@@ -1,0 +1,42 @@
+{
+  "name": "@udyamflow/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3000 --turbopack",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "lint": "biome check .",
+    "check-types": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@tanstack/react-query": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/react-query": "catalog:",
+    "@trpc/server": "catalog:",
+    "@udyamflow/api": "workspace:*",
+    "@udyamflow/auth": "workspace:*",
+    "@udyamflow/db": "workspace:*",
+    "@udyamflow/tokens": "workspace:*",
+    "@udyamflow/ui": "workspace:*",
+    "@next/env": "catalog:",
+    "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
+    "next": "catalog:",
+    "next-themes": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "superjson": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@udyamflow/tsconfig": "workspace:*",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:"
+  }
+}

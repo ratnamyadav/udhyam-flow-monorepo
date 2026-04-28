@@ -1,0 +1,18 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.4.13/schema.json",
+  "extends": ["./tooling/biome/biome.json"],
+  "files": {
+    "includes": [
+      "**",
+      "!**/.next",
+      "!**/dist",
+      "!**/build",
+      "!**/node_modules",
+      "!**/.expo",
+      "!**/.turbo",
+      "!**/migrations",
+      "!apps/mobile/global.css",
+      "!**/next-env.d.ts"
+    ]
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@udyamflow/db",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema/index.ts",
+    "./client": "./src/client.ts"
+  },
+  "scripts": {
+    "db:push": "dotenv -e ../../.env -- drizzle-kit push",
+    "db:generate": "dotenv -e ../../.env -- drizzle-kit generate",
+    "db:studio": "dotenv -e ../../.env -- drizzle-kit studio",
+    "db:seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "lint": "biome check src",
+    "check-types": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@neondatabase/serverless": "catalog:",
+    "@udyamflow/tokens": "workspace:*",
+    "drizzle-orm": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@udyamflow/tsconfig": "workspace:*",
+    "dotenv": "catalog:",
+    "dotenv-cli": "8.0.0",
+    "drizzle-kit": "catalog:",
+    "tsx": "catalog:",
+    "typescript": "catalog:"
+  }
+}

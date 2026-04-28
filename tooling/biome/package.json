@@ -1,0 +1,9 @@
+{
+  "name": "@udyamflow/biome-config",
+  "version": "0.0.0",
+  "private": true,
+  "main": "biome.json",
+  "files": [
+    "biome.json"
+  ]
+}

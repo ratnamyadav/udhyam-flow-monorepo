@@ -1,0 +1,72 @@
+/* UdyamFlow shared Tailwind v4 theme. Apps import this once from globals.css. */
+
+@import "tailwindcss";
+
+@theme {
+  /* Warm-slate palette (light) — verbatim from the design canvas. */
+  --color-bg: #fbfaf8;
+  --color-surface: #ffffff;
+  --color-surface-mute: #f5f4f0;
+  --color-border: #e9e7e0;
+  --color-border-strong: #d6d3ca;
+  --color-ink: #1a1815;
+  --color-ink-mute: #5b574e;
+  --color-ink-soft: #8a857a;
+  --color-danger: #c14848;
+  --color-success: #3d7c4d;
+  --color-highlight: #c8704a;
+
+  /* Tenant accent (overridden per-org via inline CSS vars) */
+  --color-accent: #1a1815;
+  --color-accent-soft: #f5f4f0;
+  --color-accent-ink: #1a1815;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Inter", "Fraunces", Georgia, serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Dark-mode flip */
+.dark {
+  --color-bg: #141311;
+  --color-surface: #1c1b18;
+  --color-surface-mute: #252320;
+  --color-border: #2c2a26;
+  --color-border-strong: #3a3833;
+  --color-ink: #f4f2ec;
+  --color-ink-mute: #a8a39a;
+  --color-ink-soft: #7a766d;
+  --color-danger: #e07b7b;
+  --color-success: #7fb78f;
+}
+
+/* Density-aware spacing for the authed shell */
+[data-density="compact"] {
+  --row-h: 32px;
+  --pad: 10px;
+  --gap: 8px;
+}
+[data-density="comfortable"] {
+  --row-h: 40px;
+  --pad: 14px;
+  --gap: 12px;
+}
+
+/* Default tenant CSS vars — overridden per-tenant by <TenantThemeProvider> */
+:root {
+  --accent: #1a1815;
+  --accent-soft: #f5f4f0;
+  --accent-ink: #1a1815;
+  --radius: 8px;
+  --font-display: "Inter", system-ui, sans-serif;
+  --font-ui: "Inter", system-ui, sans-serif;
+}
+
+html,
+body {
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "ss01", "cv11";
+}

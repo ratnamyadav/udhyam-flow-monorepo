@@ -1,0 +1,25 @@
+{
+  "name": "udyamflow",
+  "private": true,
+  "version": "0.0.0",
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "check-types": "turbo check-types",
+    "clean": "turbo clean && rm -rf node_modules",
+    "db:push": "pnpm --filter @udyamflow/db db:push",
+    "db:generate": "pnpm --filter @udyamflow/db db:generate",
+    "db:seed": "pnpm --filter @udyamflow/db db:seed"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.13",
+    "turbo": "2.9.6",
+    "typescript": "6.0.3"
+  },
+  "engines": {
+    "node": ">=20.10.0"
+  }
+}

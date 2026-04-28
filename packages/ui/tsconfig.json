@@ -1,0 +1,5 @@
+{
+  "extends": "@udyamflow/tsconfig/react-library.json",
+  "include": ["src"],
+  "compilerOptions": { "noEmit": true }
+}

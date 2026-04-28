@@ -1,0 +1,4 @@
+@import "@udyamflow/ui/styles.css";
+
+@source "../app/**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";

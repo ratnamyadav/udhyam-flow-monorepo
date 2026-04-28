@@ -1,0 +1,69 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+  - "tooling/*"
+
+catalog:
+  # React
+  react: 19.2.5
+  react-dom: 19.2.5
+  "@types/react": 19.2.0
+  "@types/react-dom": 19.2.0
+
+  # Next.js
+  next: 16.2.4
+  "@next/env": 16.2.4
+  next-themes: 0.4.6
+
+  # Expo
+  expo: 55.0.17
+  expo-router: 55.0.13
+  expo-secure-store: 55.0.13
+  expo-linking: 55.0.14
+  expo-status-bar: 55.0.5
+  expo-constants: 55.0.15
+  react-native: 0.85.2
+  react-native-safe-area-context: 5.7.0
+  react-native-screens: 4.24.0
+  react-native-gesture-handler: 2.31.1
+  react-native-reanimated: 4.3.0
+
+  # Styling
+  tailwindcss: 4.2.4
+  "@tailwindcss/postcss": 4.2.4
+  postcss: 8.5.5
+  autoprefixer: 10.4.21
+  nativewind: 5.0.0-preview.3
+  react-native-css: 3.0.1
+  class-variance-authority: 0.7.1
+  clsx: 2.1.1
+  tailwind-merge: 3.5.0
+
+  # Auth
+  better-auth: 1.6.9
+
+  # DB
+  drizzle-orm: 0.45.2
+  drizzle-kit: 0.31.10
+  "@neondatabase/serverless": 1.1.0
+
+  # API
+  "@trpc/server": 11.16.0
+  "@trpc/client": 11.16.0
+  "@trpc/react-query": 11.16.0
+  "@tanstack/react-query": 5.100.5
+  superjson: 2.2.6
+  zod: 4.3.6
+
+  # Tooling
+  typescript: 6.0.3
+  "@typescript/native-preview": 7.0.0-dev.20260421.2
+  "@biomejs/biome": 2.4.13
+  turbo: 2.9.6
+  "@t3-oss/env-nextjs": 0.13.11
+
+  # Misc
+  lucide-react: 0.479.0
+  dotenv: 17.2.3
+  tsx: 4.20.6
+  "@types/node": 22.10.10

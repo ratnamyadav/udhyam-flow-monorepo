@@ -1,0 +1,33 @@
+{
+  "name": "@udyamflow/admin",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --port 3001 --turbopack",
+    "build": "next build",
+    "start": "next start --port 3001",
+    "lint": "biome check .",
+    "check-types": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@next/env": "catalog:",
+    "@udyamflow/auth": "workspace:*",
+    "@udyamflow/db": "workspace:*",
+    "@udyamflow/tokens": "workspace:*",
+    "@udyamflow/ui": "workspace:*",
+    "better-auth": "catalog:",
+    "next": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@udyamflow/tsconfig": "workspace:*",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:"
+  }
+}

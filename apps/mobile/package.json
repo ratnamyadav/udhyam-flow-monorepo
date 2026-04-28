@@ -1,0 +1,41 @@
+{
+  "name": "@udyamflow/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "scripts": {
+    "dev": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "lint": "biome check .",
+    "check-types": "tsgo --noEmit"
+  },
+  "dependencies": {
+    "@udyamflow/auth": "workspace:*",
+    "@udyamflow/tokens": "workspace:*",
+    "expo": "catalog:",
+    "expo-constants": "catalog:",
+    "expo-linking": "catalog:",
+    "expo-router": "catalog:",
+    "expo-secure-store": "catalog:",
+    "expo-status-bar": "catalog:",
+    "nativewind": "catalog:",
+    "react-native-css": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "react-native": "catalog:",
+    "react-native-gesture-handler": "catalog:",
+    "react-native-reanimated": "catalog:",
+    "react-native-safe-area-context": "catalog:",
+    "react-native-screens": "catalog:",
+    "tailwindcss": "catalog:"
+  },
+  "devDependencies": {
+    "@babel/core": "7.27.1",
+    "@types/react": "catalog:",
+    "@typescript/native-preview": "catalog:",
+    "@udyamflow/tsconfig": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

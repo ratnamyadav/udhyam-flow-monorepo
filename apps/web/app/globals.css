@@ -1,0 +1,8 @@
+@import "@udyamflow/ui/styles.css";
+
+@source "../app/**/*.{ts,tsx}";
+@source "../components/**/*.{ts,tsx}";
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+
+/* Tailwind v4 — `@theme` colors map directly to utility classes:
+   bg-bg, text-ink, border-border, etc. */
