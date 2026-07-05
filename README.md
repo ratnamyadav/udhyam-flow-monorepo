@@ -80,8 +80,19 @@ Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant tabl
 | `/dashboard` | Owner dashboard — today's bookings, metrics, staff |
 | `/settings/branding` | Live theme customizer |
 | `/settings/locations` | CRUD for locations |
+| `/settings/resources` | Staff/courts/rooms + per-day working hours |
+| `/settings/services` | Service catalog (duration, price, eligible resources) |
+| `/settings/team` | Invite teammates, manage members, revoke pending invites |
 | `/settings/templates` | Switch profession template |
-| `/bookings` | Booking history (placeholder) |
+| `/settings/payments` | Stripe + Cashfree gateway configuration & webhook URLs |
+| `/bookings` | Booking history — filter by status/resource, cancel/no-show/complete |
+| `/customers` | CRM — customer list, search, detail with booking history + notes |
+| `/accept-invitation/[id]` | Accept-invitation flow for invited teammates |
+| `/api/upload/logo` | Authed POST — uploads tenant logo to Cloudflare R2 (sharp-resized to 512px webp) |
+| `/api/payments/stripe/webhook` | Stripe webhook — verifies signature, marks bookings paid / refunded |
+| `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC, marks bookings paid / refunded |
+| `/forgot-password`, `/reset-password`, `/verify-email` | Password reset + email verification flows |
+| `/book/[orgSlug]/confirmation` | Post-payment confirmation (auto-refreshes until webhook lands) |
 | `/book/[orgSlug]?layout=sidebar\|stacked\|inline` | Public tenant booking page (server-rendered with the tenant's theme) |
 | `/api/auth/[...all]` | BetterAuth handler |
 | `/api/trpc/[trpc]` | tRPC fetch adapter |
@@ -264,3 +275,16 @@ The flow on first sign-up:
 ├── biome.json, turbo.json, pnpm-workspace.yaml, .env.example
 └── README.md
 ```
+
+---
+
+## Company & legal
+
+UdyamFlow is a product of **[Nextfly Technologies](https://nextflytech.com)**.
+
+- 🔒 [Privacy Policy](https://udyamflow.com/legal/privacy)
+- 📜 [Terms & Conditions](https://udyamflow.com/legal/terms)
+- ↩️ [Cancellation Policy](https://udyamflow.com/legal/cancellation)
+
+Built with love in India 🇮🇳 © [Nextfly Technologies](https://nextflytech.com). All rights reserved.
+

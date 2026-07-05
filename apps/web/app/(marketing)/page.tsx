@@ -1,4 +1,4 @@
-import { Logo } from '@udyamflow/ui';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { BrowserChrome } from '@/components/marketing/browser-chrome';
 import { FeatureRow } from '@/components/marketing/feature-row';
@@ -8,6 +8,21 @@ import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { Stat } from '@/components/marketing/stat';
 import { TemplatesGrid } from '@/components/marketing/templates-grid';
 import { ThemePreviewCard } from '@/components/marketing/theme-preview-card';
+import { SiteFooter } from '@/components/site-footer';
+
+export const metadata: Metadata = {
+  title: 'UdyamFlow — Bookings, branded for the way you work',
+  description:
+    'One booking platform that adapts to doctors, tutors, courts, salons — pick a template, recolor it, and you’re taking bookings the same afternoon. Free for the first 6 months.',
+  openGraph: {
+    title: 'UdyamFlow — Bookings, branded',
+    description:
+      'A multi-tenant booking SaaS that looks like your business, not ours. Free for the first 6 months.',
+    type: 'website',
+    siteName: 'UdyamFlow',
+  },
+  twitter: { card: 'summary_large_image', title: 'UdyamFlow — Bookings, branded' },
+};
 
 export default function MarketingLandingPage() {
   return (
@@ -223,12 +238,7 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      <footer className="px-14 py-12 border-t border-border text-[13px] text-ink-soft">
-        <div className="max-w-[1280px] mx-auto flex justify-between items-center">
-          <Logo />
-          <span>© 2026 UdyamFlow. Made with care in Bengaluru & Berlin.</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

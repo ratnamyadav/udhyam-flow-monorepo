@@ -44,6 +44,7 @@ export default async function AuthedAppLayout({ children }: { children: React.Re
       name: o.name,
       slug: o.slug,
       logo: s?.logoText ?? o.logo ?? o.name.slice(0, 2).toUpperCase(),
+      logoUrl: s?.logoUrl ?? null,
       accent: s?.accent ?? '#1a1815',
     };
   });

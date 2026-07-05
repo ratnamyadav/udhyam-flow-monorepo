@@ -3,11 +3,26 @@
 import { PROFESSIONS, type ProfessionId } from '@udyamflow/tokens';
 import { trpc } from '@/lib/trpc/react';
 
+function formatMoney(cents: number, currency: string) {
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      maximumFractionDigits: 0,
+    }).format(cents / 100);
+  } catch {
+    return `${currency} ${(cents / 100).toFixed(0)}`;
+  }
+}
+
 export default function DashboardPage() {
   const settings = trpc.tenant.getSettings.useQuery();
   const resources = trpc.resource.list.useQuery();
   const locations = trpc.location.list.useQuery();
   const todays = trpc.booking.listToday.useQuery();
+  const weekly = trpc.report.weekly.useQuery();
+  const revenue = trpc.report.revenueMtd.useQuery();
+  const util = trpc.report.utilization7d.useQuery();
 
   const profession =
     PROFESSIONS[(settings.data?.profession as ProfessionId) ?? 'doctor'] ?? PROFESSIONS.doctor;
@@ -15,11 +30,42 @@ export default function DashboardPage() {
   const todaysList = todays.data ?? [];
   const totalToday = todaysList.length;
 
+  const weekDelta = weekly.data ? weekly.data.thisWeek - weekly.data.lastWeek : 0;
+  const utilPct =
+    util.data && util.data.available > 0
+      ? Math.round((util.data.booked / util.data.available) * 100)
+      : null;
+
+  const revenueLabel = (() => {
+    const totals = revenue.data ?? [];
+    if (totals.length === 0) return '—';
+    // Show the largest currency as the headline; secondary currencies fold
+    // into the delta line below.
+    const primary = totals.reduce((a, b) => (a.cents >= b.cents ? a : b));
+    return formatMoney(primary.cents, primary.currency);
+  })();
+
   const metrics = [
-    { label: profession.metricLabels[0], value: String(totalToday), delta: '+0' },
-    { label: profession.metricLabels[1], value: '0', delta: '−0' },
-    { label: profession.metricLabels[2], value: '—', delta: '' },
-    { label: profession.metricLabels[3], value: '—', delta: '' },
+    { label: profession.metricLabels[0], value: String(totalToday), delta: '+0 vs yesterday' },
+    {
+      label: profession.metricLabels[1],
+      value: weekly.data ? String(weekly.data.thisWeek) : '—',
+      delta:
+        weekly.data && weekly.data.lastWeek > 0
+          ? `${weekDelta >= 0 ? '+' : ''}${weekDelta} vs last week`
+          : 'no prior week',
+    },
+    {
+      label: 'Revenue MTD',
+      value: revenueLabel,
+      delta:
+        (revenue.data ?? []).length > 1 ? `+ ${revenue.data!.length - 1} other currencies` : '',
+    },
+    {
+      label: 'Utilization 7d',
+      value: utilPct === null ? '—' : `${utilPct}%`,
+      delta: util.data ? `${Math.round(util.data.booked / 60)} hr booked` : '',
+    },
   ];
 
   const activeLocation = locations.data?.[0];

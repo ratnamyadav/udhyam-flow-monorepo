@@ -7,7 +7,7 @@
 import { randomUUID } from 'node:crypto';
 import { PROFESSIONS, TENANT_LIST } from '@udyamflow/tokens';
 import { db } from './client';
-import { location, organization, resource, tenantSettings } from './schema';
+import { location, organization, resource, resourceHours, tenantSettings } from './schema';
 
 async function main() {
   console.log('Seeding UdyamFlow demo tenants…');
@@ -53,10 +53,11 @@ async function main() {
       .onConflictDoNothing();
 
     for (const r of profession.sampleResources) {
+      const resId = `res_${t.id}_${r.avatar.toLowerCase()}_${randomUUID().slice(0, 6)}`;
       await db
         .insert(resource)
         .values({
-          id: `res_${t.id}_${r.avatar.toLowerCase()}_${randomUUID().slice(0, 6)}`,
+          id: resId,
           organizationId: orgId,
           locationId: locId,
           name: r.name,
@@ -64,6 +65,14 @@ async function main() {
           avatar: r.avatar,
         })
         .onConflictDoNothing();
+
+      // Default Mon–Fri 09:00–18:00 so the public booking page renders slots.
+      for (let day = 1; day <= 5; day++) {
+        await db
+          .insert(resourceHours)
+          .values({ resourceId: resId, dayOfWeek: day, openMin: 9 * 60, closeMin: 18 * 60 })
+          .onConflictDoNothing();
+      }
     }
 
     console.log(`  ✓ ${t.name} (${t.slug})`);

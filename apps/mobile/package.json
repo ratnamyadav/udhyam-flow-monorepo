@@ -12,6 +12,10 @@
     "check-types": "tsgo --noEmit"
   },
   "dependencies": {
+    "@tanstack/react-query": "catalog:",
+    "@trpc/client": "catalog:",
+    "@trpc/react-query": "catalog:",
+    "@udyamflow/api": "workspace:*",
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/tokens": "workspace:*",
     "expo": "catalog:",
@@ -29,6 +33,7 @@
     "react-native-reanimated": "catalog:",
     "react-native-safe-area-context": "catalog:",
     "react-native-screens": "catalog:",
+    "superjson": "catalog:",
     "tailwindcss": "catalog:"
   },
   "devDependencies": {

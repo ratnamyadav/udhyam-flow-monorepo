@@ -37,6 +37,9 @@ export default function BrandingSettingsPage() {
   const [radius, setRadius] = useState(8);
   const [density, setDensity] = useState<'compact' | 'comfortable'>('comfortable');
   const [fontDisplay, setFontDisplay] = useState(FONTS[0]!.stack);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
 
   // Hydrate from DB once it lands.
@@ -50,7 +53,55 @@ export default function BrandingSettingsPage() {
     setRadius(s.radius);
     setDensity(s.density === 'compact' ? 'compact' : 'comfortable');
     setFontDisplay(s.fontDisplay);
+    setLogoUrl(s.logoUrl ?? null);
   }, [settingsQuery.data]);
+
+  async function onUploadLogo(rawFile: File) {
+    setUploadError(null);
+    setUploading(true);
+    try {
+      // Client-side resize first — keeps R2 storage + CDN egress tiny.
+      const { resizeImageForUpload } = await import('@/lib/resize-image');
+      const file = await resizeImageForUpload(rawFile);
+
+      // Step 1: ask the server for a presigned PUT URL.
+      const presignRes = await fetch('/api/upload/logo/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ contentType: file.type, sizeBytes: file.size }),
+      });
+      const presign = (await presignRes.json()) as {
+        uploadUrl?: string;
+        publicUrl?: string;
+        headers?: Record<string, string>;
+        error?: string;
+      };
+      if (!presignRes.ok || !presign.uploadUrl || !presign.publicUrl) {
+        throw new Error(presign.error ?? 'Could not prepare upload');
+      }
+
+      // Step 2: upload directly to R2.
+      const putRes = await fetch(presign.uploadUrl, {
+        method: 'PUT',
+        headers: presign.headers,
+        body: file,
+      });
+      if (!putRes.ok) throw new Error(`Upload to storage failed (${putRes.status})`);
+
+      // Step 3: persist the public URL on the tenant.
+      setLogoUrl(presign.publicUrl);
+      await updateSettings.mutateAsync({ logoUrl: presign.publicUrl });
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function onRemoveLogo() {
+    setLogoUrl(null);
+    await updateSettings.mutateAsync({ logoUrl: null });
+  }
 
   function applyPreset(p: (typeof PRESETS)[number]) {
     setAccent(p.accent);
@@ -90,17 +141,51 @@ export default function BrandingSettingsPage() {
           <Section title="Logo">
             <div className="flex items-center gap-3">
               <div
-                className="w-12 h-12 grid place-items-center text-white text-sm font-semibold"
+                className="w-12 h-12 grid place-items-center text-white text-sm font-semibold overflow-hidden"
                 style={{ background: accent, borderRadius: radius }}
               >
-                {logo}
+                {logoUrl ? (
+                  // biome-ignore lint/performance/noImgElement: external R2 URL
+                  <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                ) : (
+                  logo
+                )}
               </div>
               <Input
                 maxLength={4}
                 value={logo}
                 onChange={(e) => setLogo(e.target.value.toUpperCase())}
                 className="flex-1"
+                placeholder="Fallback text (2–4 chars)"
               />
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              <label className="text-[12px] px-3 py-1.5 rounded-md border border-border bg-surface text-ink cursor-pointer hover:bg-surface-mute">
+                {uploading ? 'Uploading…' : logoUrl ? 'Replace image' : 'Upload image'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) onUploadLogo(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+              {logoUrl && (
+                <button
+                  type="button"
+                  className="text-[12px] text-ink-mute hover:text-danger"
+                  onClick={onRemoveLogo}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+            {uploadError && <div className="mt-2 text-[12px] text-danger">{uploadError}</div>}
+            <div className="mt-2 text-[11px] text-ink-soft">
+              PNG, JPG, WebP, or SVG. Max 1 MB. Square images render best.
             </div>
           </Section>
 
@@ -191,6 +276,10 @@ export default function BrandingSettingsPage() {
                 </button>
               ))}
             </div>
+          </Section>
+
+          <Section title="Notifications">
+            <NotificationToggles />
           </Section>
 
           <Button onClick={onSave} disabled={updateSettings.isPending}>
@@ -288,6 +377,47 @@ function Section({ title, children }: { title: string; children: React.ReactNode
     <div className="space-y-2">
       <Label>{title}</Label>
       {children}
+    </div>
+  );
+}
+
+function NotificationToggles() {
+  const utils = trpc.useUtils();
+  const status = trpc.notifications.status.useQuery();
+  const settings = trpc.tenant.getSettings.useQuery();
+  const update = trpc.tenant.updateSettings.useMutation({
+    onSuccess: () => utils.tenant.getSettings.invalidate(),
+  });
+
+  const sms = settings.data?.enableSms ?? false;
+  const wa = settings.data?.enableWhatsapp ?? false;
+  const configured = status.data?.msg91 ?? false;
+
+  return (
+    <div className="space-y-2">
+      <label className="flex items-center justify-between text-[13px] text-ink">
+        <span>SMS confirmations (MSG91)</span>
+        <input
+          type="checkbox"
+          checked={sms}
+          disabled={!configured || update.isPending}
+          onChange={(e) => update.mutate({ enableSms: e.target.checked })}
+        />
+      </label>
+      <label className="flex items-center justify-between text-[13px] text-ink">
+        <span>WhatsApp confirmations (MSG91)</span>
+        <input
+          type="checkbox"
+          checked={wa}
+          disabled={!configured || update.isPending}
+          onChange={(e) => update.mutate({ enableWhatsapp: e.target.checked })}
+        />
+      </label>
+      {!configured && (
+        <div className="text-[11px] text-ink-soft">
+          MSG91 is not configured on the server — set MSG91_AUTH_KEY to enable these toggles.
+        </div>
+      )}
     </div>
   );
 }

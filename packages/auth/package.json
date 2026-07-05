@@ -19,6 +19,7 @@
   "dependencies": {
     "@better-auth/expo": "1.6.9",
     "@udyamflow/db": "workspace:*",
+    "@udyamflow/notifications": "workspace:*",
     "better-auth": "catalog:"
   },
   "devDependencies": {

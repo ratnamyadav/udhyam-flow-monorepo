@@ -12,13 +12,18 @@
   },
   "scripts": {
     "lint": "biome check src",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsgo --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@trpc/server": "catalog:",
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/db": "workspace:*",
+    "@udyamflow/notifications": "workspace:*",
     "@udyamflow/tokens": "workspace:*",
+    "date-fns": "catalog:",
+    "date-fns-tz": "catalog:",
+    "stripe": "catalog:",
     "superjson": "catalog:",
     "zod": "catalog:"
   },
@@ -27,6 +32,7 @@
     "@typescript/native-preview": "catalog:",
     "@udyamflow/tsconfig": "workspace:*",
     "drizzle-orm": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

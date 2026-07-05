@@ -1,5 +1,6 @@
 import { Logo } from '@udyamflow/ui';
 import Link from 'next/link';
+import { CopyrightLine } from '@/components/site-footer';
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -27,7 +28,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
             </div>
           </div>
         </div>
-        <div className="text-xs text-ink-soft">© 2026 UdyamFlow</div>
+        <CopyrightLine className="text-xs text-ink-soft" />
       </div>
       <div className="flex items-center justify-center p-8">{children}</div>
     </div>

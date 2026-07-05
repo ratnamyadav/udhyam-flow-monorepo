@@ -13,6 +13,9 @@ export type TenantTheme = {
   name: string;
   profession: ProfessionId;
   logo: string;
+  // Optional URL of an uploaded image logo. When set, UI prefers it over
+  // the letter `logo` badge.
+  logoUrl?: string | null;
   accent: string;
   accentSoft: string;
   accentInk: string;

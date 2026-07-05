@@ -12,8 +12,10 @@
   },
   "dependencies": {
     "@next/env": "catalog:",
+    "@sentry/nextjs": "catalog:",
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/db": "workspace:*",
+    "@udyamflow/env": "workspace:*",
     "@udyamflow/tokens": "workspace:*",
     "@udyamflow/ui": "workspace:*",
     "better-auth": "catalog:",

@@ -1,17 +1,33 @@
 'use client';
 
-import { signIn } from '@udyamflow/auth/client';
+import { authClient, signIn } from '@udyamflow/auth/client';
 import { Button, Input, Label } from '@udyamflow/ui';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
+import { SocialButtons } from '@/components/auth/social-buttons';
 
 export default function SignInPage() {
+  return (
+    <Suspense
+      fallback={<div className="w-full max-w-[400px] text-[13px] text-ink-mute">Loading…</div>}
+    >
+      <SignInInner />
+    </Suspense>
+  );
+}
+
+function SignInInner() {
   const router = useRouter();
+  const params = useSearchParams();
+  const callbackUrl = params.get('callbackUrl') ?? '/dashboard';
+  const resetOk = params.get('reset') === 'ok';
+
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  void authClient; // keep import for later social handlers
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -23,7 +39,7 @@ export default function SignInPage() {
       setError(res.error.message ?? 'Could not sign in');
       return;
     }
-    router.push('/dashboard');
+    router.push(callbackUrl);
   }
 
   return (
@@ -35,6 +51,14 @@ export default function SignInPage() {
           Start free
         </Link>
       </p>
+
+      {resetOk && (
+        <div className="mb-5 bg-surface border border-border rounded-md px-3 py-2 text-[12px] text-ink">
+          Your password was reset. Sign in with the new password.
+        </div>
+      )}
+
+      <SocialButtons callbackUrl={callbackUrl} />
 
       <div className="space-y-4">
         <div className="space-y-1.5">

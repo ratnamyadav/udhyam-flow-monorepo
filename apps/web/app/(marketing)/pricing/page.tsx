@@ -1,9 +1,9 @@
 'use client';
 
-import { Logo } from '@udyamflow/ui';
 import Link from 'next/link';
 import { useState } from 'react';
 import { MarketingNav } from '@/components/marketing/marketing-nav';
+import { SiteFooter } from '@/components/site-footer';
 
 const REGIONS = {
   US: { strike: '$50', price: '$10', unit: '/ location / month', currency: 'USD' },
@@ -179,12 +179,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <footer className="px-14 py-12 border-t border-border text-[13px] text-ink-soft">
-        <div className="max-w-[1280px] mx-auto flex justify-between items-center">
-          <Logo />
-          <span>© 2026 UdyamFlow. Made with care in Bengaluru & Berlin.</span>
-        </div>
-      </footer>
+      <SiteFooter />
     </div>
   );
 }

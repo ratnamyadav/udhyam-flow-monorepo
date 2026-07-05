@@ -5,6 +5,7 @@ import { Button, Input, Label } from '@udyamflow/ui';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { SocialButtons } from '@/components/auth/social-buttons';
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -24,7 +25,11 @@ export default function SignUpPage() {
       setError(res.error.message ?? 'Could not create account');
       return;
     }
-    router.push('/onboarding/account');
+    // If email verification is required server-side, the sign-up call
+    // doesn't yet have an active session — route through /verify-email
+    // (which polls until verified) instead of straight to onboarding.
+    const verified = res.data && 'user' in res.data && res.data.user?.emailVerified;
+    router.push(verified ? '/onboarding/account' : '/verify-email');
   }
 
   return (
@@ -38,6 +43,8 @@ export default function SignUpPage() {
           Sign in
         </Link>
       </p>
+
+      <SocialButtons callbackUrl="/onboarding/account" />
 
       <div className="space-y-4">
         <div className="space-y-1.5">

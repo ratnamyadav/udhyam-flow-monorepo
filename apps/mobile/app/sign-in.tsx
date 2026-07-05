@@ -63,6 +63,15 @@ export default function SignInScreen() {
           Don't have an account? <Text className="text-ink underline">Sign up</Text>
         </Text>
       </Link>
+
+      <View className="mt-8 pt-6 border-t border-border">
+        <Text className="text-xs text-ink-mute text-center mb-2 uppercase tracking-wider font-mono">
+          Booking with a provider?
+        </Text>
+        <Link href="/book" className="self-center">
+          <Text className="text-sm text-ink underline text-center">Open the booking flow →</Text>
+        </Link>
+      </View>
     </View>
   );
 }

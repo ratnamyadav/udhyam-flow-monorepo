@@ -6,6 +6,7 @@ type SettingsRow = {
   profession: string;
   templateId: string;
   logoText: string;
+  logoUrl?: string | null;
   accent: string;
   accentSoft: string;
   accentInk: string;
@@ -32,6 +33,7 @@ export function settingsToTheme(args: {
     name: org.name,
     profession: settings.profession as TenantTheme['profession'],
     logo: settings.logoText,
+    logoUrl: settings.logoUrl ?? null,
     accent: settings.accent,
     accentSoft: settings.accentSoft,
     accentInk: settings.accentInk,

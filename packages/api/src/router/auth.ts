@@ -5,6 +5,12 @@ import { protectedProcedure, publicProcedure, router } from '../trpc';
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => ctx.session?.user ?? null),
 
+  // Tells the sign-in / sign-up pages which social buttons to render. Cheap
+  // boolean lookup — no provider auth secrets returned.
+  providers: publicProcedure.query(() => ({
+    google: !!process.env.GOOGLE_CLIENT_ID,
+  })),
+
   listOrganizations: protectedProcedure.query(async ({ ctx }) => {
     const memberships = await ctx.db
       .select({

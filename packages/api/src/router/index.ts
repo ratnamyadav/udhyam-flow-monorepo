@@ -1,9 +1,15 @@
 import { router } from '../trpc';
 import { authRouter } from './auth';
 import { bookingRouter } from './booking';
+import { customerRouter } from './customer';
 import { locationRouter } from './location';
+import { notificationsRouter } from './notifications';
 import { onboardingRouter } from './onboarding';
+import { paymentRouter } from './payment';
+import { reportRouter } from './report';
 import { resourceRouter } from './resource';
+import { serviceRouter } from './service';
+import { teamRouter } from './team';
 import { tenantRouter } from './tenant';
 
 export const appRouter = router({
@@ -12,7 +18,13 @@ export const appRouter = router({
   onboarding: onboardingRouter,
   location: locationRouter,
   resource: resourceRouter,
+  service: serviceRouter,
   booking: bookingRouter,
+  customer: customerRouter,
+  team: teamRouter,
+  notifications: notificationsRouter,
+  payment: paymentRouter,
+  report: reportRouter,
 });
 
 export type AppRouter = typeof appRouter;

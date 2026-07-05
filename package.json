@@ -12,7 +12,9 @@
     "clean": "turbo clean && rm -rf node_modules",
     "db:push": "pnpm --filter @udyamflow/db db:push",
     "db:generate": "pnpm --filter @udyamflow/db db:generate",
-    "db:seed": "pnpm --filter @udyamflow/db db:seed"
+    "db:seed": "pnpm --filter @udyamflow/db db:seed",
+    "db:backfill-customers": "pnpm --filter @udyamflow/db db:backfill-customers",
+    "test": "turbo test"
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.13",
