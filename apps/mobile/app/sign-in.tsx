@@ -2,6 +2,7 @@ import { signIn } from '@udyamflow/auth/expo-client';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
+import { ResponsiveContent } from '../components/responsive';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -24,54 +25,56 @@ export default function SignInScreen() {
 
   return (
     <View className="flex-1 bg-bg px-6 justify-center">
-      <Text className="text-3xl font-semibold text-ink">UdyamFlow</Text>
-      <Text className="text-base text-ink-mute mt-1 mb-8">Sign in to your workspace</Text>
+      <ResponsiveContent variant="form">
+        <Text className="text-3xl font-semibold text-ink">UdyamFlow</Text>
+        <Text className="text-base text-ink-mute mt-1 mb-8">Sign in to your workspace</Text>
 
-      <Text className="text-xs text-ink-mute uppercase tracking-wider mb-1.5">Email</Text>
-      <TextInput
-        autoCapitalize="none"
-        keyboardType="email-address"
-        autoComplete="email"
-        value={email}
-        onChangeText={setEmail}
-        className="border border-border rounded-md px-3 py-3 bg-surface text-ink mb-4"
-      />
+        <Text className="text-xs text-ink-mute uppercase tracking-wider mb-1.5">Email</Text>
+        <TextInput
+          autoCapitalize="none"
+          keyboardType="email-address"
+          autoComplete="email"
+          value={email}
+          onChangeText={setEmail}
+          className="border border-border rounded-md px-3 py-3 bg-surface text-ink mb-4"
+        />
 
-      <Text className="text-xs text-ink-mute uppercase tracking-wider mb-1.5">Password</Text>
-      <TextInput
-        secureTextEntry
-        autoComplete="password"
-        value={password}
-        onChangeText={setPassword}
-        className="border border-border rounded-md px-3 py-3 bg-surface text-ink mb-2"
-      />
+        <Text className="text-xs text-ink-mute uppercase tracking-wider mb-1.5">Password</Text>
+        <TextInput
+          secureTextEntry
+          autoComplete="password"
+          value={password}
+          onChangeText={setPassword}
+          className="border border-border rounded-md px-3 py-3 bg-surface text-ink mb-2"
+        />
 
-      {error ? <Text className="text-red-600 text-sm mb-2">{error}</Text> : null}
+        {error ? <Text className="text-red-600 text-sm mb-2">{error}</Text> : null}
 
-      <Pressable
-        onPress={onSubmit}
-        disabled={pending}
-        className="bg-ink rounded-md py-3.5 mt-3 active:opacity-90"
-      >
-        <Text className="text-bg text-center font-medium">
-          {pending ? 'Signing in…' : 'Sign in'}
-        </Text>
-      </Pressable>
+        <Pressable
+          onPress={onSubmit}
+          disabled={pending}
+          className="bg-ink rounded-md py-3.5 mt-3 active:opacity-90"
+        >
+          <Text className="text-bg text-center font-medium">
+            {pending ? 'Signing in…' : 'Sign in'}
+          </Text>
+        </Pressable>
 
-      <Link href="/sign-up" className="mt-4 self-center">
-        <Text className="text-sm text-ink-mute">
-          Don't have an account? <Text className="text-ink underline">Sign up</Text>
-        </Text>
-      </Link>
-
-      <View className="mt-8 pt-6 border-t border-border">
-        <Text className="text-xs text-ink-mute text-center mb-2 uppercase tracking-wider font-mono">
-          Booking with a provider?
-        </Text>
-        <Link href="/book" className="self-center">
-          <Text className="text-sm text-ink underline text-center">Open the booking flow →</Text>
+        <Link href="/sign-up" className="mt-4 self-center">
+          <Text className="text-sm text-ink-mute">
+            Don't have an account? <Text className="text-ink underline">Sign up</Text>
+          </Text>
         </Link>
-      </View>
+
+        <View className="mt-8 pt-6 border-t border-border">
+          <Text className="text-xs text-ink-mute text-center mb-2 uppercase tracking-wider font-mono">
+            Booking with a provider?
+          </Text>
+          <Link href="/book" className="self-center">
+            <Text className="text-sm text-ink underline text-center">Open the booking flow →</Text>
+          </Link>
+        </View>
+      </ResponsiveContent>
     </View>
   );
 }

@@ -5,28 +5,33 @@ packages:
 
 catalog:
   # React
-  react: 19.2.5
-  react-dom: 19.2.5
-  "@types/react": 19.2.0
-  "@types/react-dom": 19.2.0
+  react: 19.2.8
+  react-dom: 19.2.8
+  "@types/react": 19.2.18
+  "@types/react-dom": 19.2.7
 
   # Next.js
-  next: 16.2.4
-  "@next/env": 16.2.4
+  next: 16.3.7
+  "@next/env": 16.3.7
   next-themes: 0.4.6
 
-  # Expo
-  expo: 55.0.17
-  expo-router: 55.0.13
-  expo-secure-store: 55.0.13
-  expo-linking: 55.0.14
-  expo-status-bar: 55.0.5
-  expo-constants: 55.0.15
-  react-native: 0.85.2
+  # Expo — SDK 57 (React Native 0.86). Keep these in lockstep with
+  # `expo/bundledNativeModules.json`; run `pnpm --filter @udyamflow/mobile exec expo install --check`
+  # after bumping.
+  expo: 57.0.26
+  expo-router: 57.0.24
+  "@expo/metro-runtime": 57.0.16
+  expo-secure-store: 57.0.4
+  expo-linking: 57.0.11
+  expo-status-bar: 57.0.1
+  expo-constants: 57.0.20
+  expo-build-properties: 57.0.22
+  react-native: 0.86.3
   react-native-safe-area-context: 5.7.0
-  react-native-screens: 4.24.0
-  react-native-gesture-handler: 2.31.1
-  react-native-reanimated: 4.3.0
+  react-native-screens: 4.26.2
+  react-native-gesture-handler: 2.32.0
+  react-native-reanimated: 4.5.1
+  react-native-worklets: 0.10.1
 
   # Styling
   tailwindcss: 4.2.4
@@ -34,7 +39,7 @@ catalog:
   postcss: 8.5.5
   autoprefixer: 10.4.21
   nativewind: 5.0.0-preview.3
-  react-native-css: 3.0.1
+  react-native-css: 3.0.7
   class-variance-authority: 0.7.1
   clsx: 2.1.1
   tailwind-merge: 3.5.0

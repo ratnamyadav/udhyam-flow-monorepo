@@ -1,6 +1,7 @@
 import { useSession } from '@udyamflow/auth/expo-client';
 import { useEffect } from 'react';
 import { ScrollView, Text, View } from 'react-native';
+import { ResponsiveContent } from '../../components/responsive';
 import { trpc } from '../../lib/trpc';
 
 export default function DashboardScreen() {
@@ -25,47 +26,49 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView className="flex-1 bg-bg" contentContainerClassName="px-6 pt-16 pb-12">
-      <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">
-        {locations.data?.[0]?.name ?? 'Loading…'}
-      </Text>
-      <Text className="text-3xl font-semibold text-ink mt-1">Good day, {first}</Text>
+      <ResponsiveContent>
+        <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">
+          {locations.data?.[0]?.name ?? 'Loading…'}
+        </Text>
+        <Text className="text-3xl font-semibold text-ink mt-1">Good day, {first}</Text>
 
-      <View className="flex-row gap-2 mt-7">
-        <Metric label="Today" value={String(count)} />
-        <Metric label="Resources" value={String(resources.data?.length ?? 0)} />
-        <Metric label="Locations" value={String(locations.data?.length ?? 0)} />
-      </View>
+        <View className="flex-row gap-2 mt-7">
+          <Metric label="Today" value={String(count)} />
+          <Metric label="Resources" value={String(resources.data?.length ?? 0)} />
+          <Metric label="Locations" value={String(locations.data?.length ?? 0)} />
+        </View>
 
-      <Text className="text-xs uppercase tracking-wider text-ink-mute font-mono mt-9 mb-3">
-        Today's bookings
-      </Text>
-      {todays.isLoading ? (
-        <Text className="text-sm text-ink-mute">Loading…</Text>
-      ) : count === 0 ? (
-        <View className="bg-surface border border-border rounded-xl p-6">
-          <Text className="text-sm text-ink">No bookings today.</Text>
-          <Text className="text-xs text-ink-mute mt-1">
-            Share your booking page to start filling slots.
-          </Text>
-        </View>
-      ) : (
-        <View className="bg-surface border border-border rounded-xl overflow-hidden">
-          {(todays.data ?? []).map((b, i) => (
-            <View key={b.id} className={`px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
-              <Text className="text-sm font-medium text-ink">{b.customerName}</Text>
-              <Text className="text-xs text-ink-mute font-mono">
-                {new Date(b.slotStart).toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hour12: false,
-                })}
-                {' · '}
-                {b.status}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
+        <Text className="text-xs uppercase tracking-wider text-ink-mute font-mono mt-9 mb-3">
+          Today's bookings
+        </Text>
+        {todays.isLoading ? (
+          <Text className="text-sm text-ink-mute">Loading…</Text>
+        ) : count === 0 ? (
+          <View className="bg-surface border border-border rounded-xl p-6">
+            <Text className="text-sm text-ink">No bookings today.</Text>
+            <Text className="text-xs text-ink-mute mt-1">
+              Share your booking page to start filling slots.
+            </Text>
+          </View>
+        ) : (
+          <View className="bg-surface border border-border rounded-xl overflow-hidden">
+            {(todays.data ?? []).map((b, i) => (
+              <View key={b.id} className={`px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
+                <Text className="text-sm font-medium text-ink">{b.customerName}</Text>
+                <Text className="text-xs text-ink-mute font-mono">
+                  {new Date(b.slotStart).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: false,
+                  })}
+                  {' · '}
+                  {b.status}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
+      </ResponsiveContent>
     </ScrollView>
   );
 }

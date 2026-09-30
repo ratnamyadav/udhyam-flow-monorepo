@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, Text, View } from 'react-native';
+import { ResponsiveContent } from '../../../components/responsive';
 import { trpc } from '../../../lib/trpc';
 
 export default function BookingDetailScreen() {
@@ -44,47 +45,49 @@ export default function BookingDetailScreen() {
 
   return (
     <ScrollView className="flex-1 bg-bg" contentContainerClassName="px-6 pt-16 pb-12">
-      <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">
-        Booking · {booking.id.slice(-6).toUpperCase()}
-      </Text>
-      <Text className="text-3xl font-semibold text-ink mt-1">{booking.customerName}</Text>
-      <Text className="text-sm text-ink-mute mt-1">
-        {booking.customerEmail ?? booking.customerPhone ?? '—'}
-      </Text>
+      <ResponsiveContent>
+        <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">
+          Booking · {booking.id.slice(-6).toUpperCase()}
+        </Text>
+        <Text className="text-3xl font-semibold text-ink mt-1">{booking.customerName}</Text>
+        <Text className="text-sm text-ink-mute mt-1">
+          {booking.customerEmail ?? booking.customerPhone ?? '—'}
+        </Text>
 
-      <View className="bg-surface border border-border rounded-xl p-4 mt-7">
-        <Row label="When" value={booking.slotStart.toLocaleString()} />
-        <Row label="Status" value={booking.status} />
-        <Row label="Payment" value={booking.paymentStatus} />
-      </View>
+        <View className="bg-surface border border-border rounded-xl p-4 mt-7">
+          <Row label="When" value={booking.slotStart.toLocaleString()} />
+          <Row label="Status" value={booking.status} />
+          <Row label="Payment" value={booking.paymentStatus} />
+        </View>
 
-      {isConfirmed && (
-        <View className="mt-6 gap-2">
-          {isFuture ? (
-            <Pressable
-              onPress={() => cancel.mutate({ id: booking.id })}
-              className="bg-surface border border-border rounded-md py-3.5 active:opacity-90"
-            >
-              <Text className="text-ink text-center font-medium">Cancel booking</Text>
-            </Pressable>
-          ) : (
-            <>
+        {isConfirmed && (
+          <View className="mt-6 gap-2">
+            {isFuture ? (
               <Pressable
-                onPress={() => complete.mutate({ id: booking.id })}
-                className="bg-ink rounded-md py-3.5 active:opacity-90"
-              >
-                <Text className="text-bg text-center font-medium">Mark complete</Text>
-              </Pressable>
-              <Pressable
-                onPress={() => noShow.mutate({ id: booking.id })}
+                onPress={() => cancel.mutate({ id: booking.id })}
                 className="bg-surface border border-border rounded-md py-3.5 active:opacity-90"
               >
-                <Text className="text-ink text-center font-medium">Mark no-show</Text>
+                <Text className="text-ink text-center font-medium">Cancel booking</Text>
               </Pressable>
-            </>
-          )}
-        </View>
-      )}
+            ) : (
+              <>
+                <Pressable
+                  onPress={() => complete.mutate({ id: booking.id })}
+                  className="bg-ink rounded-md py-3.5 active:opacity-90"
+                >
+                  <Text className="text-bg text-center font-medium">Mark complete</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => noShow.mutate({ id: booking.id })}
+                  className="bg-surface border border-border rounded-md py-3.5 active:opacity-90"
+                >
+                  <Text className="text-ink text-center font-medium">Mark no-show</Text>
+                </Pressable>
+              </>
+            )}
+          </View>
+        )}
+      </ResponsiveContent>
     </ScrollView>
   );
 }

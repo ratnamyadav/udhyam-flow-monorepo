@@ -1,17 +1,9 @@
 const { getDefaultConfig } = require('expo/metro-config');
-const { withNativeWind } = require('nativewind/metro');
-const path = require('node:path');
+const { withNativewind } = require('nativewind/metro');
 
-// Resolve sibling workspaces so Metro can find @udyamflow/* packages.
-const workspaceRoot = path.resolve(__dirname, '../..');
-const projectRoot = __dirname;
+// Expo's default Metro config detects the pnpm workspace root automatically
+// (watchFolders + nodeModulesPaths), so sibling @udyamflow/* packages and
+// pnpm's nested node_modules resolve without manual overrides.
+const config = getDefaultConfig(__dirname);
 
-const config = getDefaultConfig(projectRoot);
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules'),
-];
-config.resolver.disableHierarchicalLookup = true;
-
-module.exports = withNativeWind(config, { input: './global.css' });
+module.exports = withNativewind(config);

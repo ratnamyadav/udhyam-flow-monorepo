@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ResponsiveContent } from '../../components/responsive';
 import { trpc } from '../../lib/trpc';
 
 // Per-tenant booking surface — resource picker, slot grid, customer form.
@@ -81,109 +82,113 @@ export default function BookTenantScreen() {
 
   return (
     <ScrollView className="flex-1 bg-bg" contentContainerClassName="px-6 pt-16 pb-16">
-      <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">/{orgSlug}</Text>
-      <Text className="text-3xl font-semibold text-ink mt-1">Pick a slot</Text>
+      <ResponsiveContent>
+        <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">/{orgSlug}</Text>
+        <Text className="text-3xl font-semibold text-ink mt-1">Pick a slot</Text>
 
-      <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-6 mb-2">
-        Who do you want to see?
-      </Text>
-      <View className="flex-row flex-wrap gap-2">
-        {resources.data.map((r) => {
-          const on = (effectiveResource ?? '') === r.id;
-          return (
-            <Pressable
-              key={r.id}
-              onPress={() => {
-                setResourceId(r.id);
-                setSelected(null);
-              }}
-              className={`px-3 py-2 rounded-md border ${on ? 'border-ink' : 'border-border'}`}
-            >
-              <Text className={`text-[13px] ${on ? 'text-ink' : 'text-ink-mute'}`}>{r.name}</Text>
-            </Pressable>
-          );
-        })}
-      </View>
+        <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-6 mb-2">
+          Who do you want to see?
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {resources.data.map((r) => {
+            const on = (effectiveResource ?? '') === r.id;
+            return (
+              <Pressable
+                key={r.id}
+                onPress={() => {
+                  setResourceId(r.id);
+                  setSelected(null);
+                }}
+                className={`px-3 py-2 rounded-md border ${on ? 'border-ink' : 'border-border'}`}
+              >
+                <Text className={`text-[13px] ${on ? 'text-ink' : 'text-ink-mute'}`}>{r.name}</Text>
+              </Pressable>
+            );
+          })}
+        </View>
 
-      {services.data && services.data.length > 0 && (
-        <>
-          <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-6 mb-2">
-            Service
+        {services.data && services.data.length > 0 && (
+          <>
+            <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-6 mb-2">
+              Service
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {services.data.map((s) => {
+                const on = serviceId === s.id;
+                return (
+                  <Pressable
+                    key={s.id}
+                    onPress={() => {
+                      setServiceId(s.id);
+                      setSelected(null);
+                    }}
+                    className={`px-3 py-2 rounded-md border ${on ? 'border-ink' : 'border-border'}`}
+                  >
+                    <Text className={`text-[13px] ${on ? 'text-ink' : 'text-ink-mute'}`}>
+                      {s.name} · {s.durationMin}min
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          </>
+        )}
+
+        <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-6 mb-2">
+          Today · {timezone}
+        </Text>
+        {slotsQuery.isLoading ? (
+          <Text className="text-sm text-ink-mute py-3">Loading availability…</Text>
+        ) : slots.length === 0 ? (
+          <Text className="text-sm text-ink-mute py-3">
+            No slots today. Try a different resource or check back tomorrow.
           </Text>
+        ) : (
           <View className="flex-row flex-wrap gap-2">
-            {services.data.map((s) => {
-              const on = serviceId === s.id;
+            {slots.map((s) => {
+              const on = selected?.start === s.start;
               return (
                 <Pressable
-                  key={s.id}
-                  onPress={() => {
-                    setServiceId(s.id);
-                    setSelected(null);
-                  }}
-                  className={`px-3 py-2 rounded-md border ${on ? 'border-ink' : 'border-border'}`}
+                  key={s.start}
+                  onPress={() => setSelected(s)}
+                  className={`px-3 py-2 rounded-md border ${on ? 'bg-ink border-ink' : 'border-border'}`}
                 >
-                  <Text className={`text-[13px] ${on ? 'text-ink' : 'text-ink-mute'}`}>
-                    {s.name} · {s.durationMin}min
+                  <Text className={`text-[13px] font-mono ${on ? 'text-bg' : 'text-ink'}`}>
+                    {s.displayTime}
                   </Text>
                 </Pressable>
               );
             })}
           </View>
-        </>
-      )}
+        )}
 
-      <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-6 mb-2">
-        Today · {timezone}
-      </Text>
-      {slotsQuery.isLoading ? (
-        <Text className="text-sm text-ink-mute py-3">Loading availability…</Text>
-      ) : slots.length === 0 ? (
-        <Text className="text-sm text-ink-mute py-3">
-          No slots today. Try a different resource or check back tomorrow.
+        <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-8 mb-2">
+          Your details
         </Text>
-      ) : (
-        <View className="flex-row flex-wrap gap-2">
-          {slots.map((s) => {
-            const on = selected?.start === s.start;
-            return (
-              <Pressable
-                key={s.start}
-                onPress={() => setSelected(s)}
-                className={`px-3 py-2 rounded-md border ${on ? 'bg-ink border-ink' : 'border-border'}`}
-              >
-                <Text className={`text-[13px] font-mono ${on ? 'text-bg' : 'text-ink'}`}>
-                  {s.displayTime}
-                </Text>
-              </Pressable>
-            );
-          })}
+        <View className="gap-3">
+          <Field label="Name" value={name} onChangeText={setName} placeholder="Full name" />
+          <Field label="Email" value={email} onChangeText={setEmail} placeholder="optional" />
+          <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="optional" />
         </View>
-      )}
 
-      <Text className="text-[10px] uppercase tracking-wider text-ink-mute font-mono mt-8 mb-2">
-        Your details
-      </Text>
-      <View className="gap-3">
-        <Field label="Name" value={name} onChangeText={setName} placeholder="Full name" />
-        <Field label="Email" value={email} onChangeText={setEmail} placeholder="optional" />
-        <Field label="Phone" value={phone} onChangeText={setPhone} placeholder="optional" />
-      </View>
+        {create.error && (
+          <Text className="text-[12px] text-danger mt-3">{create.error.message}</Text>
+        )}
 
-      {create.error && <Text className="text-[12px] text-danger mt-3">{create.error.message}</Text>}
-
-      <Pressable
-        onPress={submit}
-        disabled={!canSubmit}
-        className={`mt-6 rounded-md py-3.5 ${canSubmit ? 'bg-ink' : 'bg-surface-mute'}`}
-      >
-        <Text className={`text-center font-medium ${canSubmit ? 'text-bg' : 'text-ink-mute'}`}>
-          {create.isPending
-            ? 'Booking…'
-            : selected
-              ? `Confirm ${selected.displayTime}`
-              : 'Pick a slot'}
-        </Text>
-      </Pressable>
+        <Pressable
+          onPress={submit}
+          disabled={!canSubmit}
+          className={`mt-6 rounded-md py-3.5 ${canSubmit ? 'bg-ink' : 'bg-surface-mute'}`}
+        >
+          <Text className={`text-center font-medium ${canSubmit ? 'text-bg' : 'text-ink-mute'}`}>
+            {create.isPending
+              ? 'Booking…'
+              : selected
+                ? `Confirm ${selected.displayTime}`
+                : 'Pick a slot'}
+          </Text>
+        </Pressable>
+      </ResponsiveContent>
     </ScrollView>
   );
 }
