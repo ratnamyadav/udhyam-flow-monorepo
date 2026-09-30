@@ -1,6 +1,7 @@
 import { auth } from '@udyamflow/auth';
 import { Logo } from '@udyamflow/ui';
 import { headers } from 'next/headers';
+import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { SignOutButton } from './sign-out-button';
 
@@ -50,6 +51,17 @@ export default async function AdminDashboardPage() {
               Auth scaffolding only for now — tenant management, billing, and feature flags ship
               next. This panel shares the BetterAuth session with the main app via the same DB.
             </p>
+            <div className="mt-8 grid grid-cols-3 gap-4">
+              <Link
+                href="/gst"
+                className="bg-surface border border-border rounded-xl p-5 hover:border-border-strong"
+              >
+                <div className="text-[15px] font-medium text-ink">GST thresholds</div>
+                <div className="text-[12px] text-ink-mute mt-1">
+                  Platform default and per-store limits for charging GST.
+                </div>
+              </Link>
+            </div>
           </>
         )}
       </div>

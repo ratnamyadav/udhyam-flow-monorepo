@@ -287,6 +287,10 @@ function GstProfileForm() {
     stateCode: '',
     billingAddress: '',
     invoicePrefix: 'INV',
+    // 'inherit' → platform default; 'custom' → `threshold` (₹, '' or 0 =
+    // GST on every transaction).
+    thresholdMode: 'inherit' as 'inherit' | 'custom',
+    threshold: '',
   });
   useEffect(() => {
     const p = profile.data;
@@ -298,8 +302,11 @@ function GstProfileForm() {
       stateCode: p.stateCode ?? '',
       billingAddress: p.billingAddress ?? '',
       invoicePrefix: p.invoicePrefix,
+      thresholdMode: p.gstThresholdCents === null ? 'inherit' : 'custom',
+      threshold: p.gstThresholdCents ? String(p.gstThresholdCents / 100) : '',
     });
   }, [profile.data]);
+  const platformDefault = profile.data?.platformGstThresholdCents ?? null;
 
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => {
     setSaved(false);
@@ -315,6 +322,10 @@ function GstProfileForm() {
       stateCode: f.stateCode || null,
       billingAddress: f.billingAddress.trim() || null,
       invoicePrefix: f.invoicePrefix,
+      gstThresholdCents:
+        f.thresholdMode === 'inherit'
+          ? null
+          : Math.max(0, Math.round((Number(f.threshold) || 0) * 100)),
     });
   }
 
@@ -392,6 +403,53 @@ function GstProfileForm() {
           onChange={set('invoicePrefix')}
         />
       </div>
+      {f.gstRegistered && (
+        <fieldset className="space-y-2">
+          <legend className="text-[13px] font-medium text-ink mb-1">When to charge GST</legend>
+          <label className="flex items-center gap-2 text-[13px] text-ink">
+            <input
+              type="radio"
+              checked={f.thresholdMode === 'inherit'}
+              onChange={() => {
+                setSaved(false);
+                setF((p) => ({ ...p, thresholdMode: 'inherit' }));
+              }}
+            />
+            Use the UdyamFlow default (
+            {platformDefault
+              ? `only above ₹${(platformDefault / 100).toLocaleString('en-IN')}`
+              : 'every transaction'}
+            )
+          </label>
+          <label className="flex items-center gap-2 text-[13px] text-ink">
+            <input
+              type="radio"
+              checked={f.thresholdMode === 'custom'}
+              onChange={() => {
+                setSaved(false);
+                setF((p) => ({ ...p, thresholdMode: 'custom' }));
+              }}
+            />
+            Only on transactions above ₹
+            <Input
+              aria-label="GST threshold in rupees"
+              type="number"
+              min={0}
+              step={1}
+              className="w-28 h-8"
+              value={f.threshold}
+              disabled={f.thresholdMode !== 'custom'}
+              onChange={set('threshold')}
+              placeholder="0"
+            />
+          </label>
+          <div className="text-[11px] text-ink-soft">
+            0 = every transaction. Bookings at or below the limit get a Bill of Supply with no GST.
+            A GST-registered business normally owes GST on every taxable sale — confirm with your CA
+            before using a limit.
+          </div>
+        </fieldset>
+      )}
       {save.error && <div className="text-[12px] text-danger">{save.error.message}</div>}
       <div className="flex items-center gap-3">
         <Button type="submit" size="sm" disabled={save.isPending}>

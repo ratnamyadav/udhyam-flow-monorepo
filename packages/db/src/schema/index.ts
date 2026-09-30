@@ -5,6 +5,7 @@ export * from './invoicing';
 export * from './location';
 export * from './membership';
 export * from './org';
+export * from './platform';
 export * from './resource';
 export * from './resource-hours';
 export * from './service';

@@ -5,6 +5,7 @@ import {
   financialYear,
   formatInr,
   formatInvoiceNumber,
+  resolveGstThreshold,
   sanitizeInvoicePrefix,
 } from '../src/gst/tax';
 import type { InvoiceDraft } from '../src/invoicing/types';
@@ -95,6 +96,39 @@ describe('computeGst', () => {
       customer: b2c,
     });
     expect(g).toMatchObject({ documentType: 'invoice', taxableCents: 5_000, placeOfSupply: null });
+  });
+});
+
+describe('GST threshold', () => {
+  const base = { rateBps: 1800, exempt: false, supplier, customer: b2c };
+
+  it('skips GST at or below the threshold, with a printable note', () => {
+    const at = computeGst({ ...base, amountCents: 50_000, thresholdCents: 50_000 });
+    expect(at).toMatchObject({
+      documentType: 'bill_of_supply',
+      taxableCents: 50_000,
+      cgstCents: 0,
+      sgstCents: 0,
+      rateBps: 0,
+    });
+    expect(at.note).toContain('₹500.00');
+  });
+
+  it('charges GST strictly above the threshold', () => {
+    const above = computeGst({ ...base, amountCents: 50_001, thresholdCents: 50_000 });
+    expect(above.documentType).toBe('tax_invoice');
+    expect(above.note).toBeNull();
+    expect(computeGst({ ...base, amountCents: 100, thresholdCents: null }).documentType).toBe(
+      'tax_invoice',
+    );
+  });
+
+  it('prefers the store value, falls back to the platform default, 0 disables', () => {
+    expect(resolveGstThreshold(null, 20_000)).toBe(20_000);
+    expect(resolveGstThreshold(50_000, 20_000)).toBe(50_000);
+    expect(resolveGstThreshold(0, 20_000)).toBeNull(); // store opted out
+    expect(resolveGstThreshold(null, null)).toBeNull();
+    expect(resolveGstThreshold(undefined, 0)).toBeNull();
   });
 });
 

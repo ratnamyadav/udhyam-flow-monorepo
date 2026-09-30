@@ -166,9 +166,10 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
         <footer className="mt-10 pt-6 border-t border-neutral-200 text-[11px] text-neutral-500 space-y-1">
           {inv.documentType === 'bill_of_supply' && (
             <div>
-              {inv.supplierGstin
-                ? 'Exempt supply — no GST charged.'
-                : 'Supplier not registered under GST — no GST charged.'}
+              {inv.taxNote ??
+                (inv.supplierGstin
+                  ? 'Exempt supply — no GST charged.'
+                  : 'Supplier not registered under GST — no GST charged.')}
             </div>
           )}
           {taxInvoice && <div>Amounts are inclusive of GST.</div>}

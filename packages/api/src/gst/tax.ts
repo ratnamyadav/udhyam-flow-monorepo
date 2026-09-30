@@ -21,6 +21,9 @@ export type GstInput = {
   exempt: boolean;
   supplier: { registered: boolean; gstin: string | null; stateCode: string | null };
   customer: { gstin: string | null; stateCode: string | null };
+  // GST is charged only when the (tax-inclusive) amount is strictly above
+  // this. null / 0 = charge on every transaction. See resolveGstThreshold.
+  thresholdCents?: number | null;
 };
 
 export type GstBreakdown = {
@@ -32,7 +35,20 @@ export type GstBreakdown = {
   rateBps: number;
   placeOfSupply: string | null;
   interState: boolean;
+  // Why no GST was charged, when that's a business rule rather than the
+  // law (currently: amount at or below the configured threshold).
+  note: string | null;
 };
+
+// Which threshold applies: the store's own value wins (0 = explicitly "no
+// threshold"), otherwise the platform default set by UdyamFlow admins.
+export function resolveGstThreshold(
+  storeCents: number | null | undefined,
+  platformCents: number | null | undefined,
+): number | null {
+  const v = storeCents ?? platformCents ?? null;
+  return v && v > 0 ? v : null;
+}
 
 export function computeGst(input: GstInput): GstBreakdown {
   const supplierState =
@@ -52,12 +68,20 @@ export function computeGst(input: GstInput): GstBreakdown {
     rateBps: 0,
     placeOfSupply,
     interState,
+    note: null,
   };
   // Not in India → a plain invoice; in India but unregistered or exempt →
   // Bill of Supply (no tax may be charged on it).
   if (!supplierState) return { documentType: 'invoice', ...noTax, placeOfSupply: null };
   if (!input.supplier.registered || input.exempt || input.rateBps <= 0) {
     return { documentType: 'bill_of_supply', ...noTax };
+  }
+  if (input.thresholdCents && input.amountCents <= input.thresholdCents) {
+    return {
+      documentType: 'bill_of_supply',
+      ...noTax,
+      note: `GST not charged — transaction value is ₹${formatInr(input.thresholdCents)} or less.`,
+    };
   }
 
   const taxableCents = Math.round((input.amountCents * 10_000) / (10_000 + input.rateBps));
@@ -72,6 +96,7 @@ export function computeGst(input: GstInput): GstBreakdown {
       rateBps: input.rateBps,
       placeOfSupply,
       interState,
+      note: null,
     };
   }
   const cgstCents = Math.floor(taxCents / 2);
@@ -84,6 +109,7 @@ export function computeGst(input: GstInput): GstBreakdown {
     rateBps: input.rateBps,
     placeOfSupply,
     interState,
+    note: null,
   };
 }
 

@@ -188,6 +188,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.6.9(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.10)(drizzle-orm@0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@types/pg@8.15.5)(kysely@0.28.16))(next@16.2.4(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react-dom@19.2.5(react@19.2.5))(react@19.2.5)(vitest@3.2.4(@types/node@25.6.0)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3))
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.2(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@types/pg@8.15.5)(kysely@0.28.16)
       next:
         specifier: 'catalog:'
         version: 16.2.4(@babel/core@7.27.1)(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
@@ -8899,7 +8902,9 @@ snapshots:
       metro-runtime: 0.84.3
     transitivePeerDependencies:
       - '@babel/core'
+      - bufferutil
       - supports-color
+      - utf-8-validate
 
   '@react-native/normalize-colors@0.83.6': {}
 
