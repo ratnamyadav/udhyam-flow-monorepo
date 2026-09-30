@@ -11,7 +11,8 @@
     "./trpc": "./src/trpc.ts",
     "./invoicing": "./src/invoicing/index.ts",
     "./export": "./src/export/accounting.ts",
-    "./gst": "./src/gst/index.ts"
+    "./gst": "./src/gst/index.ts",
+    "./whatsapp": "./src/whatsapp/index.ts"
   },
   "scripts": {
     "lint": "biome check src",

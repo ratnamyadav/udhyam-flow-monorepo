@@ -30,6 +30,7 @@ const NAV = [
   { href: '/settings/invoicing', label: 'Invoicing' },
   { href: '/settings/branding', label: 'Branding' },
   { href: '/settings/templates', label: 'Template' },
+  { href: '/settings/channels', label: 'Channels' },
 ];
 
 export function Topbar({

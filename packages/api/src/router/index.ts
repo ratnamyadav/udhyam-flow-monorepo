@@ -1,6 +1,7 @@
 import { router } from '../trpc';
 import { authRouter } from './auth';
 import { bookingRouter } from './booking';
+import { channelsRouter } from './channels';
 import { customerRouter } from './customer';
 import { invoicingRouter } from './invoicing';
 import { locationRouter } from './location';
@@ -27,6 +28,7 @@ export const appRouter = router({
   payment: paymentRouter,
   invoicing: invoicingRouter,
   report: reportRouter,
+  channels: channelsRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -59,6 +59,8 @@ export const serviceRouter = router({
         currency: z.string().length(3).default('INR'),
         resourceIds: z.array(z.string()).default([]),
         ...gstInput,
+        // Online session — bookings get a Meet/Zoom/Jitsi link.
+        isOnline: z.boolean().default(false),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -74,6 +76,7 @@ export const serviceRouter = router({
         sacCode: input.sacCode,
         gstRateBps: input.gstRateBps,
         gstExempt: input.gstExempt,
+        isOnline: input.isOnline,
       });
       if (input.resourceIds.length > 0) {
         await ctx.db
@@ -94,6 +97,7 @@ export const serviceRouter = router({
         priceCents: z.number().int().min(0).optional(),
         currency: z.string().length(3).optional(),
         ...gstInput,
+        isOnline: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

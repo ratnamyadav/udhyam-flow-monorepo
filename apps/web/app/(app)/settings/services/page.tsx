@@ -33,6 +33,10 @@ export default function ServicesSettingsPage() {
   const setRes = trpc.service.setResources.useMutation({
     onSuccess: () => utils.service.list.invalidate(),
   });
+  // Online-session toggle (join link on bookings) — see OnlineToggle below.
+  const setOnline = trpc.service.update.useMutation({
+    onSuccess: () => utils.service.list.invalidate(),
+  });
 
   const [name, setName] = useState('');
   const [duration, setDuration] = useState(30);
@@ -42,6 +46,7 @@ export default function ServicesSettingsPage() {
   const suggestedGst = useSuggestedGst();
   const [gst, setGst] = useState<ServiceGst | null>(null);
   const gstValue = gst ?? defaultServiceGst(suggestedGst);
+  const [isOnline, setIsOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onCreate() {
@@ -60,6 +65,7 @@ export default function ServicesSettingsPage() {
         sacCode: gstValue.sacCode.trim() || null,
         gstRateBps: gstValue.gstRateBps,
         gstExempt: gstValue.gstExempt,
+        isOnline,
       })
       .then(() => {
         setName('');
@@ -67,6 +73,7 @@ export default function ServicesSettingsPage() {
         setPrice(0);
         setPicked([]);
         setGst(null);
+        setIsOnline(false);
       })
       .catch((e: Error) => setError(e.message));
   }
@@ -127,6 +134,11 @@ export default function ServicesSettingsPage() {
                       );
                     })}
                   </div>
+                  <OnlineToggle
+                    checked={s.isOnline}
+                    disabled={setOnline.isPending}
+                    onChange={(v) => setOnline.mutate({ id: s.id, isOnline: v })}
+                  />
                 </div>
                 <div className="text-[13px] font-mono text-ink-mute">{s.durationMin} min</div>
                 <div className="text-[13px] font-mono text-ink">
@@ -227,6 +239,7 @@ export default function ServicesSettingsPage() {
               })}
             </div>
           </div>
+          <OnlineToggle checked={isOnline} onChange={setIsOnline} />
           {error && <div className="text-[12px] text-danger">{error}</div>}
           <Button onClick={onCreate} disabled={create.isPending} className="w-full">
             {create.isPending ? 'Adding…' : '+ Add service'}
@@ -234,5 +247,29 @@ export default function ServicesSettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Online sessions get a video link on every booking: the practitioner's own
+// Meet/Zoom room (Resources → Meeting link) or a generated Jitsi room.
+function OnlineToggle({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="mt-2 flex items-center gap-1.5 text-[12px] text-ink-mute">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>Online session (video link)</span>
+    </label>
   );
 }

@@ -103,6 +103,10 @@ Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant tabl
 | `/api/auth/[...all]` | BetterAuth handler |
 | `/api/trpc/[trpc]` | tRPC fetch adapter |
 | `/api/health` | Health check (returns `{ ok, orgs }`) |
+| `/settings/channels` | Booking channels — `?source=` share links (Google Business Profile, Instagram, WhatsApp) + bookings by source (30 days) |
+| `/pay/[bookingId]` | Pay link from reminders — starts Stripe / Cashfree checkout for an unpaid booking |
+| `/api/cron/reminders` | Hourly Vercel Cron (`apps/web/vercel.json`, `Authorization: Bearer $CRON_SECRET`) — WhatsApp/SMS reminders ~24h before confirmed bookings |
+| `/api/notifications/whatsapp/inbound` | MSG91 inbound WhatsApp webhook (`?secret=$MSG91_WEBHOOK_SECRET`) — Confirm / Cancel / Reschedule button replies |
 
 ---
 
@@ -147,7 +151,6 @@ Optional — invoicing:
 | Variable | What it is |
 |---|---|
 | `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` | FreshBooks OAuth app ([developer portal](https://my.freshbooks.com/#/developer)). Register the redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/freshbooks/callback` — FreshBooks requires `https`, so use a tunnel (e.g. ngrok) in dev |
-
 | `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` | Zoho Books server-based OAuth client ([api-console.zoho.in](https://api-console.zoho.in)); redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/zoho/callback`. Enable multi-DC to accept users outside India. `ZOHO_ACCOUNTS_URL` overrides the consent host (default `https://accounts.zoho.in`) |
 
 Built-in **UdyamFlow GST invoices** need no env: set the GST profile on `/settings/invoicing` and each service's SAC code + GST slab on `/settings/services` (prices are GST-inclusive; exempt services and unregistered businesses get a Bill of Supply). Numbers run per financial year (`INV/26-27/0001`).
@@ -155,6 +158,15 @@ Built-in **UdyamFlow GST invoices** need no env: set the GST profile on `/settin
 Optional — Indian payouts (Cashfree Easy Split): tenants add their bank account / UPI ID on `/settings/payments`; once Cashfree marks the vendor `ACTIVE`, INR orders carry `order_splits` and settle to the tenant. Easy Split must be enabled on your Cashfree account. `CASHFREE_PLATFORM_FEE_PERCENT` (default `0`) keeps a share for the platform; `CASHFREE_REQUIRE_VENDOR=true` refuses INR checkouts for tenants without an active vendor.
 
 Built-in Stripe Invoicing needs no extra env — it uses the tenant's Stripe Connect account. For invoice status sync, also subscribe the Stripe webhook (Connect events) to `invoice.paid`, `invoice.voided`, `invoice.marked_uncollectible` and `invoice.finalized`.
+
+Optional — WhatsApp reminders & two-way replies:
+
+| Variable | What it is |
+|---|---|
+| `CRON_SECRET` | Bearer token for `/api/cron/reminders` (set it in Vercel; Vercel Cron sends it automatically) |
+| `MSG91_WEBHOOK_SECRET` | Shared secret for the MSG91 inbound webhook — configure `POST {APP_URL}/api/notifications/whatsapp/inbound?secret=…` in MSG91 |
+
+WhatsApp templates to get approved on the MSG91 number (Utility, `en`): `booking_reminder` (body `{{1}}` name, `{{2}}` practitioner, `{{3}}` date/time, `{{4}}` join link or ref; quick replies Confirm / Cancel / Reschedule), `booking_reminder_pay` (same + URL button `{APP_URL}/pay/{{1}}`), and `booking_confirmed_online` (`booking_confirmed`'s four params + `{{5}}` join link).
 
 The web/admin Next apps load this `.env` from the repo root via `@next/env`'s `loadEnvConfig` in `next.config.ts`. Drizzle and the seed script load it via `dotenv-cli`. No need to duplicate per-app.
 

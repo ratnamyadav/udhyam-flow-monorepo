@@ -24,6 +24,9 @@ export const service = pgTable('service', {
   // Exempt services (e.g. healthcare by a clinical establishment) go on a
   // Bill of Supply with no tax.
   gstExempt: boolean('gst_exempt').notNull().default(false),
+  // Online session (video call) — bookings get a meeting link instead of
+  // relying on the location address.
+  isOnline: boolean('is_online').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

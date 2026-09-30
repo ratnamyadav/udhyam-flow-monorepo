@@ -26,6 +26,7 @@ export type BookingService = {
   durationMin: number;
   priceCents: number;
   currency: string;
+  isOnline?: boolean;
 };
 
 type Slot = { start: string; end: string; displayTime: string };
@@ -47,6 +48,7 @@ export function BookingInterface({
   locationId,
   timezone,
   layout,
+  source,
 }: {
   orgSlug: string;
   theme: TenantTheme;
@@ -55,6 +57,7 @@ export function BookingInterface({
   locationId: string | null;
   timezone: string;
   layout: Layout;
+  source?: string;
 }) {
   const profession = PROFESSIONS[theme.profession as ProfessionId] ?? PROFESSIONS.doctor;
   const [resourceIdx, setResourceIdx] = useState(0);
@@ -83,6 +86,7 @@ export function BookingInterface({
     displayTime: string;
     customerName: string;
     resourceName: string;
+    meetingUrl: string | null;
   } | null>(null);
 
   const createCheckout = trpc.payment.createCheckout.useMutation();
@@ -112,6 +116,7 @@ export function BookingInterface({
         displayTime: slot?.displayTime ?? '',
         customerName: vars.customerName,
         resourceName: resource?.name ?? '',
+        meetingUrl: res.meetingUrl,
       });
       slotsQuery.refetch();
       setSelected(null);
@@ -138,6 +143,7 @@ export function BookingInterface({
       customerPhone: customerPhone.trim() || undefined,
       slotStart: selected.start,
       slotEnd: selected.end,
+      source,
     });
   }
 
@@ -168,6 +174,7 @@ export function BookingInterface({
                 <div className="text-[13px] font-medium text-ink">{s.name}</div>
                 <div className="text-[11px] text-ink-mute font-mono">
                   {s.durationMin} min · {priceFor(s.priceCents, s.currency)}
+                  {s.isOnline && ' · Online'}
                 </div>
               </button>
             );
@@ -190,6 +197,7 @@ export function BookingInterface({
           displayTime={confirmation.displayTime}
           resourceName={confirmation.resourceName}
           timezone={timezone}
+          meetingUrl={confirmation.meetingUrl}
         />
       </div>
     );

@@ -11,6 +11,7 @@ export function BookingSuccess({
   displayTime,
   timezone,
   resourceName,
+  meetingUrl,
 }: {
   theme: TenantTheme;
   referenceCode: string;
@@ -18,6 +19,8 @@ export function BookingSuccess({
   displayTime: string;
   timezone: string;
   resourceName: string;
+  // Online sessions only — Meet / Zoom / Jitsi join link.
+  meetingUrl?: string | null;
 }) {
   return (
     <div className="max-w-[460px] mx-auto">
@@ -55,6 +58,28 @@ export function BookingSuccess({
           <div className="text-[12px] font-mono text-ink-mute">{timezone}</div>
         </div>
       </div>
+      {meetingUrl && (
+        <div
+          className="mt-3 px-5 py-4 border border-border rounded-xl"
+          style={{ background: 'var(--color-surface)' }}
+        >
+          <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-1">
+            Online session
+          </div>
+          <a
+            href={meetingUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[13px] font-mono break-all underline"
+            style={{ color: theme.accentInk }}
+          >
+            {meetingUrl}
+          </a>
+          <div className="text-[12px] text-ink-mute mt-1">
+            Save this link — you'll join from it at your appointment time.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

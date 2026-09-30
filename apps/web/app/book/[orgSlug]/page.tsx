@@ -33,10 +33,10 @@ export default async function BookingPage({
   searchParams,
 }: {
   params: Promise<{ orgSlug: string }>;
-  searchParams: Promise<{ layout?: string }>;
+  searchParams: Promise<{ layout?: string; source?: string; utm_source?: string }>;
 }) {
   const { orgSlug } = await params;
-  const { layout: layoutParam } = await searchParams;
+  const { layout: layoutParam, source, utm_source } = await searchParams;
 
   // Resolve org + tenantSettings + first location + resources in one shot.
   const [org] = await db
@@ -93,8 +93,12 @@ export default async function BookingPage({
         durationMin: s.durationMin,
         priceCents: s.priceCents,
         currency: s.currency,
+        isOnline: s.isOnline,
       }))}
       layout={layout}
+      // Attribution (`?source=google` from Google Business Profile etc.).
+      // booking.create sanitizes it; we just forward the raw value.
+      source={(source ?? utm_source)?.slice(0, 64)}
     />
   );
 }
