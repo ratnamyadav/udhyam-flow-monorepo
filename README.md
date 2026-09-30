@@ -86,13 +86,16 @@ Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant tabl
 | `/settings/team` | Invite teammates, manage members, revoke pending invites |
 | `/settings/templates` | Switch profession template |
 | `/settings/payments` | Stripe + Cashfree gateway configuration & webhook URLs |
-| `/settings/invoicing` | Pick the invoice provider (FreshBooks or built-in Stripe Invoicing), connect FreshBooks, toggle auto-invoicing |
+| `/settings/invoicing` | Pick the invoice provider (built-in GST invoices, Zoho Books, FreshBooks or Stripe Invoicing), GST profile, auto-invoicing, CSV / Tally export |
 | `/bookings` | Booking history — filter by status/resource, cancel/no-show/complete |
 | `/customers` | CRM — customer list, search, detail with booking history + notes |
 | `/accept-invitation/[id]` | Accept-invitation flow for invited teammates |
 | `/api/upload/logo` | Authed POST — uploads tenant logo to Cloudflare R2 (sharp-resized to 512px webp) |
 | `/api/payments/stripe/webhook` | Stripe webhook — verifies signature, marks bookings paid / refunded, records / syncs invoices |
 | `/api/integrations/freshbooks/callback` | FreshBooks OAuth redirect — stores encrypted tokens for the tenant |
+| `/api/integrations/zoho/callback` | Zoho Books OAuth redirect (multi-data-centre aware) |
+| `/api/export/invoices?format=csv\|tally&from&to` | Authed invoice export for the tenant's accountant — GST CSV or TallyPrime XML |
+| `/invoice/[id]` | Public, printable built-in GST invoice / Bill of Supply |
 | `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC, marks bookings paid / refunded |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Password reset + email verification flows |
 | `/book/[orgSlug]/confirmation` | Post-payment confirmation (auto-refreshes until webhook lands) |
@@ -144,6 +147,12 @@ Optional — invoicing:
 | Variable | What it is |
 |---|---|
 | `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` | FreshBooks OAuth app ([developer portal](https://my.freshbooks.com/#/developer)). Register the redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/freshbooks/callback` — FreshBooks requires `https`, so use a tunnel (e.g. ngrok) in dev |
+
+| `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` | Zoho Books server-based OAuth client ([api-console.zoho.in](https://api-console.zoho.in)); redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/zoho/callback`. Enable multi-DC to accept users outside India. `ZOHO_ACCOUNTS_URL` overrides the consent host (default `https://accounts.zoho.in`) |
+
+Built-in **UdyamFlow GST invoices** need no env: set the GST profile on `/settings/invoicing` and each service's SAC code + GST slab on `/settings/services` (prices are GST-inclusive; exempt services and unregistered businesses get a Bill of Supply). Numbers run per financial year (`INV/26-27/0001`).
+
+Optional — Indian payouts (Cashfree Easy Split): tenants add their bank account / UPI ID on `/settings/payments`; once Cashfree marks the vendor `ACTIVE`, INR orders carry `order_splits` and settle to the tenant. Easy Split must be enabled on your Cashfree account. `CASHFREE_PLATFORM_FEE_PERCENT` (default `0`) keeps a share for the platform; `CASHFREE_REQUIRE_VENDOR=true` refuses INR checkouts for tenants without an active vendor.
 
 Built-in Stripe Invoicing needs no extra env — it uses the tenant's Stripe Connect account. For invoice status sync, also subscribe the Stripe webhook (Connect events) to `invoice.paid`, `invoice.voided`, `invoice.marked_uncollectible` and `invoice.finalized`.
 

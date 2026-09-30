@@ -25,6 +25,21 @@ function draft(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft {
     alreadyPaid: null,
     send: true,
     dueDays: 7,
+    tax: {
+      gst: {
+        documentType: 'invoice',
+        taxableCents: 4550,
+        cgstCents: 0,
+        sgstCents: 0,
+        igstCents: 0,
+        rateBps: 0,
+        placeOfSupply: null,
+        interState: false,
+      },
+      sacCode: null,
+      supplierGstin: null,
+      customerGstin: null,
+    },
     ...overrides,
   };
 }

@@ -53,6 +53,13 @@ export const serverEnvSchema = z.object({
   // in the FreshBooks developer portal (FreshBooks requires https).
   FRESHBOOKS_CLIENT_ID: z.string().optional(),
   FRESHBOOKS_CLIENT_SECRET: z.string().optional(),
+  // Zoho Books OAuth client (api-console.zoho.in, server-based app; enable
+  // multi-DC to accept users outside India). Redirect URI:
+  // `${NEXT_PUBLIC_APP_URL}/api/integrations/zoho/callback`.
+  ZOHO_CLIENT_ID: z.string().optional(),
+  ZOHO_CLIENT_SECRET: z.string().optional(),
+  // Where consent starts — defaults to https://accounts.zoho.in.
+  ZOHO_ACCOUNTS_URL: z.url().optional(),
   // Google OAuth — optional. Sign-in/up pages hide the Google button when
   // not configured.
   GOOGLE_CLIENT_ID: z.string().optional(),

@@ -10,7 +10,15 @@
 // enforced by a unique index so double-clicks and webhook retries can't
 // issue twice.
 
-import { integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import {
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { organization } from './org';
 
 export const integrationConnection = pgTable(
@@ -20,7 +28,7 @@ export const integrationConnection = pgTable(
     organizationId: text('organization_id')
       .notNull()
       .references(() => organization.id, { onDelete: 'cascade' }),
-    // 'freshbooks' (future: 'quickbooks' | 'xero' | 'zoho_books')
+    // 'freshbooks' | 'zoho_books' (future: 'quickbooks' | 'xero')
     provider: text('provider').notNull(),
     accessToken: text('access_token').notNull(),
     refreshToken: text('refresh_token'),
@@ -30,6 +38,9 @@ export const integrationConnection = pgTable(
     externalAccountId: text('external_account_id'),
     externalBusinessId: text('external_business_id'),
     displayName: text('display_name'),
+    // Provider-specific extras, e.g. Zoho's per-data-centre hosts
+    // ({ accountsUrl, apiDomain }).
+    metadata: jsonb('metadata').$type<Record<string, string>>(),
     connectedByUserId: text('connected_by_user_id'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
@@ -48,7 +59,7 @@ export const invoice = pgTable(
     // financial record even if the booking row is later removed.
     bookingId: text('booking_id').notNull(),
     customerId: text('customer_id'),
-    // 'stripe' | 'freshbooks'
+    // 'udyamflow' | 'stripe' | 'freshbooks' | 'zoho_books'
     provider: text('provider').notNull(),
     externalId: text('external_id'),
     number: text('number'),

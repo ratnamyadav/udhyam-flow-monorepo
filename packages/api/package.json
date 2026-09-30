@@ -9,7 +9,9 @@
     ".": "./src/index.ts",
     "./root": "./src/root.ts",
     "./trpc": "./src/trpc.ts",
-    "./invoicing": "./src/invoicing/index.ts"
+    "./invoicing": "./src/invoicing/index.ts",
+    "./export": "./src/export/accounting.ts",
+    "./gst": "./src/gst/index.ts"
   },
   "scripts": {
     "lint": "biome check src",

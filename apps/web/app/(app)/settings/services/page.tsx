@@ -2,6 +2,13 @@
 
 import { Button, Input, Label } from '@udyamflow/ui';
 import { useState } from 'react';
+import {
+  defaultServiceGst,
+  type ServiceGst,
+  ServiceGstEditor,
+  ServiceGstInputs,
+  useSuggestedGst,
+} from '@/components/services/service-gst';
 import { trpc } from '@/lib/trpc/react';
 
 function priceFor(cents: number, currency: string) {
@@ -32,6 +39,9 @@ export default function ServicesSettingsPage() {
   const [price, setPrice] = useState(0);
   const [currency, setCurrency] = useState('INR');
   const [picked, setPicked] = useState<string[]>([]);
+  const suggestedGst = useSuggestedGst();
+  const [gst, setGst] = useState<ServiceGst | null>(null);
+  const gstValue = gst ?? defaultServiceGst(suggestedGst);
   const [error, setError] = useState<string | null>(null);
 
   async function onCreate() {
@@ -47,12 +57,16 @@ export default function ServicesSettingsPage() {
         priceCents: Math.round(price * 100),
         currency,
         resourceIds: picked,
+        sacCode: gstValue.sacCode.trim() || null,
+        gstRateBps: gstValue.gstRateBps,
+        gstExempt: gstValue.gstExempt,
       })
       .then(() => {
         setName('');
         setDuration(30);
         setPrice(0);
         setPicked([]);
+        setGst(null);
       })
       .catch((e: Error) => setError(e.message));
   }
@@ -92,6 +106,7 @@ export default function ServicesSettingsPage() {
                   {s.description && (
                     <div className="text-[12px] text-ink-mute">{s.description}</div>
                   )}
+                  {s.currency === 'INR' && <ServiceGstEditor service={s} />}
                   <div className="mt-2 flex flex-wrap gap-1">
                     {(resources.data ?? []).map((r) => {
                       const on = s.resourceIds.includes(r.id);
@@ -188,6 +203,7 @@ export default function ServicesSettingsPage() {
               <option value="GBP">GBP — £</option>
             </select>
           </div>
+          {currency === 'INR' && <ServiceGstInputs value={gstValue} onChange={setGst} />}
           <div className="space-y-1.5">
             <Label>Available with</Label>
             <div className="flex flex-wrap gap-1">

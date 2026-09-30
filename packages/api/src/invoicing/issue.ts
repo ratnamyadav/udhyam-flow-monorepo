@@ -6,7 +6,9 @@ import { TRPCError } from '@trpc/server';
 import { type Db, schema } from '@udyamflow/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { decrypt, encrypt } from '../crypto';
+import { computeGst } from '../gst/tax';
 import { getStripe } from '../stripe';
+import { issueBuiltinInvoice } from './builtin';
 import {
   exchangeFreshbooksToken,
   FreshBooksClient,
@@ -19,8 +21,10 @@ import {
   DEFAULT_DUE_DAYS,
   type InvoiceDraft,
   type InvoiceProvider,
+  type IssuedInvoice,
   type StripeInvoiceLike,
 } from './types';
+import { exchangeZohoToken, isZohoHost, ZohoBooksClient, ZohoError, zohoConfig } from './zoho';
 
 // A `pending` claim older than this is assumed orphaned (process died
 // mid-call) and may be reclaimed.
@@ -113,6 +117,48 @@ async function getFreshbooksSession(db: Db, organizationId: string) {
   }
 }
 
+// Zoho access tokens last an hour; refresh tokens don't rotate, so a
+// racing refresh is harmless (both get valid access tokens).
+async function getZohoSession(db: Db, organizationId: string) {
+  const cfg = zohoConfig();
+  if (!cfg) {
+    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Zoho Books is not configured' });
+  }
+  const conn = await getConnection(db, organizationId, 'zoho_books');
+  const apiDomain = conn?.metadata?.apiDomain;
+  const accountsUrl = conn?.metadata?.accountsUrl ?? cfg.accountsUrl;
+  if (!conn?.externalAccountId || !apiDomain) {
+    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Connect Zoho Books first' });
+  }
+  const fresh =
+    conn.accessTokenExpiresAt && conn.accessTokenExpiresAt.getTime() - REFRESH_SKEW_MS > Date.now();
+  if (fresh || !conn.refreshToken) {
+    return { accessToken: decrypt(conn.accessToken), apiDomain, orgId: conn.externalAccountId };
+  }
+  try {
+    const tokens = await exchangeZohoToken({
+      ...cfg,
+      accountsUrl,
+      refreshToken: decrypt(conn.refreshToken),
+    });
+    await db
+      .update(schema.integrationConnection)
+      .set({
+        accessToken: encrypt(tokens.accessToken),
+        accessTokenExpiresAt: tokens.expiresAt,
+        updatedAt: new Date(),
+      })
+      .where(eq(schema.integrationConnection.id, conn.id));
+    return { accessToken: tokens.accessToken, apiDomain, orgId: conn.externalAccountId };
+  } catch (err) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'Zoho Books session expired — reconnect Zoho Books in Settings → Invoicing',
+      cause: err,
+    });
+  }
+}
+
 async function findInvoiceForBooking(db: Db, bookingId: string) {
   const [row] = await db
     .select()
@@ -151,8 +197,18 @@ export async function issueInvoiceForBooking(
       invoiceProvider: schema.tenantSettings.invoiceProvider,
       stripeAccountId: schema.tenantSettings.stripeAccountId,
       stripeChargesEnabled: schema.tenantSettings.stripeChargesEnabled,
+      gstRegistered: schema.tenantSettings.gstRegistered,
+      gstin: schema.tenantSettings.gstin,
+      gstStateCode: schema.tenantSettings.gstStateCode,
+      gstLegalName: schema.tenantSettings.gstLegalName,
+      invoicePrefix: schema.tenantSettings.invoicePrefix,
+      orgName: schema.organization.name,
     })
     .from(schema.tenantSettings)
+    .innerJoin(
+      schema.organization,
+      eq(schema.organization.id, schema.tenantSettings.organizationId),
+    )
     .where(eq(schema.tenantSettings.organizationId, args.organizationId));
   const provider = (settings?.invoiceProvider ?? 'none') as InvoiceProvider;
   if (provider === 'none') {
@@ -193,6 +249,24 @@ export async function issueInvoiceForBooking(
     throw new TRPCError({ code: 'CONFLICT', message: 'Invoice is already being created' });
   }
 
+  const [cust] = booking.customerId
+    ? await db
+        .select({ gstin: schema.customer.gstin, stateCode: schema.customer.stateCode })
+        .from(schema.customer)
+        .where(eq(schema.customer.id, booking.customerId))
+    : [];
+  const gst = computeGst({
+    amountCents: svc.priceCents,
+    rateBps: svc.gstRateBps,
+    exempt: svc.gstExempt,
+    supplier: {
+      registered: !!settings?.gstRegistered,
+      gstin: settings?.gstin ?? null,
+      stateCode: settings?.gstStateCode ?? null,
+    },
+    customer: { gstin: cust?.gstin ?? null, stateCode: cust?.stateCode ?? null },
+  });
+
   const draft: InvoiceDraft = {
     bookingId: booking.id,
     organizationId: args.organizationId,
@@ -211,11 +285,32 @@ export async function issueInvoiceForBooking(
       booking.paymentStatus === 'paid' ? { via: booking.paymentProvider ?? 'online' } : null,
     send: args.send,
     dueDays: DEFAULT_DUE_DAYS,
+    tax: {
+      gst,
+      sacCode: svc.sacCode,
+      supplierGstin: settings?.gstRegistered ? (settings.gstin ?? null) : null,
+      customerGstin: cust?.gstin ?? null,
+    },
   };
 
   try {
-    let issued: Awaited<ReturnType<typeof issueStripeInvoice>>;
-    if (provider === 'stripe') {
+    let issued: IssuedInvoice;
+    // Providers whose invoice carries our GST breakdown.
+    let gstFields = {};
+    if (provider === 'udyamflow') {
+      issued = await issueBuiltinInvoice(
+        db,
+        {
+          invoiceId: id,
+          prefix: settings?.invoicePrefix ?? 'INV',
+          businessName: settings?.gstLegalName || settings?.orgName || 'Your provider',
+        },
+        draft,
+      );
+    } else if (provider === 'zoho_books') {
+      const z = await getZohoSession(db, args.organizationId);
+      issued = await new ZohoBooksClient(z.accessToken, z.apiDomain).issueInvoice(z.orgId, draft);
+    } else if (provider === 'stripe') {
       const stripe = getStripe();
       if (!stripe || !settings?.stripeAccountId || !settings.stripeChargesEnabled) {
         throw new TRPCError({
@@ -232,9 +327,24 @@ export async function issueInvoiceForBooking(
       );
     }
 
+    if (provider === 'udyamflow' || provider === 'zoho_books') {
+      gstFields = {
+        documentType: gst.documentType,
+        taxableCents: gst.taxableCents,
+        cgstCents: gst.cgstCents,
+        sgstCents: gst.sgstCents,
+        igstCents: gst.igstCents,
+        gstRateBps: gst.rateBps,
+        sacCode: svc.sacCode,
+        placeOfSupply: gst.placeOfSupply,
+        supplierGstin: draft.tax.supplierGstin,
+        customerGstin: draft.tax.customerGstin,
+      };
+    }
+
     const [row] = await db
       .update(schema.invoice)
-      .set({ ...issued, updatedAt: new Date() })
+      .set({ ...issued, ...gstFields, issuedAt: new Date(), updatedAt: new Date() })
       .where(eq(schema.invoice.id, id))
       .returning();
     return row!;
@@ -242,6 +352,14 @@ export async function issueInvoiceForBooking(
     // Release the claim so the user can retry.
     await db.delete(schema.invoice).where(eq(schema.invoice.id, id));
     if (err instanceof TRPCError) throw err;
+    if (err instanceof ZohoError && err.status === 401) {
+      throw new TRPCError({
+        code: 'PRECONDITION_FAILED',
+        message:
+          'Zoho Books rejected our credentials — reconnect Zoho Books in Settings → Invoicing',
+        cause: err,
+      });
+    }
     if (err instanceof FreshBooksError && err.status === 401) {
       throw new TRPCError({
         code: 'PRECONDITION_FAILED',
@@ -374,19 +492,104 @@ export async function completeFreshbooksConnection(
       set: values,
     });
 
+  await setProviderIfUnset(db, organizationId, 'freshbooks');
+
+  return { organizationId, businessName: business.name };
+}
+
+// Zoho OAuth callback. `accountsServer` comes from Zoho's redirect (the
+// user's data centre) and is host-checked before we send it our secret.
+export async function completeZohoConnection(
+  db: Db,
+  args: { code: string; state: string; userId: string; accountsServer: string | null },
+) {
+  const cfg = zohoConfig();
+  if (!cfg) throw new Error('Zoho Books is not configured');
+  const { organizationId } = verifyOAuthState(args.state, args.userId);
+  await requireOrgAdmin(db, organizationId, args.userId);
+
+  const accountsUrl =
+    args.accountsServer && isZohoHost(args.accountsServer, 'accounts')
+      ? args.accountsServer
+      : cfg.accountsUrl;
+  const tokens = await exchangeZohoToken({ ...cfg, accountsUrl, code: args.code });
+  if (!tokens.refreshToken) throw new Error('Zoho did not return a refresh token — try again');
+  const orgs = await new ZohoBooksClient(tokens.accessToken, tokens.apiDomain).listOrganizations();
+  const org = orgs[0];
+  if (!org) throw new Error('That Zoho account has no Zoho Books organization');
+
+  const values = {
+    accessToken: encrypt(tokens.accessToken),
+    refreshToken: encrypt(tokens.refreshToken),
+    accessTokenExpiresAt: tokens.expiresAt,
+    externalAccountId: org.organizationId,
+    externalBusinessId: null,
+    displayName: org.name,
+    metadata: { accountsUrl, apiDomain: tokens.apiDomain },
+    connectedByUserId: args.userId,
+    updatedAt: new Date(),
+  };
   await db
-    .insert(schema.tenantSettings)
-    .values({ organizationId, invoiceProvider: 'freshbooks' })
-    .onConflictDoNothing();
+    .insert(schema.integrationConnection)
+    .values({ id: randomUUID(), organizationId, provider: 'zoho_books', ...values })
+    .onConflictDoUpdate({
+      target: [schema.integrationConnection.organizationId, schema.integrationConnection.provider],
+      set: values,
+    });
+  await setProviderIfUnset(db, organizationId, 'zoho_books');
+  return { organizationId, businessName: org.name };
+}
+
+async function setProviderIfUnset(db: Db, organizationId: string, provider: string) {
+  await db.insert(schema.tenantSettings).values({ organizationId }).onConflictDoNothing();
   await db
     .update(schema.tenantSettings)
-    .set({ invoiceProvider: 'freshbooks', updatedAt: new Date() })
+    .set({ invoiceProvider: provider, updatedAt: new Date() })
     .where(
       and(
         eq(schema.tenantSettings.organizationId, organizationId),
         eq(schema.tenantSettings.invoiceProvider, 'none'),
       ),
     );
+}
 
-  return { organizationId, businessName: business.name };
+// Everything a public invoice page needs, by (unguessable) invoice id.
+// Only built-in invoices are served — other providers host their own.
+export async function getPublicInvoice(db: Db, invoiceId: string) {
+  const [row] = await db
+    .select({
+      invoice: schema.invoice,
+      booking: {
+        customerName: schema.booking.customerName,
+        customerEmail: schema.booking.customerEmail,
+        customerPhone: schema.booking.customerPhone,
+        slotStart: schema.booking.slotStart,
+        serviceId: schema.booking.serviceId,
+      },
+      tenant: {
+        name: schema.organization.name,
+        legalName: schema.tenantSettings.gstLegalName,
+        gstin: schema.tenantSettings.gstin,
+        gstStateCode: schema.tenantSettings.gstStateCode,
+        billingAddress: schema.tenantSettings.billingAddress,
+        accent: schema.tenantSettings.accent,
+        logoUrl: schema.tenantSettings.logoUrl,
+      },
+    })
+    .from(schema.invoice)
+    .innerJoin(schema.booking, eq(schema.booking.id, schema.invoice.bookingId))
+    .innerJoin(schema.organization, eq(schema.organization.id, schema.invoice.organizationId))
+    .leftJoin(
+      schema.tenantSettings,
+      eq(schema.tenantSettings.organizationId, schema.invoice.organizationId),
+    )
+    .where(and(eq(schema.invoice.id, invoiceId), eq(schema.invoice.provider, 'udyamflow')));
+  if (!row) return null;
+  const [svc] = row.booking.serviceId
+    ? await db
+        .select({ name: schema.service.name })
+        .from(schema.service)
+        .where(eq(schema.service.id, row.booking.serviceId))
+    : [];
+  return { ...row, serviceName: svc?.name ?? 'Service' };
 }

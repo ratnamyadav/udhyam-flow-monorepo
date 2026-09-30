@@ -3,10 +3,29 @@ import { TRPCError } from '@trpc/server';
 import { schema } from '@udyamflow/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { isValidHsnSac } from '../gst/india';
+import { GST_RATES_BPS } from '../gst/tax';
 import { publicProcedure, router, tenantProcedure } from '../trpc';
 
 // Tenant-scoped service catalog + the join table that tells the booking page
 // which resources offer each service.
+
+// GST treatment per service (see ../gst/tax.ts). All optional so existing
+// callers keep working; the schema defaults to 18%, not exempt.
+const gstInput = {
+  sacCode: z
+    .string()
+    .trim()
+    .refine(isValidHsnSac, 'SAC code must be 4–8 digits')
+    .nullable()
+    .optional(),
+  gstRateBps: z
+    .number()
+    .int()
+    .refine((v) => (GST_RATES_BPS as readonly number[]).includes(v), 'Pick a GST slab')
+    .optional(),
+  gstExempt: z.boolean().optional(),
+};
 
 export const serviceRouter = router({
   list: tenantProcedure.query(async ({ ctx }) => {
@@ -39,6 +58,7 @@ export const serviceRouter = router({
         priceCents: z.number().int().min(0).default(0),
         currency: z.string().length(3).default('INR'),
         resourceIds: z.array(z.string()).default([]),
+        ...gstInput,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -51,6 +71,9 @@ export const serviceRouter = router({
         durationMin: input.durationMin,
         priceCents: input.priceCents,
         currency: input.currency,
+        sacCode: input.sacCode,
+        gstRateBps: input.gstRateBps,
+        gstExempt: input.gstExempt,
       });
       if (input.resourceIds.length > 0) {
         await ctx.db
@@ -70,6 +93,7 @@ export const serviceRouter = router({
         durationMin: z.number().int().min(5).max(480).optional(),
         priceCents: z.number().int().min(0).optional(),
         currency: z.string().length(3).optional(),
+        ...gstInput,
       }),
     )
     .mutation(async ({ ctx, input }) => {

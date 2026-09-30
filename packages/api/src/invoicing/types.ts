@@ -1,8 +1,17 @@
 // Provider-agnostic shapes for issuing an invoice. Each provider adapter
-// (stripe.ts, freshbooks.ts) takes an `InvoiceDraft` and returns an
-// `IssuedInvoice`; `issue.ts` owns the DB bookkeeping around them.
+// (builtin.ts, stripe.ts, freshbooks.ts, zoho.ts) takes an `InvoiceDraft`
+// and returns an `IssuedInvoice`; `issue.ts` owns the DB bookkeeping.
 
-export const INVOICE_PROVIDERS = ['none', 'stripe', 'freshbooks'] as const;
+import type { GstBreakdown } from '../gst/tax';
+
+// 'udyamflow' is the built-in GST invoice generator (no third party).
+export const INVOICE_PROVIDERS = [
+  'none',
+  'udyamflow',
+  'stripe',
+  'freshbooks',
+  'zoho_books',
+] as const;
 export type InvoiceProvider = (typeof INVOICE_PROVIDERS)[number];
 
 export type InvoiceStatus = 'pending' | 'draft' | 'open' | 'paid' | 'void';
@@ -22,6 +31,14 @@ export type InvoiceDraft = {
   // Email the invoice to the customer from the provider.
   send: boolean;
   dueDays: number;
+  // Indian GST treatment, computed once in issue.ts. Providers that
+  // understand GST (built-in, Zoho Books) use it; others ignore it.
+  tax: {
+    gst: GstBreakdown;
+    sacCode: string | null;
+    supplierGstin: string | null;
+    customerGstin: string | null;
+  };
 };
 
 export type IssuedInvoice = {

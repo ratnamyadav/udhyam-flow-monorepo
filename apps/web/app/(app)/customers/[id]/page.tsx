@@ -1,5 +1,6 @@
 'use client';
 
+import { GST_STATES } from '@udyamflow/api/gst';
 import { Button, Input, Label } from '@udyamflow/ui';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
@@ -22,6 +23,8 @@ export default function CustomerDetailPage() {
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');
+  const [gstin, setGstin] = useState('');
+  const [stateCode, setStateCode] = useState('');
 
   useEffect(() => {
     if (!customer.data) return;
@@ -29,6 +32,8 @@ export default function CustomerDetailPage() {
     setEmail(customer.data.email ?? '');
     setPhone(customer.data.phone ?? '');
     setNotes(customer.data.notes ?? '');
+    setGstin(customer.data.gstin ?? '');
+    setStateCode(customer.data.stateCode ?? '');
   }, [customer.data]);
 
   function save() {
@@ -38,6 +43,8 @@ export default function CustomerDetailPage() {
       email: email.trim() || null,
       phone: phone.trim() || null,
       notes: notes.trim() || null,
+      gstin: gstin.trim() || null,
+      stateCode: stateCode || null,
     });
   }
 
@@ -105,6 +112,29 @@ export default function CustomerDetailPage() {
             <div className="space-y-1.5">
               <Label htmlFor="cphone">Phone</Label>
               <Input id="cphone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="cgstin">GSTIN (business)</Label>
+                <Input id="cgstin" value={gstin} onChange={(e) => setGstin(e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="cstate">State (for GST)</Label>
+                <select
+                  id="cstate"
+                  className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink"
+                  value={stateCode}
+                  disabled={!!gstin.trim()}
+                  onChange={(e) => setStateCode(e.target.value)}
+                >
+                  <option value="">Same as business</option>
+                  {Object.entries(GST_STATES).map(([code, n]) => (
+                    <option key={code} value={code}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="cnotes">Notes</Label>

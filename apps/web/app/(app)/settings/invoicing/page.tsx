@@ -1,17 +1,19 @@
 'use client';
 
 // Choose where booking invoices are issued:
-//   • Stripe Invoicing — built in, runs on the tenant's Stripe Connect account
-//   • FreshBooks — first accounting integration, connected via OAuth
-// QuickBooks / Xero / Zoho Books are listed as upcoming integrations.
+//   • UdyamFlow GST invoices — built in, numbered per financial year
+//   • Zoho Books / FreshBooks — accounting integrations over OAuth
+//   • Stripe Invoicing — on the tenant's Stripe Connect account
+// Plus the tenant's GST profile and accountant exports (CSV / Tally).
 
-import { Button } from '@udyamflow/ui';
+import { GST_STATES } from '@udyamflow/api/gst';
+import { Button, Input, Label } from '@udyamflow/ui';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { Suspense, useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc/react';
 
-type Provider = 'none' | 'stripe' | 'freshbooks';
+type OAuthProvider = 'freshbooks' | 'zoho_books';
 
 const UPCOMING = [
   {
@@ -22,11 +24,9 @@ const UPCOMING = [
     name: 'Xero',
     blurb: 'Popular with accountants in the UK, AU and NZ.',
   },
-  {
-    name: 'Zoho Books',
-    blurb: 'GST-compliant invoices and e-invoicing for India.',
-  },
 ];
+
+const selectCls = 'h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-ink';
 
 export default function InvoicingSettingsPage() {
   return (
@@ -38,7 +38,7 @@ export default function InvoicingSettingsPage() {
         <h1 className="text-[32px] font-medium tracking-tight text-ink">Invoicing</h1>
         <p className="text-[14px] text-ink-mute mt-2 max-w-[640px]">
           Issue an invoice for every booking — from the bookings list, or automatically once a
-          customer pays. Use Stripe's built-in invoicing, or send invoices straight into your
+          customer pays. Use UdyamFlow's GST invoices, Stripe, or send invoices straight into your
           accounting software.
         </p>
       </div>
@@ -55,31 +55,73 @@ function InvoicingSettings() {
   const update = trpc.invoicing.updateSettings.useMutation({
     onSuccess: () => utils.invoicing.status.invalidate(),
   });
-  const connect = trpc.invoicing.connectFreshbooks.useMutation();
-  const disconnect = trpc.invoicing.disconnectFreshbooks.useMutation({
+  const connect = trpc.invoicing.connect.useMutation();
+  const disconnect = trpc.invoicing.disconnect.useMutation({
     onSuccess: () => utils.invoicing.status.invalidate(),
   });
 
   const search = useSearchParams();
   const [flash, setFlash] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
   useEffect(() => {
-    const fb = search.get('freshbooks');
-    if (fb === 'connected') setFlash({ tone: 'good', text: 'FreshBooks connected.' });
-    if (fb === 'error') {
-      setFlash({
-        tone: 'bad',
-        text: `FreshBooks connection failed: ${search.get('reason') ?? 'unknown error'}`,
-      });
+    for (const [key, label] of [
+      ['freshbooks', 'FreshBooks'],
+      ['zoho', 'Zoho Books'],
+    ] as const) {
+      const v = search.get(key);
+      if (v === 'connected') setFlash({ tone: 'good', text: `${label} connected.` });
+      if (v === 'error') {
+        setFlash({
+          tone: 'bad',
+          text: `${label} connection failed: ${search.get('reason') ?? 'unknown error'}`,
+        });
+      }
     }
   }, [search]);
 
   const s = status.data;
-  const provider: Provider = s?.provider ?? 'none';
+  const provider = s?.provider ?? 'none';
   const error = update.error ?? connect.error ?? disconnect.error;
 
-  async function startFreshbooks() {
-    const res = await connect.mutateAsync();
+  async function startConnect(p: OAuthProvider) {
+    const res = await connect.mutateAsync({ provider: p });
     window.location.assign(res.url);
+  }
+
+  function oauthBody(p: OAuthProvider, label: string, envVars: string[]) {
+    const info = p === 'freshbooks' ? s?.freshbooks : s?.zoho;
+    if (!info?.available) return <EnvHint vars={envVars} />;
+    if (info.connected) {
+      return (
+        <div className="flex items-center gap-3 mt-3">
+          <span className="text-[12px] text-ink">{info.businessName}</span>
+          <button
+            type="button"
+            className="text-[12px] text-ink-mute hover:text-danger"
+            disabled={disconnect.isPending}
+            onClick={() => {
+              if (confirm(`Disconnect ${label}? Existing invoices stay in ${label}.`)) {
+                disconnect.mutate({ provider: p });
+              }
+            }}
+          >
+            Disconnect
+          </button>
+        </div>
+      );
+    }
+    return (
+      <Button
+        className="mt-3"
+        variant="outline"
+        size="sm"
+        onClick={() => startConnect(p)}
+        disabled={connect.isPending}
+      >
+        {connect.isPending && connect.variables?.provider === p
+          ? 'Redirecting…'
+          : `Connect ${label}`}
+      </Button>
+    );
   }
 
   return (
@@ -96,8 +138,41 @@ function InvoicingSettings() {
 
       <div className="grid grid-cols-2 gap-4">
         <ProviderCard
+          name="UdyamFlow GST invoices"
+          subtitle="Built in · free · recommended for India"
+          selected={provider === 'udyamflow'}
+          badge="Ready"
+          good
+          onSelect={() => update.mutate({ provider: 'udyamflow' })}
+          disabled={update.isPending}
+        >
+          <p>
+            Tax invoices (CGST/SGST or IGST) or Bills of Supply, numbered per financial year, with a
+            shareable, printable page. Fill in your GST profile below.
+          </p>
+        </ProviderCard>
+
+        <ProviderCard
+          name="Zoho Books"
+          subtitle="Accounting · GST-native"
+          selected={provider === 'zoho_books'}
+          badge={
+            !s?.zoho.available ? 'Not configured' : s.zoho.connected ? 'Connected' : 'Not connected'
+          }
+          good={!!s?.zoho.connected}
+          onSelect={s?.zoho.connected ? () => update.mutate({ provider: 'zoho_books' }) : undefined}
+          disabled={update.isPending}
+        >
+          <p>
+            Contacts, GST invoices and payments land in your Zoho Books organization — ready for
+            GSTR-1 filing from Zoho.
+          </p>
+          {oauthBody('zoho_books', 'Zoho Books', ['ZOHO_CLIENT_ID', 'ZOHO_CLIENT_SECRET'])}
+        </ProviderCard>
+
+        <ProviderCard
           name="FreshBooks"
-          subtitle="Accounting integration · recommended"
+          subtitle="Accounting · US / CA / UK"
           selected={provider === 'freshbooks'}
           badge={
             !s?.freshbooks.available
@@ -116,40 +191,15 @@ function InvoicingSettings() {
             Clients, invoices and payments sync into your FreshBooks books. Paid bookings are
             recorded as paid; unpaid ones are emailed by FreshBooks.
           </p>
-          {!s?.freshbooks.available ? (
-            <EnvHint vars={['FRESHBOOKS_CLIENT_ID', 'FRESHBOOKS_CLIENT_SECRET']} />
-          ) : s.freshbooks.connected ? (
-            <div className="flex items-center gap-3 mt-3">
-              <span className="text-[12px] text-ink">{s.freshbooks.businessName}</span>
-              <button
-                type="button"
-                className="text-[12px] text-ink-mute hover:text-danger"
-                disabled={disconnect.isPending}
-                onClick={() => {
-                  if (confirm('Disconnect FreshBooks? Existing invoices stay in FreshBooks.')) {
-                    disconnect.mutate();
-                  }
-                }}
-              >
-                Disconnect
-              </button>
-            </div>
-          ) : (
-            <Button
-              className="mt-3"
-              variant="outline"
-              size="sm"
-              onClick={startFreshbooks}
-              disabled={connect.isPending}
-            >
-              {connect.isPending ? 'Redirecting…' : 'Connect FreshBooks'}
-            </Button>
-          )}
+          {oauthBody('freshbooks', 'FreshBooks', [
+            'FRESHBOOKS_CLIENT_ID',
+            'FRESHBOOKS_CLIENT_SECRET',
+          ])}
         </ProviderCard>
 
         <ProviderCard
           name="Stripe Invoicing"
-          subtitle="Built in · no extra account"
+          subtitle="Built in · global"
           selected={provider === 'stripe'}
           badge={
             !s?.stripe.available ? 'Not configured' : s.stripe.ready ? 'Ready' : 'Needs Stripe'
@@ -200,11 +250,14 @@ function InvoicingSettings() {
         )}
       </div>
 
+      <GstProfileForm />
+      <ExportPanel />
+
       <div>
         <div className="text-[12px] uppercase tracking-wider font-mono text-ink-soft mb-3">
           More integrations — coming soon
         </div>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-2 gap-4">
           {UPCOMING.map((u) => (
             <div key={u.name} className="bg-surface border border-border rounded-xl p-4 opacity-70">
               <div className="text-[14px] font-medium text-ink">{u.name}</div>
@@ -213,6 +266,227 @@ function InvoicingSettings() {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+
+function GstProfileForm() {
+  const utils = trpc.useUtils();
+  const profile = trpc.invoicing.gstProfile.useQuery();
+  const save = trpc.invoicing.updateGstProfile.useMutation({
+    onSuccess: () => {
+      utils.invoicing.gstProfile.invalidate();
+      setSaved(true);
+    },
+  });
+  const [saved, setSaved] = useState(false);
+  const [f, setF] = useState({
+    gstRegistered: false,
+    gstin: '',
+    legalName: '',
+    stateCode: '',
+    billingAddress: '',
+    invoicePrefix: 'INV',
+  });
+  useEffect(() => {
+    const p = profile.data;
+    if (!p) return;
+    setF({
+      gstRegistered: p.gstRegistered,
+      gstin: p.gstin ?? '',
+      legalName: p.legalName ?? '',
+      stateCode: p.stateCode ?? '',
+      billingAddress: p.billingAddress ?? '',
+      invoicePrefix: p.invoicePrefix,
+    });
+  }, [profile.data]);
+
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => {
+    setSaved(false);
+    setF((p) => ({ ...p, [k]: e.target.value }));
+  };
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    save.mutate({
+      gstRegistered: f.gstRegistered,
+      gstin: f.gstRegistered && f.gstin.trim() ? f.gstin.trim() : null,
+      legalName: f.legalName.trim() || null,
+      stateCode: f.stateCode || null,
+      billingAddress: f.billingAddress.trim() || null,
+      invoicePrefix: f.invoicePrefix,
+    });
+  }
+
+  return (
+    <form onSubmit={submit} className="bg-surface border border-border rounded-xl p-5 space-y-4">
+      <div>
+        <div className="text-[15px] font-medium text-ink">GST profile</div>
+        <div className="text-[12px] text-ink-mute mt-1">
+          Printed on UdyamFlow invoices and used for Zoho Books. Not registered? Leave GST off —
+          you'll issue Bills of Supply (registration is required above ₹20 lakh turnover for
+          services in most states).
+        </div>
+      </div>
+      <label className="flex items-center gap-2 text-[13px] text-ink">
+        <input
+          type="checkbox"
+          checked={f.gstRegistered}
+          onChange={(e) => {
+            setSaved(false);
+            setF((p) => ({ ...p, gstRegistered: e.target.checked }));
+          }}
+        />
+        GST-registered
+      </label>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="gst-legal">Legal / trade name</Label>
+          <Input id="gst-legal" value={f.legalName} onChange={set('legalName')} />
+        </div>
+        {f.gstRegistered ? (
+          <div className="space-y-1.5">
+            <Label htmlFor="gst-gstin">GSTIN</Label>
+            <Input
+              id="gst-gstin"
+              value={f.gstin}
+              onChange={set('gstin')}
+              placeholder="27AAPFU0939F1ZV"
+            />
+          </div>
+        ) : (
+          <div className="space-y-1.5">
+            <Label htmlFor="gst-state">State</Label>
+            <select
+              id="gst-state"
+              className={selectCls}
+              value={f.stateCode}
+              onChange={set('stateCode')}
+            >
+              <option value="">Outside India / not applicable</option>
+              {Object.entries(GST_STATES).map(([code, name]) => (
+                <option key={code} value={code}>
+                  {code} · {name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="gst-addr">Billing address</Label>
+        <textarea
+          id="gst-addr"
+          rows={2}
+          className="w-full text-[13px] bg-surface border border-border rounded-md px-2.5 py-1.5 text-ink"
+          value={f.billingAddress}
+          onChange={set('billingAddress')}
+        />
+      </div>
+      <div className="w-40 space-y-1.5">
+        <Label htmlFor="gst-prefix">Invoice prefix</Label>
+        <Input
+          id="gst-prefix"
+          maxLength={4}
+          value={f.invoicePrefix}
+          onChange={set('invoicePrefix')}
+        />
+      </div>
+      {save.error && <div className="text-[12px] text-danger">{save.error.message}</div>}
+      <div className="flex items-center gap-3">
+        <Button type="submit" size="sm" disabled={save.isPending}>
+          {save.isPending ? 'Saving…' : 'Save GST profile'}
+        </Button>
+        {saved && <span className="text-[12px] text-ink-mute">Saved.</span>}
+      </div>
+      <div className="text-[11px] text-ink-soft">
+        Set each service's SAC code and GST rate in Settings → Services. Prices are treated as
+        GST-inclusive.
+      </div>
+    </form>
+  );
+}
+
+// Current Indian financial year as default export window.
+function fyStart(): string {
+  const now = new Date();
+  const y = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
+  return `${y}-04-01`;
+}
+
+function ExportPanel() {
+  const [from, setFrom] = useState(fyStart());
+  const [to, setTo] = useState(new Date().toISOString().slice(0, 10));
+  const [ledgers, setLedgers] = useState({
+    sales: 'Sales - Services',
+    cgst: 'Output CGST',
+    sgst: 'Output SGST',
+    igst: 'Output IGST',
+    receipts: 'Payment Gateway',
+  });
+  const [showLedgers, setShowLedgers] = useState(false);
+
+  const href = (format: 'csv' | 'tally') => {
+    const q = new URLSearchParams({ format, from, to, ...(format === 'tally' ? ledgers : {}) });
+    return `/api/export/invoices?${q.toString()}`;
+  };
+
+  return (
+    <div className="bg-surface border border-border rounded-xl p-5 space-y-4">
+      <div>
+        <div className="text-[15px] font-medium text-ink">Export for your accountant</div>
+        <div className="text-[12px] text-ink-mute mt-1">
+          CSV with GST columns (for GSTR-1 / Excel), or Tally XML to import into TallyPrime via
+          Gateway of Tally → Import → Transactions.
+        </div>
+      </div>
+      <div className="flex items-end gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor="ex-from">From</Label>
+          <Input id="ex-from" type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor="ex-to">To</Label>
+          <Input id="ex-to" type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+        </div>
+        <a href={href('csv')}>
+          <Button type="button" variant="outline" size="md">
+            Download CSV
+          </Button>
+        </a>
+        <a href={href('tally')}>
+          <Button type="button" variant="outline" size="md">
+            Download Tally XML
+          </Button>
+        </a>
+      </div>
+      <button
+        type="button"
+        className="text-[12px] text-ink-mute hover:text-ink"
+        onClick={() => setShowLedgers((v) => !v)}
+      >
+        {showLedgers ? 'Hide' : 'Edit'} Tally ledger names
+      </button>
+      {showLedgers && (
+        <div className="grid grid-cols-3 gap-3">
+          {(Object.keys(ledgers) as (keyof typeof ledgers)[]).map((k) => (
+            <div key={k} className="space-y-1.5">
+              <Label htmlFor={`led-${k}`}>
+                {k === 'receipts' ? 'Payments received into' : `${k.toUpperCase()} ledger`}
+              </Label>
+              <Input
+                id={`led-${k}`}
+                value={ledgers[k]}
+                onChange={(e) => setLedgers((p) => ({ ...p, [k]: e.target.value }))}
+              />
+            </div>
+          ))}
+          <div className="col-span-3 text-[11px] text-ink-soft">
+            These ledgers must already exist in Tally. Customer ledgers are created under Sundry
+            Debtors automatically.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

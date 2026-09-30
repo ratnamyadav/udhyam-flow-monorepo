@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { type Db, schema } from '@udyamflow/db';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import { z } from 'zod';
+import { isStateCode, isValidGstin, stateCodeFromGstin } from '../gst/india';
 import { router, tenantProcedure } from '../trpc';
 
 export const customerRouter = router({
@@ -56,6 +57,15 @@ export const customerRouter = router({
         email: z.string().email().nullable().optional(),
         phone: z.string().nullable().optional(),
         notes: z.string().nullable().optional(),
+        // GST invoicing: a business customer's GSTIN, or just their state
+        // (place of supply). A GSTIN implies the state.
+        gstin: z
+          .string()
+          .transform((v) => v.trim().toUpperCase())
+          .refine(isValidGstin, 'Invalid GSTIN')
+          .nullable()
+          .optional(),
+        stateCode: z.string().refine(isStateCode, 'Unknown state').nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -70,6 +80,7 @@ export const customerRouter = router({
         );
       if (!owned) throw new TRPCError({ code: 'NOT_FOUND', message: 'Customer not found' });
       const { id, ...patch } = input;
+      if (patch.gstin) patch.stateCode = stateCodeFromGstin(patch.gstin);
       await ctx.db.update(schema.customer).set(patch).where(eq(schema.customer.id, id));
       return { ok: true };
     }),
