@@ -2,6 +2,7 @@ import { router } from '../trpc';
 import { authRouter } from './auth';
 import { bookingRouter } from './booking';
 import { customerRouter } from './customer';
+import { invoicingRouter } from './invoicing';
 import { locationRouter } from './location';
 import { notificationsRouter } from './notifications';
 import { onboardingRouter } from './onboarding';
@@ -24,6 +25,7 @@ export const appRouter = router({
   team: teamRouter,
   notifications: notificationsRouter,
   payment: paymentRouter,
+  invoicing: invoicingRouter,
   report: reportRouter,
 });
 

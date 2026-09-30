@@ -42,6 +42,12 @@ export const serverEnvSchema = z.object({
   CASHFREE_CLIENT_SECRET: z.string().optional(),
   // 'sandbox' | 'production' — defaults to sandbox.
   CASHFREE_ENV: z.enum(['sandbox', 'production']).optional(),
+  // FreshBooks OAuth app (invoicing integration). Optional — without both,
+  // the invoicing settings page hides the "Connect FreshBooks" button.
+  // Register the redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/freshbooks/callback`
+  // in the FreshBooks developer portal (FreshBooks requires https).
+  FRESHBOOKS_CLIENT_ID: z.string().optional(),
+  FRESHBOOKS_CLIENT_SECRET: z.string().optional(),
   // Google OAuth — optional. Sign-in/up pages hide the Google button when
   // not configured.
   GOOGLE_CLIENT_ID: z.string().optional(),

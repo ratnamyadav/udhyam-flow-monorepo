@@ -36,6 +36,12 @@ export const tenantSettings = pgTable('tenant_settings', {
   stripeChargesEnabled: boolean('stripe_charges_enabled').notNull().default(false),
   cashfreeMerchantId: text('cashfree_merchant_id'),
   cashfreeApiKey: text('cashfree_api_key'),
+  // Where invoices get issued: 'none' | 'stripe' (built-in Stripe Invoicing
+  // on the tenant's Connect account) | 'freshbooks' (needs a row in
+  // integration_connection). `autoInvoice` issues one automatically when a
+  // booking's payment webhook lands.
+  invoiceProvider: text('invoice_provider').notNull().default('none'),
+  autoInvoice: boolean('auto_invoice').notNull().default(false),
   onboardingStep: integer('onboarding_step').notNull().default(1),
   createdAt: timestamp('created_at').notNull().defaultNow(),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),

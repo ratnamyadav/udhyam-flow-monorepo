@@ -1,6 +1,11 @@
+import {
+  autoInvoiceIfEnabled,
+  recordStripeInvoice,
+  syncStripeInvoiceStatus,
+} from '@udyamflow/api/invoicing';
 import { db, schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
-import type { NextRequest } from 'next/server';
+import { after, type NextRequest } from 'next/server';
 import Stripe from 'stripe';
 
 // Stripe webhook. Source of truth for marking bookings paid — we don't trust
@@ -52,7 +57,34 @@ export async function POST(req: NextRequest) {
         .update(schema.booking)
         .set({ paymentStatus: 'paid' })
         .where(eq(schema.booking.id, bookingId));
+
+      // Invoicing runs after the 200 so a slow provider can't make Stripe
+      // retry the webhook. If Checkout generated an invoice (built-in Stripe
+      // invoicing), mirror it; otherwise issue via the tenant's provider.
+      const invoiceId = typeof session.invoice === 'string' ? session.invoice : session.invoice?.id;
+      const organizationId = session.metadata?.organizationId;
+      after(async () => {
+        try {
+          if (invoiceId && organizationId) {
+            const invoice = await stripe.invoices.retrieve(invoiceId, {}, reqOpts);
+            await recordStripeInvoice(db, { organizationId, bookingId, invoice });
+          } else {
+            await autoInvoiceIfEnabled(db, bookingId);
+          }
+        } catch (err) {
+          console.error(`[invoicing] post-checkout invoicing failed for ${bookingId}:`, err);
+        }
+      });
     }
+  } else if (
+    event.type === 'invoice.paid' ||
+    event.type === 'invoice.voided' ||
+    event.type === 'invoice.marked_uncollectible' ||
+    event.type === 'invoice.finalized'
+  ) {
+    // Keeps invoices issued from UdyamFlow (and the bookings they bill)
+    // in sync when the customer pays or the tenant voids in Stripe.
+    await syncStripeInvoiceStatus(db, event.data.object);
   } else if (event.type === 'checkout.session.expired') {
     const session = event.data.object;
     const bookingId = session.metadata?.bookingId;

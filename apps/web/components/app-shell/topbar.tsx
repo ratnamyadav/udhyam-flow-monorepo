@@ -27,6 +27,7 @@ const NAV = [
   { href: '/settings/locations', label: 'Locations' },
   { href: '/settings/team', label: 'Team' },
   { href: '/settings/payments', label: 'Payments' },
+  { href: '/settings/invoicing', label: 'Invoicing' },
   { href: '/settings/branding', label: 'Branding' },
   { href: '/settings/templates', label: 'Template' },
 ];

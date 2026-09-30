@@ -37,9 +37,17 @@ export default function BookingsPage() {
   const refund = trpc.payment.refund.useMutation({
     onSuccess: () => utils.booking.invalidate(),
   });
+  const invoicing = trpc.invoicing.status.useQuery();
+  const invoices = trpc.invoicing.list.useQuery();
+  const createInvoice = trpc.invoicing.create.useMutation({
+    onSuccess: () => utils.invoicing.list.invalidate(),
+    onError: (err) => alert(err.message),
+  });
 
   const bookings = list.data ?? [];
   const resById = new Map((resources.data ?? []).map((r) => [r.id, r]));
+  const invoiceByBooking = new Map((invoices.data ?? []).map((i) => [i.bookingId, i]));
+  const canInvoice = (invoicing.data?.provider ?? 'none') !== 'none';
 
   return (
     <div className="px-12 py-10 max-w-[1280px] mx-auto">
@@ -78,7 +86,7 @@ export default function BookingsPage() {
       </div>
 
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[160px_1fr_180px_120px_180px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
+        <div className="grid grid-cols-[160px_1fr_180px_120px_260px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
           <div>When</div>
           <div>Customer</div>
           <div>Resource</div>
@@ -102,10 +110,11 @@ export default function BookingsPage() {
             const isFuture = b.slotStart > new Date();
             const isConfirmed = b.status === 'confirmed';
             const meta = STATUS_LABELS[b.status] ?? STATUS_LABELS.confirmed!;
+            const inv = invoiceByBooking.get(b.id);
             return (
               <div
                 key={b.id}
-                className="grid grid-cols-[160px_1fr_180px_120px_180px] px-5 py-3.5 border-t border-border first:border-t-0 items-center hover:bg-surface-mute"
+                className="grid grid-cols-[160px_1fr_180px_120px_260px] px-5 py-3.5 border-t border-border first:border-t-0 items-center hover:bg-surface-mute"
               >
                 <div className="text-[12px] font-mono tabular-nums text-ink">
                   {b.slotStart.toLocaleString([], {
@@ -132,6 +141,38 @@ export default function BookingsPage() {
                   </span>
                 </div>
                 <div className="flex gap-2 text-[12px]">
+                  {inv ? (
+                    inv.hostedUrl ? (
+                      <a
+                        href={inv.hostedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-ink hover:underline underline-offset-2"
+                        title={`${inv.provider} invoice · ${inv.status}`}
+                      >
+                        {inv.number ? `Invoice ${inv.number}` : 'Invoice'} ↗
+                      </a>
+                    ) : (
+                      <span className="text-ink-mute" title={inv.provider}>
+                        {inv.status === 'pending' ? 'Invoicing…' : `Invoice ${inv.number ?? ''}`}
+                      </span>
+                    )
+                  ) : (
+                    canInvoice &&
+                    b.serviceId &&
+                    b.status !== 'cancelled' && (
+                      <button
+                        type="button"
+                        className="text-ink-mute hover:text-ink"
+                        onClick={() => createInvoice.mutate({ bookingId: b.id })}
+                        disabled={createInvoice.isPending}
+                      >
+                        {createInvoice.isPending && createInvoice.variables?.bookingId === b.id
+                          ? 'Invoicing…'
+                          : 'Invoice'}
+                      </button>
+                    )
+                  )}
                   {b.paymentStatus === 'paid' && (
                     <button
                       type="button"

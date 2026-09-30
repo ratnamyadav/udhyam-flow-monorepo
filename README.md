@@ -58,6 +58,7 @@ Postgres schema is split by domain in `packages/db/src/schema/`:
 - **Org** — `organization`, `member`, `invitation` (BetterAuth org plugin; orgs == tenants)
 - **Tenant** — `tenant_settings` 1:1 with `organization` (theme, profession, template, density, currency)
 - **Booking** — `location`, `resource`, `booking`
+- **Invoicing** — `invoice` (one per booking, mirrors the provider's invoice), `integration_connection` (encrypted OAuth tokens for accounting tools)
 
 Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant table. The tRPC `tenantProcedure` middleware reads the active org from the session (BetterAuth's `activeOrganizationId`) and scopes all queries to it.
 
@@ -85,11 +86,13 @@ Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant tabl
 | `/settings/team` | Invite teammates, manage members, revoke pending invites |
 | `/settings/templates` | Switch profession template |
 | `/settings/payments` | Stripe + Cashfree gateway configuration & webhook URLs |
+| `/settings/invoicing` | Pick the invoice provider (FreshBooks or built-in Stripe Invoicing), connect FreshBooks, toggle auto-invoicing |
 | `/bookings` | Booking history — filter by status/resource, cancel/no-show/complete |
 | `/customers` | CRM — customer list, search, detail with booking history + notes |
 | `/accept-invitation/[id]` | Accept-invitation flow for invited teammates |
 | `/api/upload/logo` | Authed POST — uploads tenant logo to Cloudflare R2 (sharp-resized to 512px webp) |
-| `/api/payments/stripe/webhook` | Stripe webhook — verifies signature, marks bookings paid / refunded |
+| `/api/payments/stripe/webhook` | Stripe webhook — verifies signature, marks bookings paid / refunded, records / syncs invoices |
+| `/api/integrations/freshbooks/callback` | FreshBooks OAuth redirect — stores encrypted tokens for the tenant |
 | `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC, marks bookings paid / refunded |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Password reset + email verification flows |
 | `/book/[orgSlug]/confirmation` | Post-payment confirmation (auto-refreshes until webhook lands) |
@@ -135,6 +138,14 @@ Required values:
 | `BETTER_AUTH_URL` | `http://localhost:3000` for dev |
 | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_AUTH_URL` | `http://localhost:3000` |
 | `EXPO_PUBLIC_AUTH_URL` | `http://localhost:3000` (mobile points at the web auth handler) |
+
+Optional — invoicing:
+
+| Variable | What it is |
+|---|---|
+| `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` | FreshBooks OAuth app ([developer portal](https://my.freshbooks.com/#/developer)). Register the redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/freshbooks/callback` — FreshBooks requires `https`, so use a tunnel (e.g. ngrok) in dev |
+
+Built-in Stripe Invoicing needs no extra env — it uses the tenant's Stripe Connect account. For invoice status sync, also subscribe the Stripe webhook (Connect events) to `invoice.paid`, `invoice.voided`, `invoice.marked_uncollectible` and `invoice.finalized`.
 
 The web/admin Next apps load this `.env` from the repo root via `@next/env`'s `loadEnvConfig` in `next.config.ts`. Drizzle and the seed script load it via `dotenv-cli`. No need to duplicate per-app.
 

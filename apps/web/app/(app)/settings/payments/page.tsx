@@ -54,7 +54,9 @@ export default function PaymentsSettingsPage() {
         <div className="text-[12px] text-ink-mute mt-2">
           Configure these in your gateway dashboard. The signing secret in your env
           (STRIPE_WEBHOOK_SECRET / CASHFREE_CLIENT_SECRET) is what verifies the request. For Stripe
-          Connect, also enable the <span className="font-mono">account.updated</span> event.
+          Connect, also enable the <span className="font-mono">account.updated</span> event, plus{' '}
+          <span className="font-mono">invoice.paid</span> /{' '}
+          <span className="font-mono">invoice.voided</span> if you use Stripe invoicing.
         </div>
       </div>
     </div>
