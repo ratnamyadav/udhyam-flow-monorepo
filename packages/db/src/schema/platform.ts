@@ -8,9 +8,9 @@ export const PLATFORM_SETTINGS_ID = 'global';
 
 export const platformSettings = pgTable('platform_settings', {
   id: text('id').primaryKey(),
-  // Default "charge GST only above this amount" (paise) for stores that
-  // haven't set their own. null = charge GST on every transaction.
-  gstThresholdCents: integer('gst_threshold_cents'),
+  // Default GST registration turnover limit for services (paise) for
+  // stores without their own. null = the statutory ₹20 lakh.
+  gstTurnoverLimitCents: integer('gst_turnover_limit_cents'),
   updatedByUserId: text('updated_by_user_id'),
   updatedAt: timestamp('updated_at').notNull().defaultNow(),
 });

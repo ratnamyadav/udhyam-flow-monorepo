@@ -5,9 +5,14 @@ import {
   financialYear,
   formatInr,
   formatInvoiceNumber,
-  resolveGstThreshold,
   sanitizeInvoicePrefix,
 } from '../src/gst/tax';
+import {
+  financialYearRange,
+  formatLakh,
+  resolveTurnoverLimit,
+  turnoverLevel,
+} from '../src/gst/turnover';
 import type { InvoiceDraft } from '../src/invoicing/types';
 import { isZohoHost, pickZohoTax, ZohoBooksClient, zohoAuthorizeUrl } from '../src/invoicing/zoho';
 
@@ -99,36 +104,56 @@ describe('computeGst', () => {
   });
 });
 
-describe('GST threshold', () => {
-  const base = { rateBps: 1800, exempt: false, supplier, customer: b2c };
-
-  it('skips GST at or below the threshold, with a printable note', () => {
-    const at = computeGst({ ...base, amountCents: 50_000, thresholdCents: 50_000 });
-    expect(at).toMatchObject({
-      documentType: 'bill_of_supply',
-      taxableCents: 50_000,
-      cgstCents: 0,
-      sgstCents: 0,
-      rateBps: 0,
+describe('GST registration limit (annual turnover)', () => {
+  it('uses ₹20 lakh by default and ₹10 lakh in Manipur/Mizoram/Nagaland/Tripura', () => {
+    expect(
+      resolveTurnoverLimit({ storeCents: null, platformCents: null, stateCode: '27' }),
+    ).toEqual({
+      limitCents: 2_000_000_00,
+      source: 'statutory',
     });
-    expect(at.note).toContain('₹500.00');
+    for (const code of ['13', '14', '15', '16']) {
+      expect(
+        resolveTurnoverLimit({ storeCents: null, platformCents: null, stateCode: code }).limitCents,
+      ).toBe(1_000_000_00);
+    }
   });
 
-  it('charges GST strictly above the threshold', () => {
-    const above = computeGst({ ...base, amountCents: 50_001, thresholdCents: 50_000 });
-    expect(above.documentType).toBe('tax_invoice');
-    expect(above.note).toBeNull();
-    expect(computeGst({ ...base, amountCents: 100, thresholdCents: null }).documentType).toBe(
-      'tax_invoice',
-    );
+  it('prefers the store value, then the state rule, then the platform default', () => {
+    expect(
+      resolveTurnoverLimit({ storeCents: 4_000_000_00, platformCents: 1, stateCode: '14' }),
+    ).toEqual({ limitCents: 4_000_000_00, source: 'store' });
+    expect(
+      resolveTurnoverLimit({ storeCents: null, platformCents: 3_000_000_00, stateCode: '14' })
+        .source,
+    ).toBe('state');
+    expect(
+      resolveTurnoverLimit({ storeCents: null, platformCents: 3_000_000_00, stateCode: '07' }),
+    ).toEqual({ limitCents: 3_000_000_00, source: 'platform' });
   });
 
-  it('prefers the store value, falls back to the platform default, 0 disables', () => {
-    expect(resolveGstThreshold(null, 20_000)).toBe(20_000);
-    expect(resolveGstThreshold(50_000, 20_000)).toBe(50_000);
-    expect(resolveGstThreshold(0, 20_000)).toBeNull(); // store opted out
-    expect(resolveGstThreshold(null, null)).toBeNull();
-    expect(resolveGstThreshold(undefined, 0)).toBeNull();
+  it('warns from 80% and flags strictly above the limit', () => {
+    const limit = 2_000_000_00;
+    expect(turnoverLevel(1_599_999_99, limit)).toBe('ok');
+    expect(turnoverLevel(1_600_000_00, limit)).toBe('approaching');
+    expect(turnoverLevel(limit, limit)).toBe('approaching');
+    expect(turnoverLevel(limit + 1, limit)).toBe('exceeded');
+  });
+
+  it('computes the financial year window in IST', () => {
+    const fy = financialYearRange(new Date('2026-09-30T12:00:00Z'));
+    expect(fy.label).toBe('26-27');
+    expect(fy.start.toISOString()).toBe('2026-03-31T18:30:00.000Z');
+    expect(fy.end.toISOString()).toBe('2027-03-31T18:30:00.000Z');
+    expect(financialYearRange(new Date('2027-03-31T18:29:59Z')).label).toBe('26-27');
+    expect(financialYearRange(new Date('2027-03-31T18:30:00Z')).label).toBe('27-28');
+  });
+
+  it('formats lakh / crore amounts', () => {
+    expect(formatLakh(2_000_000_00)).toBe('₹20 lakh');
+    expect(formatLakh(1_250_000_00)).toBe('₹12.5 lakh');
+    expect(formatLakh(12_000_000_00)).toBe('₹1.2 crore');
+    expect(formatLakh(45_000_00)).toBe('₹45,000');
   });
 });
 

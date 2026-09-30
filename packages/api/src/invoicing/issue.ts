@@ -6,7 +6,7 @@ import { TRPCError } from '@trpc/server';
 import { type Db, schema } from '@udyamflow/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { decrypt, encrypt } from '../crypto';
-import { computeGst, resolveGstThreshold } from '../gst/tax';
+import { computeGst } from '../gst/tax';
 import { getStripe } from '../stripe';
 import { issueBuiltinInvoice } from './builtin';
 import {
@@ -159,15 +159,6 @@ async function getZohoSession(db: Db, organizationId: string) {
   }
 }
 
-// Platform-wide default GST threshold, set by UdyamFlow admins.
-export async function getPlatformGstThreshold(db: Db): Promise<number | null> {
-  const [row] = await db
-    .select({ cents: schema.platformSettings.gstThresholdCents })
-    .from(schema.platformSettings)
-    .where(eq(schema.platformSettings.id, schema.PLATFORM_SETTINGS_ID));
-  return row?.cents ?? null;
-}
-
 async function findInvoiceForBooking(db: Db, bookingId: string) {
   const [row] = await db
     .select()
@@ -211,7 +202,6 @@ export async function issueInvoiceForBooking(
       gstStateCode: schema.tenantSettings.gstStateCode,
       gstLegalName: schema.tenantSettings.gstLegalName,
       invoicePrefix: schema.tenantSettings.invoicePrefix,
-      gstThresholdCents: schema.tenantSettings.gstThresholdCents,
       orgName: schema.organization.name,
     })
     .from(schema.tenantSettings)
@@ -266,10 +256,6 @@ export async function issueInvoiceForBooking(
         .where(eq(schema.customer.id, booking.customerId))
     : [];
   const gst = computeGst({
-    thresholdCents: resolveGstThreshold(
-      settings?.gstThresholdCents,
-      await getPlatformGstThreshold(db),
-    ),
     amountCents: svc.priceCents,
     rateBps: svc.gstRateBps,
     exempt: svc.gstExempt,
@@ -353,7 +339,6 @@ export async function issueInvoiceForBooking(
         placeOfSupply: gst.placeOfSupply,
         supplierGstin: draft.tax.supplierGstin,
         customerGstin: draft.tax.customerGstin,
-        taxNote: gst.note,
       };
     }
 

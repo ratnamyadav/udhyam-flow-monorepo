@@ -1,6 +1,7 @@
 'use client';
 
 import { PROFESSIONS, type ProfessionId } from '@udyamflow/tokens';
+import { GstTurnoverBanner } from '@/components/invoicing/gst-turnover';
 import { trpc } from '@/lib/trpc/react';
 
 function formatMoney(cents: number, currency: string) {
@@ -72,6 +73,7 @@ export default function DashboardPage() {
 
   return (
     <div className="px-12 py-10 max-w-[1280px] mx-auto">
+      <GstTurnoverBanner />
       <div className="flex items-end justify-between mb-7">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">

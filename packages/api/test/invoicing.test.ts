@@ -35,7 +35,6 @@ function draft(overrides: Partial<InvoiceDraft> = {}): InvoiceDraft {
         rateBps: 0,
         placeOfSupply: null,
         interState: false,
-        note: null,
       },
       sacCode: null,
       supplierGstin: null,

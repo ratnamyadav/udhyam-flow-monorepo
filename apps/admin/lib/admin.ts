@@ -23,8 +23,3 @@ export function rupeesToPaise(raw: FormDataEntryValue | null): number | null {
   if (!Number.isFinite(n) || n < 0 || n > 10_000_000) throw new Error('Invalid amount');
   return Math.round(n * 100);
 }
-
-export function formatRupees(paise: number | null): string {
-  if (paise === null) return '—';
-  return `₹${(paise / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-}

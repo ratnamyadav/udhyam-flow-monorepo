@@ -13,7 +13,8 @@
     "./export": "./src/export/accounting.ts",
     "./gst": "./src/gst/index.ts",
     "./whatsapp": "./src/whatsapp/index.ts",
-    "./memberships": "./src/memberships/index.ts"
+    "./memberships": "./src/memberships/index.ts",
+    "./gst-turnover": "./src/gst/turnover-db.ts"
   },
   "scripts": {
     "lint": "biome check src",

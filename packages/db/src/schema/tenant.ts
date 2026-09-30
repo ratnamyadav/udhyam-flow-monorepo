@@ -53,11 +53,11 @@ export const tenantSettings = pgTable('tenant_settings', {
   // Up to 4 chars; invoice numbers look like "INV/26-27/0001" (GST caps
   // invoice numbers at 16 chars, alphanumerics plus - and /).
   invoicePrefix: text('invoice_prefix').notNull().default('INV'),
-  // Charge GST only on transactions strictly above this (paise). null =
-  // use the platform default from the admin panel; 0 = charge on every
-  // transaction regardless of the platform default. Editable by the store
-  // (Settings → Invoicing) and by UdyamFlow admins.
-  gstThresholdCents: integer('gst_threshold_cents'),
+  // Annual (financial-year) turnover above which this store must register
+  // for GST, in paise. null = default: ₹10 lakh in Manipur / Mizoram /
+  // Nagaland / Tripura, else the platform default (₹20 lakh unless admins
+  // changed it). Editable by the store and by UdyamFlow admins.
+  gstTurnoverLimitCents: integer('gst_turnover_limit_cents'),
   // Where invoices get issued: 'none' | 'stripe' (built-in Stripe Invoicing
   // on the tenant's Connect account) | 'freshbooks' (needs a row in
   // integration_connection). `autoInvoice` issues one automatically when a

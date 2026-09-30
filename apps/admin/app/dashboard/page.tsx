@@ -56,9 +56,9 @@ export default async function AdminDashboardPage() {
                 href="/gst"
                 className="bg-surface border border-border rounded-xl p-5 hover:border-border-strong"
               >
-                <div className="text-[15px] font-medium text-ink">GST thresholds</div>
+                <div className="text-[15px] font-medium text-ink">GST registration limits</div>
                 <div className="text-[12px] text-ink-mute mt-1">
-                  Platform default and per-store limits for charging GST.
+                  ₹20 lakh turnover limit, per-store overrides, stores that must register.
                 </div>
               </Link>
             </div>

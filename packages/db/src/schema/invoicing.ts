@@ -83,9 +83,6 @@ export const invoice = pgTable(
     placeOfSupply: text('place_of_supply'),
     supplierGstin: text('supplier_gstin'),
     customerGstin: text('customer_gstin'),
-    // Printed on the invoice when GST was skipped by a business rule
-    // (e.g. below the store's GST threshold).
-    taxNote: text('tax_note'),
     issuedAt: timestamp('issued_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),

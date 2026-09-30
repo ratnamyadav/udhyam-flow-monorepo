@@ -170,6 +170,9 @@ importers:
       '@sentry/nextjs':
         specifier: 'catalog:'
         version: 10.21.0(@opentelemetry/context-async-hooks@2.8.0(@opentelemetry/api@1.9.1))(@opentelemetry/core@2.8.0(@opentelemetry/api@1.9.1))(@opentelemetry/sdk-trace-base@2.8.0(@opentelemetry/api@1.9.1))(next@16.2.4(@opentelemetry/api@1.9.1)(babel-plugin-react-compiler@1.0.0)(react-dom@19.2.5(react@19.2.5))(react@19.2.5))(react@19.2.5)(webpack@5.107.2(lightningcss@1.32.0))
+      '@udyamflow/api':
+        specifier: workspace:*
+        version: link:../../packages/api
       '@udyamflow/auth':
         specifier: workspace:*
         version: link:../../packages/auth
@@ -8902,9 +8905,7 @@ snapshots:
       metro-runtime: 0.84.3
     transitivePeerDependencies:
       - '@babel/core'
-      - bufferutil
       - supports-color
-      - utf-8-validate
 
   '@react-native/normalize-colors@0.83.6': {}
 

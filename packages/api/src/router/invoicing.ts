@@ -4,13 +4,9 @@ import { and, desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { isStateCode, isValidGstin, stateCodeFromGstin } from '../gst/india';
 import { sanitizeInvoicePrefix } from '../gst/tax';
+import { getStoreGstTurnover } from '../gst/turnover-db';
 import { freshbooksAuthorizeUrl, freshbooksConfig } from '../invoicing/freshbooks';
-import {
-  getConnection,
-  getPlatformGstThreshold,
-  issueInvoiceForBooking,
-  requireOrgAdmin,
-} from '../invoicing/issue';
+import { getConnection, issueInvoiceForBooking, requireOrgAdmin } from '../invoicing/issue';
 import { createOAuthState } from '../invoicing/oauth-state';
 import { INVOICE_PROVIDERS } from '../invoicing/types';
 import { zohoAuthorizeUrl, zohoConfig } from '../invoicing/zoho';
@@ -166,25 +162,19 @@ export const invoicingRouter = router({
         stateCode: schema.tenantSettings.gstStateCode,
         billingAddress: schema.tenantSettings.billingAddress,
         invoicePrefix: schema.tenantSettings.invoicePrefix,
-        gstThresholdCents: schema.tenantSettings.gstThresholdCents,
       })
       .from(schema.tenantSettings)
       .where(eq(schema.tenantSettings.organizationId, ctx.organizationId));
-    const platformGstThresholdCents = await getPlatformGstThreshold(ctx.db);
-    return {
-      ...(s ?? {
+    return (
+      s ?? {
         gstRegistered: false,
         gstin: null,
         legalName: null,
         stateCode: null,
         billingAddress: null,
         invoicePrefix: 'INV',
-        gstThresholdCents: null,
-      }),
-      // Default set by UdyamFlow admins; applies while the store's own
-      // value is null.
-      platformGstThresholdCents,
-    };
+      }
+    );
   }),
 
   updateGstProfile: tenantProcedure
@@ -201,9 +191,6 @@ export const invoicingRouter = router({
           stateCode: z.string().refine(isStateCode, 'Pick a state').nullable(),
           billingAddress: z.string().trim().max(400).nullable(),
           invoicePrefix: z.string().max(10),
-          // Paise. null = inherit the platform default, 0 = GST on every
-          // transaction. Omit to leave unchanged.
-          gstThresholdCents: z.number().int().min(0).max(1_000_000_000).nullable().optional(),
         })
         .refine((v) => !v.gstRegistered || !!v.gstin, {
           message: 'GSTIN is required when GST-registered',
@@ -221,9 +208,6 @@ export const invoicingRouter = router({
         gstStateCode: stateCode,
         billingAddress: input.billingAddress,
         invoicePrefix: sanitizeInvoicePrefix(input.invoicePrefix),
-        ...(input.gstThresholdCents !== undefined
-          ? { gstThresholdCents: input.gstThresholdCents }
-          : {}),
       };
       await ctx.db
         .insert(schema.tenantSettings)
@@ -231,6 +215,27 @@ export const invoicingRouter = router({
         .onConflictDoUpdate({
           target: schema.tenantSettings.organizationId,
           set: { ...patch, updatedAt: new Date() },
+        });
+      return { ok: true };
+    }),
+
+  // FY turnover through UdyamFlow vs the GST registration limit.
+  gstTurnover: tenantProcedure.query(({ ctx }) => getStoreGstTurnover(ctx.db, ctx.organizationId)),
+
+  // Store's own registration limit (paise); null = default (state rule /
+  // platform default / ₹20 lakh). UdyamFlow admins can set it too.
+  setGstTurnoverLimit: tenantProcedure
+    .input(
+      z.object({ limitCents: z.number().int().min(1_00_000_00).max(2_000_000_000).nullable() }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      await requireOrgAdmin(ctx.db, ctx.organizationId, ctx.user.id);
+      await ctx.db
+        .insert(schema.tenantSettings)
+        .values({ organizationId: ctx.organizationId, gstTurnoverLimitCents: input.limitCents })
+        .onConflictDoUpdate({
+          target: schema.tenantSettings.organizationId,
+          set: { gstTurnoverLimitCents: input.limitCents, updatedAt: new Date() },
         });
       return { ok: true };
     }),

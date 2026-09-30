@@ -6,27 +6,31 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { requireAdmin, rupeesToPaise } from '@/lib/admin';
 
-// Server actions for /gst. Each re-checks the admin role.
+// Server actions for /gst. Each re-checks the admin role — actions are
+// public POST endpoints regardless of which page renders them.
+
+const MIN_LIMIT_CENTS = 1_00_000_00; // ₹1 lakh — guards against typos
 
 function back(q: Record<string, string>): never {
   redirect(`/gst?${new URLSearchParams(q).toString()}`);
 }
 
-// Platform default "charge GST only above ₹X" for stores that haven't set
-// their own. Empty = GST on every transaction.
-export async function setPlatformGstThreshold(form: FormData) {
-  const admin = await requireAdmin();
+function parseLimit(form: FormData): number | null {
   let cents: number | null;
   try {
-    cents = rupeesToPaise(form.get('threshold'));
+    cents = rupeesToPaise(form.get('limit'));
   } catch {
     back({ error: 'Enter a valid amount in rupees' });
   }
-  const values = {
-    gstThresholdCents: cents && cents > 0 ? cents : null,
-    updatedByUserId: admin.id,
-    updatedAt: new Date(),
-  };
+  if (cents !== null && cents < MIN_LIMIT_CENTS) back({ error: 'Limit must be at least ₹1 lakh' });
+  return cents;
+}
+
+// Platform default GST registration limit. Empty = statutory ₹20 lakh.
+export async function setPlatformTurnoverLimit(form: FormData) {
+  const admin = await requireAdmin();
+  const cents = parseLimit(form);
+  const values = { gstTurnoverLimitCents: cents, updatedByUserId: admin.id, updatedAt: new Date() };
   await db
     .insert(schema.platformSettings)
     .values({ id: schema.PLATFORM_SETTINGS_ID, ...values })
@@ -35,9 +39,8 @@ export async function setPlatformGstThreshold(form: FormData) {
   back({ saved: 'platform' });
 }
 
-// Per-store override. mode=inherit clears it (platform default applies);
-// mode=custom stores the amount (0 = GST on every transaction).
-export async function setStoreGstThreshold(form: FormData) {
+// Per-store limit. Empty = back to the default (state rule / platform).
+export async function setStoreTurnoverLimit(form: FormData) {
   await requireAdmin();
   const organizationId = String(form.get('organizationId') ?? '');
   const [org] = organizationId
@@ -47,20 +50,13 @@ export async function setStoreGstThreshold(form: FormData) {
         .where(eq(schema.organization.id, organizationId))
     : [];
   if (!org) back({ error: 'Unknown store' });
-  let cents: number | null = null;
-  if (form.get('mode') !== 'inherit') {
-    try {
-      cents = rupeesToPaise(form.get('threshold')) ?? 0;
-    } catch {
-      back({ error: 'Enter a valid amount in rupees' });
-    }
-  }
+  const cents = parseLimit(form);
   await db
     .insert(schema.tenantSettings)
-    .values({ organizationId, gstThresholdCents: cents })
+    .values({ organizationId, gstTurnoverLimitCents: cents })
     .onConflictDoUpdate({
       target: schema.tenantSettings.organizationId,
-      set: { gstThresholdCents: cents, updatedAt: new Date() },
+      set: { gstTurnoverLimitCents: cents, updatedAt: new Date() },
     });
   revalidatePath('/gst');
   back({ saved: organizationId });
