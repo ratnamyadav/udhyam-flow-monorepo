@@ -6,6 +6,11 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useOnboarding } from '@/components/onboarding/store';
 import { StepHeading, WizardFooter } from '@/components/onboarding/wizard-shell';
 
+function bookingUrl(slug: string) {
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://udyamflow.com').replace(/\/+$/, '');
+  return `${base.replace(/^https?:\/\//, '')}/book/${slug}`;
+}
+
 export default function StepReady() {
   const router = useRouter();
   const { state, hydrated, reset } = useOnboarding();
@@ -33,7 +38,7 @@ export default function StepReady() {
   const cards = [
     {
       title: 'Your booking page',
-      body: `Share ${slug}.udyamflow.com or your custom domain.`,
+      body: `Share ${bookingUrl(slug)} with your customers.`,
       cta: 'Open booking page',
       href: `/book/${slug}`,
       newTab: true,

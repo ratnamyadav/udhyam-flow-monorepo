@@ -1,6 +1,6 @@
 'use client';
 
-import type { TenantTheme } from '@udyamflow/tokens';
+import { type TenantTheme, tenantThemeToCssVars } from '@udyamflow/tokens';
 import { createContext, useContext } from 'react';
 import { TenantThemeProvider } from '@/components/theme/tenant-theme-provider';
 import { type OrgOption, Topbar } from './topbar';
@@ -32,7 +32,13 @@ export function AppShell({
   return (
     <TenantThemeProvider theme={theme} density={density ?? 'comfortable'}>
       <ActiveThemeContext.Provider value={theme}>
-        <div className="min-h-screen bg-bg">
+        {/* Tenant vars inline too, so the server-rendered first paint is already
+            branded — TenantThemeProvider only reaches <html> after hydration. */}
+        <div
+          className="min-h-screen bg-bg"
+          style={tenantThemeToCssVars(theme)}
+          data-density={density ?? 'comfortable'}
+        >
           <Topbar orgs={orgs} activeOrgId={activeOrgId} activeTheme={theme} user={user} />
           <div>{children}</div>
         </div>

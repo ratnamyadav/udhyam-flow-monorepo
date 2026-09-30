@@ -13,6 +13,10 @@ function slugify(s: string) {
     .replace(/^-+|-+$/g, '');
 }
 
+// What customers will visit — shown next to the slug so it's clear what
+// the URL becomes.
+const BOOKING_URL_PREFIX = `${(process.env.NEXT_PUBLIC_APP_URL ?? 'https://udyamflow.com').replace(/^https?:\/\//, '').replace(/\/+$/, '')}/book/`;
+
 export default function StepAccount() {
   const { state, patch, reset } = useOnboarding();
 
@@ -57,20 +61,9 @@ export default function StepAccount() {
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="email">Work email</Label>
-            <Input
-              id="email"
-              type="email"
-              value={state.email}
-              onChange={(e) => patch({ email: e.target.value })}
-            />
-            <div className="text-xs text-ink-soft">
-              Used for booking confirmations and admin alerts.
-            </div>
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="slug">Workspace URL</Label>
+            <Label htmlFor="slug">Booking page URL</Label>
             <div className="flex items-center gap-1 text-[14px]">
+              <span className="text-ink-mute font-mono">{BOOKING_URL_PREFIX}</span>
               <Input
                 id="slug"
                 value={state.slug}
@@ -86,7 +79,6 @@ export default function StepAccount() {
                 onBlur={() => patch({ slug: slugify(state.slug) })}
                 className="flex-1 font-mono"
               />
-              <span className="text-ink-mute font-mono">.udyamflow.com</span>
             </div>
             <div className="text-xs text-ink-soft">
               Lowercase letters, numbers, and dashes only.

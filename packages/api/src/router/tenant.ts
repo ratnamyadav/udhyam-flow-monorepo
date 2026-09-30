@@ -78,7 +78,7 @@ export const tenantRouter = router({
         // Booking page copy; null/empty = the profession's default wording.
         bookingHeadline: z.string().trim().max(120).nullable().optional(),
         bookingIntro: z.string().trim().max(600).nullable().optional(),
-        logoText: z.string().max(4).optional(),
+        logoText: z.string().trim().min(1).max(4).optional(),
         // `null` clears the URL (revert to letter badge), undefined leaves it alone.
         logoUrl: z.string().url().nullable().optional(),
         profession: profession.optional(),

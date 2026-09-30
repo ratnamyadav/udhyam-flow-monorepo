@@ -12,15 +12,33 @@ export async function generateMetadata({
   params: Promise<{ orgSlug: string }>;
 }): Promise<Metadata> {
   const { orgSlug } = await params;
-  const [org] = await db
-    .select({ name: schema.organization.name })
+  const [row] = await db
+    .select({ org: schema.organization, settings: schema.tenantSettings })
     .from(schema.organization)
+    .leftJoin(
+      schema.tenantSettings,
+      eq(schema.tenantSettings.organizationId, schema.organization.id),
+    )
     .where(eq(schema.organization.slug, orgSlug));
-  if (!org) return { title: 'Book — UdyamFlow' };
+  if (!row) return { title: 'Book — UdyamFlow' };
+  const { org, settings } = row;
+  // Share previews (WhatsApp, iMessage, Slack) use the tenant's own copy and
+  // logo when they've set them.
+  const title = settings?.bookingHeadline || `Book with ${org.name}`;
+  const description =
+    settings?.bookingIntro?.slice(0, 200) ||
+    `Reserve a slot with ${org.name}. Powered by UdyamFlow.`;
   return {
-    title: `Book with ${org.name} — UdyamFlow`,
-    description: `Reserve a slot with ${org.name}. Powered by UdyamFlow.`,
-    openGraph: { title: `Book with ${org.name}`, siteName: 'UdyamFlow', type: 'website' },
+    title: `${title} — ${org.name}`,
+    description,
+    openGraph: {
+      title,
+      description,
+      siteName: org.name,
+      type: 'website',
+      ...(settings?.logoUrl ? { images: [{ url: settings.logoUrl, alt: org.name }] } : {}),
+    },
+    ...(settings?.logoUrl ? { icons: { icon: settings.logoUrl } } : {}),
     // Tenant booking pages aren't for general SEO indexing.
     robots: { index: false },
   };
