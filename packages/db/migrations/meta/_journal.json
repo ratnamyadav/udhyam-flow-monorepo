@@ -15,6 +15,13 @@
       "when": 1790741311593,
       "tag": "0001_booking_no_overlap",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790742549780,
+      "tag": "0002_tenant_booking_page",
+      "breakpoints": true
     }
   ]
 }

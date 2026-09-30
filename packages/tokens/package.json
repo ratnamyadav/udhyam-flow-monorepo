@@ -12,7 +12,9 @@
     "./professions": "./src/professions.ts",
     "./templates": "./src/templates.ts",
     "./density": "./src/density.ts",
-    "./css-vars": "./src/css-vars.ts"
+    "./css-vars": "./src/css-vars.ts",
+    "./color": "./src/color.ts",
+    "./fonts": "./src/fonts.ts"
   },
   "scripts": {
     "lint": "biome check src",

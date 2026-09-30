@@ -1,7 +1,16 @@
 // 1:1 with `organization` — holds the per-tenant brand + booking template config
 // that powers the theme customizer + booking page.
 
-import { boolean, integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
+import {
+  boolean,
+  check,
+  integer,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+} from 'drizzle-orm/pg-core';
 import { organization } from './org';
 
 export const tenantSettings = pgTable(
@@ -19,10 +28,17 @@ export const tenantSettings = pgTable(
     accent: text('accent').notNull().default('#0f766e'),
     accentSoft: text('accent_soft').notNull().default('#ccfbf1'),
     accentInk: text('accent_ink').notNull().default('#134e4a'),
-    fontDisplay: text('font_display').notNull().default('"Inter", system-ui, sans-serif'),
-    fontUi: text('font_ui').notNull().default('"Inter", system-ui, sans-serif'),
+    // Font ids from @udyamflow/tokens FONT_OPTIONS (older rows may hold a
+    // CSS stack; fontStack() maps both).
+    fontDisplay: text('font_display').notNull().default('inter'),
+    fontUi: text('font_ui').notNull().default('inter'),
     radius: integer('radius').notNull().default(8),
     density: text('density').notNull().default('comfortable'),
+    // Public booking page: default layout (a `?layout=` URL param still
+    // overrides it) and optional custom copy. Null copy = profession default.
+    bookingLayout: text('booking_layout').notNull().default('sidebar'),
+    bookingHeadline: text('booking_headline'),
+    bookingIntro: text('booking_intro'),
     currency: text('currency').notNull().default('USD'),
     // Per-tenant opt-in flags for MSG91 notifications. UI hides these toggles
     // unless MSG91_AUTH_KEY is configured on the server.
@@ -46,5 +62,11 @@ export const tenantSettings = pgTable(
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   // One Stripe Connect account belongs to exactly one tenant.
-  (t) => [uniqueIndex('tenant_settings_stripe_account_uniq').on(t.stripeAccountId)],
+  (t) => [
+    uniqueIndex('tenant_settings_stripe_account_uniq').on(t.stripeAccountId),
+    check(
+      'tenant_settings_booking_layout_check',
+      sql`${t.bookingLayout} IN ('sidebar', 'stacked', 'inline')`,
+    ),
+  ],
 );

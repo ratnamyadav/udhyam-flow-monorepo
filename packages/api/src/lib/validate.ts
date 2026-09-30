@@ -1,3 +1,4 @@
+import { FONT_IDS } from '@udyamflow/tokens';
 import { z } from 'zod';
 import { isValidTimeZone } from './time';
 
@@ -5,12 +6,11 @@ export const hexColor = z
   .string()
   .regex(/^#[0-9a-fA-F]{6}$/, 'Colors must be 6-digit hex, e.g. #0f766e');
 
-// Font stacks end up in CSS custom properties — allow the characters a
-// font-family list needs and nothing that could break out of the value.
-export const fontStack = z
-  .string()
-  .max(200)
-  .regex(/^[\w\s"',.-]+$/, 'Invalid font stack');
+// Fonts are chosen from the curated list in @udyamflow/tokens (each one is
+// actually loaded by the web app) and stored by id.
+export const fontId = z.enum(FONT_IDS);
+
+export const bookingLayout = z.enum(['sidebar', 'stacked', 'inline']);
 
 export const timeZone = z.string().refine(isValidTimeZone, 'Unknown timezone');
 

@@ -4,7 +4,7 @@ import { atomic, isConflictError, schema } from '@udyamflow/db';
 import { TENANT_THEMES, type TenantId } from '@udyamflow/tokens';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { currency, fontStack, hexColor, timeZone } from '../lib/validate';
+import { currency, fontId, hexColor, timeZone } from '../lib/validate';
 import { protectedProcedure, router, tenantAdminProcedure } from '../trpc';
 
 const brandInput = z.object({
@@ -13,8 +13,8 @@ const brandInput = z.object({
   accentInk: hexColor.optional(),
   radius: z.number().int().min(0).max(24).optional(),
   logoText: z.string().trim().min(1).max(4).optional(),
-  fontDisplay: fontStack.optional(),
-  fontUi: fontStack.optional(),
+  fontDisplay: fontId.optional(),
+  fontUi: fontId.optional(),
 });
 
 const locationInput = z.object({
