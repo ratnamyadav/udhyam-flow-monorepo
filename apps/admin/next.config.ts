@@ -23,6 +23,7 @@ const config: NextConfig = {
     '@udyamflow/db',
     '@udyamflow/env',
     '@udyamflow/notifications',
+    '@udyamflow/storage',
     '@udyamflow/tokens',
     '@udyamflow/ui',
   ],

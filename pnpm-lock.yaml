@@ -356,12 +356,6 @@ importers:
 
   apps/web:
     dependencies:
-      '@aws-sdk/client-s3':
-        specifier: 'catalog:'
-        version: 3.940.0
-      '@aws-sdk/s3-request-presigner':
-        specifier: 'catalog:'
-        version: 3.940.0
       '@next/env':
         specifier: 'catalog:'
         version: 16.2.4
@@ -392,6 +386,9 @@ importers:
       '@udyamflow/env':
         specifier: workspace:*
         version: link:../../packages/env
+      '@udyamflow/storage':
+        specifier: workspace:*
+        version: link:../../packages/storage
       '@udyamflow/tokens':
         specifier: workspace:*
         version: link:../../packages/tokens
@@ -462,6 +459,9 @@ importers:
       '@udyamflow/notifications':
         specifier: workspace:*
         version: link:../notifications
+      '@udyamflow/storage':
+        specifier: workspace:*
+        version: link:../storage
       '@udyamflow/tokens':
         specifier: workspace:*
         version: link:../tokens
@@ -604,6 +604,31 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+
+  packages/storage:
+    dependencies:
+      '@aws-sdk/client-s3':
+        specifier: 'catalog:'
+        version: 3.940.0
+      '@aws-sdk/s3-request-presigner':
+        specifier: 'catalog:'
+        version: 3.940.0
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 22.10.10
+      '@typescript/native-preview':
+        specifier: 'catalog:'
+        version: 7.0.0-dev.20260421.2
+      '@udyamflow/tsconfig':
+        specifier: workspace:*
+        version: link:../tsconfig
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 3.2.4(@types/node@22.10.10)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.2)(tsx@4.21.0)(yaml@2.8.3)
 
   packages/tokens:
     devDependencies:

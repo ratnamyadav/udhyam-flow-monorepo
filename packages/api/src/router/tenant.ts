@@ -1,5 +1,6 @@
 import { TRPCError } from '@trpc/server';
 import { schema } from '@udyamflow/db';
+import { deleteObject, isTenantLogoUrl, keyFromPublicUrl } from '@udyamflow/storage';
 import { fontIdFrom, readableTextOn } from '@udyamflow/tokens';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -107,6 +108,22 @@ export const tenantRouter = router({
         patch.cashfreeApiKey = encrypt(input.cashfreeApiKey);
       }
 
+      // Logos must be files we stored for this org (via the presigned upload)
+      // — not arbitrary external URLs.
+      if (patch.logoUrl && !isTenantLogoUrl(ctx.organizationId, patch.logoUrl)) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          message: 'Upload the logo through the branding page.',
+        });
+      }
+      const [previous] =
+        patch.logoUrl !== undefined
+          ? await ctx.db
+              .select({ logoUrl: schema.tenantSettings.logoUrl })
+              .from(schema.tenantSettings)
+              .where(eq(schema.tenantSettings.organizationId, ctx.organizationId))
+          : [];
+
       await ctx.db
         .insert(schema.tenantSettings)
         .values({ organizationId: ctx.organizationId, ...patch })
@@ -114,6 +131,16 @@ export const tenantRouter = router({
           target: schema.tenantSettings.organizationId,
           set: { ...patch, updatedAt: new Date() },
         });
+
+      // Replaced or removed logo: delete the old object (best effort).
+      const oldKey = previous?.logoUrl ? keyFromPublicUrl(previous.logoUrl) : null;
+      if (
+        oldKey &&
+        previous?.logoUrl !== patch.logoUrl &&
+        isTenantLogoUrl(ctx.organizationId, previous!.logoUrl!)
+      ) {
+        await deleteObject(oldKey).catch((err) => console.error('logo cleanup failed', err));
+      }
       return { ok: true };
     }),
 });

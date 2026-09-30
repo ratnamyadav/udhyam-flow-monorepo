@@ -19,6 +19,7 @@
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/db": "workspace:*",
     "@udyamflow/notifications": "workspace:*",
+    "@udyamflow/storage": "workspace:*",
     "@udyamflow/tokens": "workspace:*",
     "date-fns": "catalog:",
     "date-fns-tz": "catalog:",

@@ -31,9 +31,18 @@ export const serverEnvSchema = z.object({
   // The client-IP header your edge sets and clients can't spoof, for rate
   // limiting (e.g. cf-connecting-ip, x-real-ip).
   TRUSTED_IP_HEADER: z.string().optional(),
-  // Cloudflare R2 for tenant logo uploads. All optional — if unset, the
-  // upload endpoint returns 503 and the branding page hides the file
-  // picker, falling back to the letter badge.
+  // Object storage for tenant logo uploads — any S3-compatible provider
+  // (AWS S3, Cloudflare R2, MinIO, Spaces, B2, Wasabi…). All optional; if
+  // unset the upload endpoint returns 503 and branding falls back to the
+  // letter badge. See packages/storage/src/config.ts.
+  STORAGE_ENDPOINT: z.url().optional(),
+  STORAGE_REGION: z.string().optional(),
+  STORAGE_BUCKET: z.string().optional(),
+  STORAGE_ACCESS_KEY_ID: z.string().optional(),
+  STORAGE_SECRET_ACCESS_KEY: z.string().optional(),
+  STORAGE_PUBLIC_URL: z.url().optional(),
+  STORAGE_FORCE_PATH_STYLE: z.enum(['true', 'false']).optional(),
+  // Legacy Cloudflare R2 variables — still honored when STORAGE_* is unset.
   R2_ACCOUNT_ID: z.string().optional(),
   R2_ACCESS_KEY_ID: z.string().optional(),
   R2_SECRET_ACCESS_KEY: z.string().optional(),

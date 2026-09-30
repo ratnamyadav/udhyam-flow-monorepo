@@ -91,6 +91,33 @@ describe('input hardening', () => {
     ).rejects.toMatchObject({ code: 'BAD_REQUEST' });
   });
 
+  it('only accepts logo URLs from this org’s storage prefix', async () => {
+    Object.assign(process.env, {
+      STORAGE_BUCKET: 'logos',
+      STORAGE_ACCESS_KEY_ID: 'k',
+      STORAGE_SECRET_ACCESS_KEY: 's',
+      STORAGE_PUBLIC_URL: 'https://cdn.example.com',
+    });
+    const { resetStorageForTests } = await import('@udyamflow/storage');
+    resetStorageForTests();
+    const f = await seedOrg(db);
+    const owner = userCaller(db, f.ownerId, f.orgId);
+    for (const logoUrl of [
+      'https://tracker.example.com/pixel.png',
+      'https://cdn.example.com/tenant-logos/org_someone_else/a.png',
+    ]) {
+      await expect(owner.tenant.updateSettings({ logoUrl })).rejects.toMatchObject({
+        code: 'BAD_REQUEST',
+      });
+    }
+    await expect(
+      owner.tenant.updateSettings({
+        logoUrl: `https://cdn.example.com/tenant-logos/${f.orgId}/a.png`,
+      }),
+    ).resolves.toEqual({ ok: true });
+    await expect(owner.tenant.updateSettings({ logoUrl: null })).resolves.toEqual({ ok: true });
+  });
+
   it('refuses to link or move onto another tenant’s records', async () => {
     const a = await seedOrg(db);
     const b = await seedOrg(db);

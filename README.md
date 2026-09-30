@@ -10,7 +10,7 @@ Pricing: **free for the first 6 months**, then per-location:
 
 ## Architecture
 
-A pnpm + Turborepo monorepo with three apps and seven shared packages.
+A pnpm + Turborepo monorepo with three apps and eight shared packages.
 
 ```
 udhyam-flow/
@@ -24,6 +24,7 @@ udhyam-flow/
 │   ├── api/        tRPC v11 routers, tenant/role middleware, payment lifecycle
 │   ├── env/        Zod-validated server + client env schemas
 │   ├── notifications/  Email (Resend), SMS + WhatsApp (MSG91)
+│   ├── storage/    S3-compatible object storage (logo uploads)
 │   ├── ui/         shadcn-style primitives + UdyamFlow theme tokens
 │   ├── tokens/     Design tokens (palette, tenants, professions, density)
 │   └── tsconfig/   Shared TypeScript presets (base / nextjs / expo / react-library)
@@ -95,7 +96,7 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | `/bookings` | Booking history — filter by status/resource, cancel/no-show/complete |
 | `/customers` | CRM — customer list, search, detail with booking history + notes |
 | `/accept-invitation/[id]` | Accept-invitation flow for invited teammates |
-| `/api/upload/logo/presign` | Owner/admin POST — returns a presigned R2 PUT URL (size-bound, PNG/JPEG/WebP only). The browser resizes the logo before uploading |
+| `/api/upload/logo/presign` | Owner/admin POST — returns a presigned PUT URL for S3-compatible storage (type- and size-bound, PNG/JPEG/WebP only). The browser resizes the logo before uploading |
 | `/api/payments/stripe/webhook` | Stripe webhook — verifies signature, marks bookings paid / refunded |
 | `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC, marks bookings paid / refunded |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Password reset + email verification flows |
@@ -143,7 +144,7 @@ Required values:
 | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_AUTH_URL` | `http://localhost:3000` |
 | `EXPO_PUBLIC_AUTH_URL` | `http://localhost:3000` (mobile points at the web auth handler; on a device use your LAN IP) |
 
-Everything else in `.env.example` is optional — payments, email/SMS, R2, Sentry, Upstash — and each feature degrades gracefully when unset. See the comments in `.env.example`.
+Everything else in `.env.example` is optional — payments, email/SMS, object storage, Sentry, Upstash — and each feature degrades gracefully when unset. See the comments in `.env.example`.
 
 The web/admin Next apps load this `.env` from the repo root via `@next/env`'s `loadEnvConfig` in `next.config.ts`. Drizzle and the seed script load it via `dotenv-cli`. No need to duplicate per-app.
 
@@ -157,6 +158,17 @@ pnpm db:seed    # inserts the three demo tenants (Patel Clinic, Kavya Tutor, Bas
 ```
 
 If `db:constraints` fails on an existing database, it already contains overlapping bookings (possible before this constraint existed): cancel the duplicates, then re-run `pnpm db:constraints`.
+
+### Logo storage setup (optional)
+
+Tenant logos go to any **S3-compatible** bucket — AWS S3, Cloudflare R2, MinIO, DigitalOcean Spaces, Backblaze B2, Wasabi. Set the `STORAGE_*` variables (see `.env.example`):
+
+- `STORAGE_BUCKET`, `STORAGE_ACCESS_KEY_ID`, `STORAGE_SECRET_ACCESS_KEY` — required.
+- `STORAGE_ENDPOINT` — the provider's S3 endpoint; leave empty for AWS S3.
+- `STORAGE_PUBLIC_URL` — where objects are publicly readable (a CDN, `r2.dev`, or the bucket URL). Derived automatically for AWS S3.
+- `STORAGE_FORCE_PATH_STYLE=true` for MinIO and other path-style servers.
+
+The browser uploads straight to the bucket with a 60-second presigned PUT (content type and exact size are signed in), so the bucket needs a CORS rule allowing `PUT` with a `Content-Type` header from your app's origin, and public read on the `tenant-logos/` prefix. Replaced logos are deleted automatically. The older `R2_*` variables keep working.
 
 ### Payments setup (optional)
 
@@ -290,6 +302,7 @@ The flow on first sign-up:
 │       └── tailwind.config.js, metro.config.js, babel.config.js
 ├── packages/
 │   ├── tokens/   src/{palette,tenants,professions,templates,density,css-vars}.ts
+│   ├── storage/  src/{config,index}.ts — S3-compatible client, presigned uploads
 │   ├── db/       src/schema/*.ts + client.ts + atomic.ts + constraints.ts + seed.ts, migrations/
 │   ├── auth/     src/{server,client,expo-client,middleware}.ts
 │   ├── api/      src/{trpc,index,notify,rate-limit,crypto}.ts + lib/ (time, slots, validate)
