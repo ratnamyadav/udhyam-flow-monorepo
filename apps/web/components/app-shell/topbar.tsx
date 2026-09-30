@@ -7,6 +7,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useCallback, useRef, useState, useTransition } from 'react';
 import { useOutsideClick } from '@/lib/use-outside-click';
+import { MobileNav, PrimaryNavLinks, SettingsMenu } from './nav-menus';
 
 export type OrgOption = {
   id: string;
@@ -16,20 +17,6 @@ export type OrgOption = {
   logoUrl?: string | null;
   accent: string;
 };
-
-const NAV = [
-  { href: '/dashboard', label: 'Dashboard' },
-  { href: '/bookings', label: 'Bookings' },
-  { href: '/customers', label: 'Customers' },
-  { href: '/settings/resources', label: 'Resources' },
-  { href: '/settings/services', label: 'Services' },
-  { href: '/settings/locations', label: 'Locations' },
-  { href: '/settings/team', label: 'Team' },
-  { href: '/settings/payments', label: 'Payments' },
-  { href: '/settings/branding', label: 'Branding' },
-  { href: '/settings/notifications', label: 'Notifications' },
-  { href: '/settings/templates', label: 'Template' },
-];
 
 export function Topbar({
   orgs,
@@ -84,17 +71,18 @@ export function Topbar({
     .toUpperCase();
 
   return (
-    <div className="relative flex items-center justify-between px-7 py-3 border-b border-border bg-surface">
-      <div className="flex items-center gap-6">
-        <div ref={orgRef} className="relative">
+    <div className="relative flex items-center justify-between gap-3 px-4 md:px-7 py-3 border-b border-border bg-surface">
+      <div className="flex items-center gap-6 min-w-0">
+        <div ref={orgRef} className="relative min-w-0">
           <button
             type="button"
             onClick={() => setOpenOrg((v) => !v)}
             disabled={isPending || orgs.length === 0}
-            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-mute transition-colors disabled:opacity-50"
+            aria-expanded={openOrg}
+            className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-mute transition-colors disabled:opacity-50 max-w-full"
           >
             <div
-              className="w-7 h-7 grid place-items-center text-[10px] font-semibold overflow-hidden"
+              className="w-7 h-7 shrink-0 grid place-items-center text-[10px] font-semibold overflow-hidden"
               style={{
                 background: activeTheme.accent,
                 color: readableTextOn(activeTheme.accent),
@@ -112,18 +100,20 @@ export function Topbar({
                 activeTheme.logo
               )}
             </div>
-            <div className="text-left">
-              <div className="text-[13px] font-medium text-ink leading-tight">
+            <div className="text-left min-w-0 max-w-[150px] sm:max-w-[220px] lg:max-w-[260px]">
+              <div className="text-[13px] font-medium text-ink leading-tight truncate">
                 {activeTheme.name || 'No workspace'}
               </div>
-              <div className="text-[11px] text-ink-mute">
+              <div className="text-[11px] text-ink-mute truncate">
                 {orgs.length > 1 ? `${orgs.length} workspaces` : 'Switch workspace'}
               </div>
             </div>
-            <span className="text-ink-soft text-xs ml-1">⌄</span>
+            <span aria-hidden className="text-ink-soft text-xs ml-1">
+              ⌄
+            </span>
           </button>
           {openOrg && orgs.length > 0 && (
-            <div className="absolute top-14 left-7 z-20 bg-surface border border-border rounded-xl p-1.5 shadow-[0_12px_32px_rgba(0,0,0,.08)] min-w-[280px]">
+            <div className="absolute top-14 left-0 md:left-7 z-20 bg-surface border border-border rounded-xl p-1.5 shadow-[0_12px_32px_rgba(0,0,0,.08)] min-w-[min(280px,calc(100vw-2rem))]">
               {orgs.map((o) => {
                 const active = o.id === activeOrgId;
                 return (
@@ -136,7 +126,7 @@ export function Topbar({
                     disabled={isPending}
                   >
                     <div
-                      className="w-6 h-6 grid place-items-center text-[10px] font-semibold overflow-hidden"
+                      className="w-6 h-6 shrink-0 grid place-items-center text-[10px] font-semibold overflow-hidden"
                       style={{
                         background: o.accent,
                         color: readableTextOn(o.accent),
@@ -153,7 +143,7 @@ export function Topbar({
                         o.logo
                       )}
                     </div>
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0 break-words">
                       <div className="text-[13px] font-medium text-ink">{o.name}</div>
                       <div className="text-[11px] text-ink-mute font-mono">/{o.slug}</div>
                     </div>
@@ -174,59 +164,49 @@ export function Topbar({
             </div>
           )}
         </div>
-        <nav className="flex gap-1">
-          {NAV.map((item) => {
-            const active = pathname?.startsWith(item.href);
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className="text-[13px] px-3 py-1.5 rounded-md transition-colors"
-                style={{
-                  color: active ? 'var(--color-ink)' : 'var(--color-ink-mute)',
-                  background: active ? 'var(--color-surface-mute)' : 'transparent',
-                  fontWeight: active ? 500 : 400,
-                }}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+        <nav aria-label="Main" className="hidden md:flex items-center gap-1">
+          <PrimaryNavLinks pathname={pathname} />
+          <SettingsMenu pathname={pathname} />
         </nav>
       </div>
-      <div ref={userRef} className="flex items-center gap-2 relative">
-        <a
-          href="mailto:support@udyamflow.com"
-          className="text-[13px] px-3 py-1.5 rounded-md text-ink-mute hover:text-ink hover:bg-surface-mute transition-colors"
-        >
-          Help
-        </a>
-        <button
-          type="button"
-          onClick={() => setOpenUser((v) => !v)}
-          className="w-8 h-8 rounded-full bg-surface-mute grid place-items-center text-[11px] font-medium text-ink hover:bg-border"
-        >
-          {initials}
-        </button>
-        {openUser && (
-          <div className="absolute top-11 right-0 z-20 bg-surface border border-border rounded-xl p-1.5 shadow-[0_12px_32px_rgba(0,0,0,.08)] min-w-[220px]">
-            <div className="px-3 py-2 border-b border-border">
-              <div className="text-[13px] font-medium text-ink">{user.name ?? 'Signed in'}</div>
-              <div className="text-[11px] text-ink-mute">{user.email}</div>
+      <div className="flex items-center gap-1 md:gap-2 shrink-0">
+        <div ref={userRef} className="flex items-center gap-2 relative">
+          <a
+            href="mailto:support@udyamflow.com"
+            className="hidden md:inline-block text-[13px] px-3 py-1.5 rounded-md text-ink-mute hover:text-ink hover:bg-surface-mute transition-colors"
+          >
+            Help
+          </a>
+          <button
+            type="button"
+            aria-expanded={openUser}
+            aria-label="Account menu"
+            onClick={() => setOpenUser((v) => !v)}
+            className="w-8 h-8 rounded-full bg-surface-mute grid place-items-center text-[11px] font-medium text-ink hover:bg-border"
+          >
+            {initials}
+          </button>
+          {openUser && (
+            <div className="absolute top-11 right-0 z-20 bg-surface border border-border rounded-xl p-1.5 shadow-[0_12px_32px_rgba(0,0,0,.08)] min-w-[220px]">
+              <div className="px-3 py-2 border-b border-border">
+                <div className="text-[13px] font-medium text-ink">{user.name ?? 'Signed in'}</div>
+                <div className="text-[11px] text-ink-mute">{user.email}</div>
+              </div>
+              <ThemeToggle />
+              <button
+                type="button"
+                onClick={async () => {
+                  await signOut();
+                  router.push('/sign-in');
+                }}
+                className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-mute text-[13px] text-ink-mute"
+              >
+                Sign out
+              </button>
             </div>
-            <ThemeToggle />
-            <button
-              type="button"
-              onClick={async () => {
-                await signOut();
-                router.push('/sign-in');
-              }}
-              className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-mute text-[13px] text-ink-mute"
-            >
-              Sign out
-            </button>
-          </div>
-        )}
+          )}
+        </div>
+        <MobileNav pathname={pathname} />
       </div>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   todayInTz,
   wallTimeToUtc,
 } from '../src/lib/time';
+import { initialsFor } from '../src/router/resource';
 
 describe('time helpers', () => {
   it('derives the weekday from the calendar date, independent of timezone', () => {
@@ -97,5 +98,15 @@ describe('generateSlots', () => {
       '11:15',
     ]);
     expect(generateSlots({ ...base, slotMin: 50 }).at(-1)?.displayTime).toBe('10:40');
+  });
+});
+
+describe('initialsFor', () => {
+  it('skips honorifics and uses first + last names', () => {
+    expect(initialsFor('Dr. Anjali Patel')).toBe('AP');
+    expect(initialsFor('Coach Ravi')).toBe('RA');
+    expect(initialsFor('Court 3')).toBe('C3');
+    expect(initialsFor('Mary Anne de Souza')).toBe('MS');
+    expect(initialsFor('Dr.')).toBe('DR');
   });
 });

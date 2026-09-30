@@ -51,3 +51,11 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      # The mobile app isn't part of `pnpm build`; bundling it catches Metro
+      # resolution and NativeWind/CSS breakage that typechecking can't.
+      - name: Bundle mobile app (Android)
+        working-directory: apps/mobile
+        env:
+          EXPO_OFFLINE: '1'
+        run: pnpm exec expo export --platform android --output-dir ${{ runner.temp }}/expo-android

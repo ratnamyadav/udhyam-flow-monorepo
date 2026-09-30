@@ -36,6 +36,29 @@ async function assertOwnedLocation(db: Db, organizationId: string, id: string) {
   if (!loc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Location not found' });
 }
 
+// "Dr. Anjali Patel" → "AP" (not "DR"): skip honorifics, take the first and
+// last remaining words (a single word gives its first two letters).
+const HONORIFICS = new Set([
+  'dr',
+  'mr',
+  'mrs',
+  'ms',
+  'miss',
+  'prof',
+  'coach',
+  'sir',
+  'smt',
+  'shri',
+]);
+export function initialsFor(name: string): string {
+  const words = name
+    .split(/\s+/)
+    .filter((w) => w && !HONORIFICS.has(w.replace(/\.$/, '').toLowerCase()));
+  if (words.length === 0) return name.slice(0, 2).toUpperCase();
+  if (words.length === 1) return words[0]!.slice(0, 2).toUpperCase();
+  return `${words[0]![0]}${words.at(-1)![0]}`.toUpperCase();
+}
+
 const hoursRow = z
   .object({
     dayOfWeek: z.number().int().min(0).max(6),
@@ -80,7 +103,7 @@ export const resourceRouter = router({
           locationId: input.locationId,
           name: input.name,
           title: input.title,
-          avatar: input.avatar?.toUpperCase() ?? input.name.slice(0, 2).toUpperCase(),
+          avatar: input.avatar?.toUpperCase() ?? initialsFor(input.name),
         }),
         // Seed Mon–Fri 9–18 hours so the resource is immediately bookable.
         ctx.db.insert(schema.resourceHours).values(

@@ -215,19 +215,19 @@ export default async function BookingConfirmationPage({
 
   return (
     <Shell brand={brand} refreshUrl={canRefresh ? refreshUrl : undefined}>
-      <div className="max-w-[460px] mx-auto text-center">
+      <div className="w-full max-w-[460px] mx-auto text-center">
         <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-3 font-mono">
           Awaiting confirmation
         </div>
         {canRefresh ? (
           <>
             <h1
-              className="text-[28px] font-medium tracking-tight text-ink m-0"
+              className="text-[24px] md:text-[28px] font-medium tracking-tight text-ink m-0 break-words"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               We're confirming your payment…
             </h1>
-            <p className="text-[14px] text-ink-mute mt-3 leading-relaxed">
+            <p className="text-[14px] text-ink-mute mt-3 leading-relaxed break-words">
               This usually takes a few seconds. This page refreshes on its own; you'll see the full
               confirmation once the bank notifies us. Reference{' '}
               <span className="font-mono">{referenceCode}</span>.
@@ -236,12 +236,12 @@ export default async function BookingConfirmationPage({
         ) : (
           <>
             <h1
-              className="text-[28px] font-medium tracking-tight text-ink m-0"
+              className="text-[24px] md:text-[28px] font-medium tracking-tight text-ink m-0 break-words"
               style={{ fontFamily: 'var(--font-display)' }}
             >
               Your payment is still processing
             </h1>
-            <p className="text-[14px] text-ink-mute mt-3 leading-relaxed">
+            <p className="text-[14px] text-ink-mute mt-3 leading-relaxed break-words">
               We haven't heard back from the bank yet. There's nothing more you need to do — we'll
               email or text you as soon as {displayTime} is confirmed. Reference{' '}
               <span className="font-mono">{referenceCode}</span>.
@@ -270,9 +270,13 @@ function Shell({
 }) {
   const { theme } = brand;
   return (
-    <div className="bg-bg p-12 min-h-[100vh]" style={brand.style} data-density={brand.density}>
+    <div
+      className="bg-bg px-4 py-8 sm:p-8 md:p-12 min-h-[100vh]"
+      style={brand.style}
+      data-density={brand.density}
+    >
       {/* Tenant header so the post-checkout page is recognisably theirs. */}
-      <div className="max-w-[460px] mx-auto mb-10 flex items-center gap-2.5">
+      <div className="max-w-[460px] mx-auto mb-8 md:mb-10 flex items-center gap-2.5">
         <div
           className="w-9 h-9 grid place-items-center text-[12px] font-semibold overflow-hidden shrink-0"
           style={{
@@ -288,7 +292,7 @@ function Shell({
           )}
         </div>
         <div
-          className="text-[15px] font-semibold text-ink"
+          className="min-w-0 break-words text-[15px] font-semibold text-ink"
           style={{ fontFamily: 'var(--font-display)' }}
         >
           {theme.name}
@@ -317,17 +321,17 @@ function FallbackCard({
   cta: string;
 }) {
   return (
-    <div className="max-w-[460px] mx-auto">
+    <div className="w-full max-w-[460px] mx-auto">
       <h1
-        className="text-[28px] m-0 font-medium tracking-tight text-ink"
+        className="text-[24px] md:text-[28px] m-0 font-medium tracking-tight text-ink break-words"
         style={{ fontFamily: 'var(--font-display)' }}
       >
         {title}
       </h1>
-      <p className="text-[14px] text-ink-mute mt-3 leading-relaxed">{body}</p>
+      <p className="text-[14px] text-ink-mute mt-3 leading-relaxed break-words">{body}</p>
       <a
         href={href}
-        className="mt-6 inline-block px-5 py-2.5 text-[13px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
+        className="mt-6 block w-full text-center sm:inline-block sm:w-auto px-5 py-3 sm:py-2.5 text-[13px] font-medium focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--accent)]"
         style={{
           background: 'var(--accent)',
           color: 'var(--accent-fg)',

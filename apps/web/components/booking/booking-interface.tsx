@@ -13,6 +13,7 @@ import { withAlpha } from '@/lib/color';
 import { addDaysYmd, ymdInZone } from '@/lib/timezones';
 import { trpc } from '@/lib/trpc/react';
 import { BookingSuccess } from './booking-success';
+import { TimezoneHint } from './timezone-hint';
 
 type Layout = BookingLayout;
 type Density = 'compact' | 'comfortable';
@@ -261,7 +262,7 @@ export function BookingInterface({
                   setPickedDate(null);
                   clearSelection();
                 }}
-                className={`border rounded-md text-left transition-colors ${FOCUS}`}
+                className={`max-w-full min-w-0 border rounded-md text-left transition-colors break-words ${FOCUS}`}
                 style={{
                   padding: PICKER_PAD,
                   borderColor: sel ? theme.accent : 'var(--color-border)',
@@ -289,7 +290,7 @@ export function BookingInterface({
         </div>
         <fieldset
           aria-labelledby="booking-service-label"
-          className="min-w-0 grid grid-cols-2"
+          className="min-w-0 grid grid-cols-1 sm:grid-cols-2"
           style={{ gap: 'var(--gap, 8px)' }}
         >
           {eligibleServices.map((s) => {
@@ -303,7 +304,7 @@ export function BookingInterface({
                   setServiceId(s.id);
                   clearSelection();
                 }}
-                className={`border rounded-md text-left transition-colors ${FOCUS}`}
+                className={`min-w-0 border rounded-md text-left transition-colors break-words ${FOCUS}`}
                 style={{
                   padding: PICKER_PAD,
                   borderColor: sel ? theme.accent : 'var(--color-border)',
@@ -322,8 +323,12 @@ export function BookingInterface({
     ) : null;
 
   const DatePicker = (
-    // Padding leaves room for the focus ring inside the scroll container.
-    <fieldset aria-label="Date" className="min-w-0 flex gap-1.5 overflow-x-auto p-1 -mx-1 mb-3">
+    // Padding leaves room for the focus ring inside the scroll container. On
+    // phones the chips snap so a swipe lands cleanly on a day.
+    <fieldset
+      aria-label="Date"
+      className="min-w-0 flex gap-1.5 overflow-x-auto overscroll-x-contain p-1 -mx-1 mb-3 snap-x snap-mandatory scroll-px-1 md:snap-none"
+    >
       {days.map((d) => {
         const sel = d === date;
         return (
@@ -336,7 +341,7 @@ export function BookingInterface({
               setPickedDate(d);
               clearSelection();
             }}
-            className={`shrink-0 border px-2.5 py-1.5 text-center transition-colors ${FOCUS}`}
+            className={`shrink-0 snap-start border px-2.5 py-1.5 text-center transition-colors ${FOCUS}`}
             style={{
               borderRadius: theme.radius,
               borderColor: sel ? theme.accent : 'var(--color-border)',
@@ -373,7 +378,10 @@ export function BookingInterface({
   // Early-out success state — replaces the whole interface.
   if (confirmation) {
     return (
-      <div className={`bg-bg min-h-[860px] ${dense ? 'p-8' : 'p-12'}`} {...rootProps}>
+      <div
+        className={`bg-bg min-h-dvh md:min-h-[860px] px-4 py-8 sm:p-6 ${dense ? 'md:p-8' : 'md:p-12'}`}
+        {...rootProps}
+      >
         <BookingSuccess
           theme={theme}
           referenceCode={confirmation.referenceCode}
@@ -403,7 +411,7 @@ export function BookingInterface({
           <span aria-hidden>{theme.logo}</span>
         )}
       </div>
-      <div>
+      <div className="min-w-0 break-words">
         <div
           className="text-[15px] font-semibold text-ink"
           style={{ fontFamily: 'var(--font-display)' }}
@@ -448,7 +456,7 @@ export function BookingInterface({
               }}
             >
               <div
-                className="w-8 h-8 grid place-items-center text-[11px] font-semibold"
+                className="w-8 h-8 shrink-0 grid place-items-center text-[11px] font-semibold"
                 aria-hidden
                 style={{
                   background: sel ? theme.accent : 'var(--color-surface-mute)',
@@ -458,7 +466,7 @@ export function BookingInterface({
               >
                 {r.avatar ?? r.name.slice(0, 2).toUpperCase()}
               </div>
-              <div>
+              <div className="min-w-0 break-words">
                 <div className="text-[13px] font-medium text-ink">{r.name}</div>
                 <div className="text-[11px] text-ink-mute">{r.title ?? ''}</div>
               </div>
@@ -487,13 +495,16 @@ export function BookingInterface({
       theme={theme}
       selected={selected}
       onSelect={(s) => selectSlot(s, date)}
-      columns={4}
+      gridClassName="grid-cols-3 sm:grid-cols-4"
       emptyText={`No availability on this day. Pick another date or a different ${profession.resourcePlural.toLowerCase().replace(/s$/, '')}.`}
     />
   );
 
+  // Shown near the slots only when the visitor's zone differs from the location's.
+  const TzHint = <TimezoneHint timezone={timezone} className="-mt-1.5 mb-3" />;
+
   const CustomerForm = (
-    <div className="mt-7 grid gap-3 max-w-[460px]">
+    <div className="mt-7 grid gap-3 w-full max-w-[460px]">
       <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono">
         Your details
       </div>
@@ -501,17 +512,21 @@ export function BookingInterface({
         <Label htmlFor="cname">Name</Label>
         <Input
           id="cname"
+          autoComplete="name"
+          className="text-base sm:text-sm"
           value={customerName}
           onChange={(e) => setCustomerName(e.target.value)}
           placeholder="Full name"
         />
       </div>
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="grid gap-1.5">
           <Label htmlFor="cemail">Email</Label>
           <Input
             id="cemail"
             type="email"
+            autoComplete="email"
+            className="text-base sm:text-sm"
             value={customerEmail}
             onChange={(e) => setCustomerEmail(e.target.value)}
             placeholder="optional"
@@ -522,6 +537,8 @@ export function BookingInterface({
           <Input
             id="cphone"
             type="tel"
+            autoComplete="tel"
+            className="text-base sm:text-sm"
             value={customerPhone}
             onChange={(e) => setCustomerPhone(e.target.value)}
             placeholder="optional"
@@ -538,7 +555,7 @@ export function BookingInterface({
         type="button"
         onClick={submit}
         disabled={!canSubmit}
-        className={`mt-2 px-6 py-3 text-sm font-medium disabled:opacity-50 ${FOCUS}`}
+        className={`mt-2 w-full px-6 py-3 text-sm font-medium disabled:opacity-50 ${FOCUS}`}
         style={{ background: theme.accent, color: 'var(--accent-fg)', borderRadius: theme.radius }}
       >
         {redirecting
@@ -554,7 +571,7 @@ export function BookingInterface({
 
   const HeroTitle = (
     <h1
-      className="text-[28px] m-0 font-medium tracking-tight text-ink"
+      className="text-[24px] md:text-[28px] m-0 font-medium tracking-tight text-ink break-words"
       style={{ fontFamily: 'var(--font-display)', lineHeight: 1.15 }}
     >
       {customHeadline ?? defaultHeadline(profession, resource?.name)}
@@ -563,34 +580,42 @@ export function BookingInterface({
 
   if (layout === 'sidebar') {
     return (
-      <div className="grid grid-cols-[360px_1fr] min-h-[860px] bg-bg" {...rootProps}>
-        <aside className={`border-r border-border bg-surface ${dense ? 'p-6' : 'p-8'}`}>
+      // Phones: the sidebar stacks above the main column. The minmax(0, …)
+      // track keeps the scrolling date strip from widening the page.
+      <div
+        className="grid grid-cols-1 md:grid-cols-[300px_minmax(0,1fr)] lg:grid-cols-[360px_minmax(0,1fr)] min-h-dvh md:min-h-[860px] bg-bg"
+        {...rootProps}
+      >
+        <aside
+          className={`min-w-0 border-b md:border-b-0 md:border-r border-border bg-surface px-4 py-5 sm:p-6 ${dense ? '' : 'lg:p-8'}`}
+        >
           {Header}
-          <div className="mt-7" />
+          <div className="mt-5 md:mt-7" />
           {LocationPicker}
           <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
             {profession.resourcePlural}
           </div>
           {ResourcesList}
-          <div className="border-t border-border my-7" />
+          <div className="border-t border-border my-5 md:my-7" />
           <div className="text-[12px] text-ink-mute leading-relaxed">
             {profession.slotLabel}s last{' '}
             <strong>{service?.durationMin ?? profession.slotDuration} minutes</strong>. Cancel
             anytime up to 24h before.
           </div>
         </aside>
-        <main className={dense ? 'p-8' : 'p-12'}>
+        <main className={`min-w-0 px-4 py-6 sm:p-6 md:p-8 ${dense ? '' : 'lg:p-12'}`}>
           <div className="max-w-[640px]">
             {HeroTitle}
-            <p className="text-[14px] text-ink-mute mt-3 max-w-[460px] leading-relaxed whitespace-pre-line">
+            <p className="text-[14px] text-ink-mute mt-3 max-w-[460px] leading-relaxed whitespace-pre-line break-words">
               {customIntro ?? defaultIntro(profession, resource?.title)}
             </p>
-            <div className="mt-9" />
+            <div className="mt-6 md:mt-9" />
             {ServicePicker}
             {DatePicker}
-            <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
+            <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3 break-words">
               {dateHeading}
             </div>
+            {TzHint}
             {SlotGrid}
             {CustomerForm}
           </div>
@@ -601,18 +626,21 @@ export function BookingInterface({
 
   if (layout === 'stacked') {
     return (
-      <div className={`bg-bg min-h-[860px] ${dense ? 'p-8' : 'p-12'}`} {...rootProps}>
+      <div
+        className={`bg-bg min-h-dvh md:min-h-[860px] p-3 sm:p-6 ${dense ? 'md:p-8' : 'md:p-12'}`}
+        {...rootProps}
+      >
         <div className="max-w-[760px] mx-auto">
           <div className="bg-surface border border-border rounded-2xl overflow-hidden">
             <div
-              className="px-8 py-7"
+              className="px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-7"
               style={{ background: theme.accentSoft, color: theme.accentInk }}
             >
               {Header}
               <div className="mt-5">{HeroTitle}</div>
               {customIntro && (
                 <p
-                  className="text-[14px] mt-3 leading-relaxed whitespace-pre-line"
+                  className="text-[14px] mt-3 leading-relaxed whitespace-pre-line break-words"
                   style={{ color: theme.accentInk }}
                 >
                   {customIntro}
@@ -623,7 +651,7 @@ export function BookingInterface({
                 {service?.durationMin ?? profession.slotDuration} minutes
               </p>
             </div>
-            <div className={dense ? 'p-6' : 'p-8'}>
+            <div className={`px-4 py-5 sm:p-6 ${dense ? '' : 'md:p-8'}`}>
               {LocationPicker}
               <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
                 {profession.resourcePlural}
@@ -631,7 +659,7 @@ export function BookingInterface({
               {visibleResources.length > 0 ? (
                 <fieldset
                   aria-label={profession.resourcePlural}
-                  className="min-w-0 grid grid-cols-3 mb-7"
+                  className="min-w-0 grid grid-cols-2 sm:grid-cols-3 mb-7"
                   style={{ gap: 'var(--gap, 8px)' }}
                 >
                   {visibleResources.map((r) => {
@@ -642,7 +670,7 @@ export function BookingInterface({
                         type="button"
                         aria-pressed={sel}
                         onClick={() => pickResource(r.id)}
-                        className={`border rounded-lg text-left ${FOCUS}`}
+                        className={`min-w-0 border rounded-lg text-left break-words ${FOCUS}`}
                         style={{
                           padding: PICKER_PAD,
                           borderColor: sel ? theme.accent : 'var(--color-border)',
@@ -660,9 +688,10 @@ export function BookingInterface({
               )}
               {ServicePicker}
               {DatePicker}
-              <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
+              <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3 break-words">
                 Available slots · {dateHeading}
               </div>
+              {TzHint}
               {SlotGrid}
               {CustomerForm}
             </div>
@@ -673,25 +702,31 @@ export function BookingInterface({
   }
 
   // Inline week layout — one column per day, starting at the picked date.
+  // Below md it collapses to the picked day alone (the date chips move it).
   const weekDays = days.slice(days.indexOf(date), days.indexOf(date) + WEEK_COLUMNS);
   return (
-    <div className={`bg-bg min-h-[860px] ${dense ? 'p-6' : 'p-10'}`} {...rootProps}>
+    <div
+      className={`bg-bg min-h-dvh md:min-h-[860px] p-3 sm:p-6 ${dense ? '' : 'md:p-10'}`}
+      {...rootProps}
+    >
       <div className="max-w-[1100px] mx-auto">
-        <div className="flex justify-between items-start mb-8">
+        <div className="flex flex-wrap justify-between items-start gap-x-4 gap-y-2 mb-6 md:mb-8 px-1 sm:px-0">
           {Header}
-          <div className="text-[11px] text-ink-soft font-mono">{timezone}</div>
+          <div className="text-[11px] text-ink-soft font-mono break-all">{timezone}</div>
         </div>
         {(customHeadline || customIntro) && (
-          <div className="mb-8 max-w-[640px]">
+          <div className="mb-6 md:mb-8 max-w-[640px] px-1 sm:px-0">
             {customHeadline && HeroTitle}
             {customIntro && (
-              <p className="text-[14px] text-ink-mute mt-3 leading-relaxed whitespace-pre-line">
+              <p className="text-[14px] text-ink-mute mt-3 leading-relaxed whitespace-pre-line break-words">
                 {customIntro}
               </p>
             )}
           </div>
         )}
-        <div className={`bg-surface border border-border rounded-2xl ${dense ? 'p-6' : 'p-8'}`}>
+        <div
+          className={`bg-surface border border-border rounded-2xl px-4 py-5 sm:p-6 ${dense ? '' : 'md:p-8'}`}
+        >
           {LocationPicker}
           <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
             {profession.resourcePlural}
@@ -699,20 +734,28 @@ export function BookingInterface({
           {ResourcesList}
           <div className="mt-7" />
           {ServicePicker}
-          <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
-            Week of {dayLabel(date, { month: 'short', day: 'numeric' })} · {timezone}
+          <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3 break-words">
+            <span className="md:hidden">{dateHeading}</span>
+            <span className="hidden md:inline">
+              Week of {dayLabel(date, { month: 'short', day: 'numeric' })} · {timezone}
+            </span>
           </div>
           {DatePicker}
+          {TzHint}
           <div
-            className="grid"
-            style={{
-              gap: 'var(--gap, 12px)',
-              gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))`,
-            }}
+            className="grid grid-cols-1 md:grid-cols-[repeat(var(--week-cols),minmax(0,1fr))]"
+            style={
+              {
+                gap: 'var(--gap, 12px)',
+                '--week-cols': String(weekDays.length),
+              } as React.CSSProperties
+            }
           >
-            {weekDays.map((d) => (
-              <div key={d}>
-                <div className="text-[11px] font-medium text-ink mb-2">
+            {weekDays.map((d, i) => (
+              // Only the picked day (first column) shows on phones.
+              <div key={d} className={i === 0 ? 'min-w-0' : 'min-w-0 hidden md:block'}>
+                {/* On phones the heading above already names the day. */}
+                <div className="hidden md:block text-[11px] font-medium text-ink mb-2">
                   {d === today ? 'Today' : dayLabel(d, { weekday: 'short' })}{' '}
                   <span className="text-ink-mute font-mono">
                     {dayLabel(d, { day: 'numeric', month: 'short' })}
@@ -724,7 +767,7 @@ export function BookingInterface({
                   theme={theme}
                   selected={selected}
                   onSelect={(s) => selectSlot(s, d)}
-                  columns={1}
+                  gridClassName="grid-cols-3 sm:grid-cols-4 md:grid-cols-1"
                   emptyText="No slots"
                 />
               </div>
@@ -743,7 +786,7 @@ function DaySlots({
   theme,
   selected,
   onSelect,
-  columns,
+  gridClassName,
   emptyText,
 }: {
   args: {
@@ -757,7 +800,8 @@ function DaySlots({
   theme: TenantTheme;
   selected: SelectedSlot | null;
   onSelect: (s: Slot) => void;
-  columns: number;
+  /** Tailwind grid-cols-* classes (responsive) for the slot buttons. */
+  gridClassName: string;
   emptyText: string;
 }) {
   const query = trpc.booking.listSlots.useQuery(args, { enabled, staleTime: 30_000 });
@@ -775,8 +819,8 @@ function DaySlots({
   return (
     <fieldset
       aria-label={`Available times, ${spokenDate(args.date)}`}
-      className="min-w-0 grid"
-      style={{ gap: 'var(--gap, 8px)', gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+      className={`min-w-0 grid ${gridClassName}`}
+      style={{ gap: 'var(--gap, 8px)' }}
     >
       {slots.map((s) => {
         const sel = selected?.start === s.start;
