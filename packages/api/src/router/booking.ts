@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
 import { type Db, schema } from '@udyamflow/db';
-import { sendSMS, sendWhatsApp } from '@udyamflow/notifications';
+import { sendEmail, sendSMS, sendWhatsApp } from '@udyamflow/notifications';
 import { PROFESSIONS, type ProfessionId } from '@udyamflow/tokens';
 import { addDays, addMinutes, startOfDay } from 'date-fns';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { and, eq, gte, lt, ne } from 'drizzle-orm';
 import { z } from 'zod';
+import { buildOnlineSessionEmail, resolveMeetingUrl } from '../online';
 import { enforceRateLimit, ipKeyFromHeaders } from '../rate-limit';
+import { sanitizeSource } from '../source';
 import { publicProcedure, router, tenantProcedure } from '../trpc';
+import { formatWhen } from '../whatsapp/reminders';
 import { upsertCustomer } from './customer';
 
 // A slot returned to the booking page. `start`/`end` are the canonical UTC ISO
@@ -132,6 +135,9 @@ export const bookingRouter = router({
         slotStart: z.iso.datetime(),
         slotEnd: z.iso.datetime(),
         intake: z.record(z.string(), z.unknown()).optional(),
+        // Raw `?source=` / `?utm_source=` from the booking link — sanitized
+        // below (junk becomes null rather than failing the booking).
+        source: z.string().max(200).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -177,6 +183,33 @@ export const bookingRouter = router({
         phone: input.customerPhone,
       });
 
+      // Online services get a join link: the practitioner's own room if set,
+      // else a generated Jitsi room. Both lookups are org-scoped.
+      let meetingUrl: string | null = null;
+      if (input.serviceId) {
+        const [svc] = await ctx.db
+          .select({ isOnline: schema.service.isOnline })
+          .from(schema.service)
+          .where(
+            and(eq(schema.service.id, input.serviceId), eq(schema.service.organizationId, org.id)),
+          );
+        if (svc?.isOnline) {
+          const [res] = await ctx.db
+            .select({ meetingUrl: schema.resource.meetingUrl })
+            .from(schema.resource)
+            .where(
+              and(
+                eq(schema.resource.id, input.resourceId),
+                eq(schema.resource.organizationId, org.id),
+              ),
+            );
+          meetingUrl = resolveMeetingUrl({
+            serviceIsOnline: true,
+            resourceMeetingUrl: res?.meetingUrl,
+          });
+        }
+      }
+
       const id = `bkg_${randomUUID()}`;
       await ctx.db.insert(schema.booking).values({
         id,
@@ -192,6 +225,8 @@ export const bookingRouter = router({
         slotEnd,
         intake: input.intake,
         status: 'confirmed',
+        meetingUrl,
+        source: sanitizeSource(input.source),
       });
 
       const referenceCode = id.slice(-6).toUpperCase();
@@ -203,8 +238,20 @@ export const bookingRouter = router({
         customerPhone: input.customerPhone,
         slotStart,
         referenceCode,
+        meetingUrl,
       });
-      return { id, referenceCode };
+      if (meetingUrl && input.customerEmail) {
+        void notifyOnlineSessionEmail(ctx.db, {
+          resourceId: input.resourceId,
+          locationId: input.locationId,
+          customerName: input.customerName,
+          customerEmail: input.customerEmail,
+          slotStart,
+          referenceCode,
+          meetingUrl,
+        });
+      }
+      return { id, referenceCode, meetingUrl };
     }),
 
   listToday: tenantProcedure.query(async ({ ctx }) => {
@@ -294,6 +341,7 @@ async function notifyConfirmed(
     customerPhone?: string;
     slotStart: Date;
     referenceCode: string;
+    meetingUrl?: string | null;
   },
 ) {
   if (!args.customerPhone) return;
@@ -322,24 +370,28 @@ async function notifyConfirmed(
     if (settings.enableSms) {
       await sendSMS({
         to: args.customerPhone,
-        body: `Hi ${args.customerName.split(' ')[0]}, your appointment with ${res?.name ?? 'us'} on ${when} is confirmed. Ref: ${args.referenceCode}`,
+        body: `Hi ${args.customerName.split(' ')[0]}, your appointment with ${res?.name ?? 'us'} on ${when} is confirmed. Ref: ${args.referenceCode}${args.meetingUrl ? ` Join: ${args.meetingUrl}` : ''}`,
         variables: {
           name: args.customerName.split(' ')[0] ?? args.customerName,
           resource: res?.name ?? '',
           when,
           ref: args.referenceCode,
+          ...(args.meetingUrl ? { link: args.meetingUrl } : {}),
         },
       });
     }
     if (settings.enableWhatsapp) {
+      // Online bookings use `booking_confirmed_online`: same four body
+      // params as `booking_confirmed` plus {{5}} = join link.
       await sendWhatsApp({
         to: args.customerPhone,
-        template: 'booking_confirmed',
+        template: args.meetingUrl ? 'booking_confirmed_online' : 'booking_confirmed',
         params: [
           args.customerName.split(' ')[0] ?? args.customerName,
           res?.name ?? '',
           when,
           args.referenceCode,
+          ...(args.meetingUrl ? [args.meetingUrl] : []),
         ],
       });
     }
@@ -348,7 +400,45 @@ async function notifyConfirmed(
   }
 }
 
-async function notifyCancelled(db: Db, organizationId: string, bookingId: string) {
+// Emails the join link for online sessions. Separate from notifyConfirmed
+// because it doesn't depend on the tenant's SMS/WhatsApp opt-ins.
+async function notifyOnlineSessionEmail(
+  db: Db,
+  args: {
+    resourceId: string;
+    locationId: string;
+    customerName: string;
+    customerEmail: string;
+    slotStart: Date;
+    referenceCode: string;
+    meetingUrl: string;
+  },
+) {
+  try {
+    const [res] = await db
+      .select({ name: schema.resource.name })
+      .from(schema.resource)
+      .where(eq(schema.resource.id, args.resourceId));
+    const [loc] = await db
+      .select({ timezone: schema.location.timezone })
+      .from(schema.location)
+      .where(eq(schema.location.id, args.locationId));
+    const { subject, html } = buildOnlineSessionEmail({
+      customerName: args.customerName,
+      resourceName: res?.name ?? '',
+      when: formatWhen(args.slotStart, loc?.timezone ?? 'UTC'),
+      referenceCode: args.referenceCode,
+      meetingUrl: args.meetingUrl,
+    });
+    await sendEmail({ to: args.customerEmail, subject, html });
+  } catch (err) {
+    console.error('notifyOnlineSessionEmail failed', err);
+  }
+}
+
+// Exported so the customer's WhatsApp "Cancel" reply sends the exact same
+// notice as a tenant-side cancel.
+export async function notifyCancelled(db: Db, organizationId: string, bookingId: string) {
   try {
     const [b] = await db
       .select({

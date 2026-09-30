@@ -418,6 +418,37 @@ function NotificationToggles() {
           MSG91 is not configured on the server — set MSG91_AUTH_KEY to enable these toggles.
         </div>
       )}
+      <ReminderTemplatesNote />
+    </div>
+  );
+}
+
+// WhatsApp reminders go out from the hourly cron (/api/cron/reminders).
+// Meta only delivers business-initiated messages from approved templates, so
+// list exactly what needs approving on the MSG91 number.
+function ReminderTemplatesNote() {
+  return (
+    <div className="mt-3 pt-3 border-t border-border text-[12px] text-ink-mute space-y-2">
+      <div>
+        Reminders go out on WhatsApp about <strong className="text-ink">24 hours before</strong>{' '}
+        each confirmed booking (SMS if only SMS is on). Customers can tap Confirm, Cancel or
+        Reschedule; unpaid bookings for priced services also get a Pay now link.
+      </div>
+      <div>These WhatsApp templates must be approved (Utility, English) on the MSG91 number:</div>
+      <ul className="space-y-1.5 font-mono text-[11px] text-ink">
+        <li>
+          booking_reminder — body {'{{1}}'} name, {'{{2}}'} practitioner, {'{{3}}'} date &amp; time,{' '}
+          {'{{4}}'} join link or booking ref · quick replies: Confirm, Cancel, Reschedule
+        </li>
+        <li>
+          booking_reminder_pay — same as booking_reminder + URL button “Pay now” →{' '}
+          {process.env.NEXT_PUBLIC_APP_URL ?? ''}/pay/{'{{1}}'}
+        </li>
+        <li>
+          booking_confirmed_online — like booking_confirmed ({'{{1}}'}–{'{{4}}'}) + {'{{5}}'} join
+          link, for online services
+        </li>
+      </ul>
     </div>
   );
 }

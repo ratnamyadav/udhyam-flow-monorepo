@@ -2,7 +2,7 @@
 // new patient", "60-min deep tissue"). A booking is for one service; a
 // service can be offered by multiple resources via the join table.
 
-import { integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { organization } from './org';
 import { resource } from './resource';
 
@@ -16,6 +16,9 @@ export const service = pgTable('service', {
   durationMin: integer('duration_min').notNull().default(30),
   priceCents: integer('price_cents').notNull().default(0),
   currency: text('currency').notNull().default('INR'),
+  // Online session (video call) — bookings get a meeting link instead of
+  // relying on the location address.
+  isOnline: boolean('is_online').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 

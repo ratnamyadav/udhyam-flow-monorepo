@@ -97,6 +97,10 @@ Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant tabl
 | `/api/auth/[...all]` | BetterAuth handler |
 | `/api/trpc/[trpc]` | tRPC fetch adapter |
 | `/api/health` | Health check (returns `{ ok, orgs }`) |
+| `/settings/channels` | Booking channels — `?source=` share links (Google Business Profile, Instagram, WhatsApp) + bookings by source (30 days) |
+| `/pay/[bookingId]` | Pay link from reminders — starts Stripe / Cashfree checkout for an unpaid booking |
+| `/api/cron/reminders` | Hourly Vercel Cron (`apps/web/vercel.json`, `Authorization: Bearer $CRON_SECRET`) — WhatsApp/SMS reminders ~24h before confirmed bookings |
+| `/api/notifications/whatsapp/inbound` | MSG91 inbound WhatsApp webhook (`?secret=$MSG91_WEBHOOK_SECRET`) — Confirm / Cancel / Reschedule button replies |
 
 ---
 
@@ -135,6 +139,15 @@ Required values:
 | `BETTER_AUTH_URL` | `http://localhost:3000` for dev |
 | `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_AUTH_URL` | `http://localhost:3000` |
 | `EXPO_PUBLIC_AUTH_URL` | `http://localhost:3000` (mobile points at the web auth handler) |
+
+Optional — WhatsApp reminders & two-way replies:
+
+| Variable | What it is |
+|---|---|
+| `CRON_SECRET` | Bearer token for `/api/cron/reminders` (set it in Vercel; Vercel Cron sends it automatically) |
+| `MSG91_WEBHOOK_SECRET` | Shared secret for the MSG91 inbound webhook — configure `POST {APP_URL}/api/notifications/whatsapp/inbound?secret=…` in MSG91 |
+
+WhatsApp templates to get approved on the MSG91 number (Utility, `en`): `booking_reminder` (body `{{1}}` name, `{{2}}` practitioner, `{{3}}` date/time, `{{4}}` join link or ref; quick replies Confirm / Cancel / Reschedule), `booking_reminder_pay` (same + URL button `{APP_URL}/pay/{{1}}`), and `booking_confirmed_online` (`booking_confirmed`'s four params + `{{5}}` join link).
 
 The web/admin Next apps load this `.env` from the repo root via `@next/env`'s `loadEnvConfig` in `next.config.ts`. Drizzle and the seed script load it via `dotenv-cli`. No need to duplicate per-app.
 

@@ -35,6 +35,7 @@ export default function ResourcesSettingsPage() {
   const [name, setName] = useState('');
   const [title, setTitle] = useState('');
   const [avatar, setAvatar] = useState('');
+  const [meetingUrl, setMeetingUrl] = useState('');
   const [locationId, setLocationId] = useState<string>('');
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +44,7 @@ export default function ResourcesSettingsPage() {
   }, [locations.data, locationId]);
 
   const [editingHours, setEditingHours] = useState<string | null>(null);
+  const [editingLink, setEditingLink] = useState<string | null>(null);
 
   async function onCreate() {
     setError(null);
@@ -54,17 +56,23 @@ export default function ResourcesSettingsPage() {
       setError('Pick a location');
       return;
     }
+    if (meetingUrl.trim() && !meetingUrl.trim().startsWith('https://')) {
+      setError('Meeting link must start with https://');
+      return;
+    }
     await create
       .mutateAsync({
         name: name.trim(),
         title: title.trim() || undefined,
         avatar: avatar.trim() || undefined,
+        meetingUrl: meetingUrl.trim() || undefined,
         locationId,
       })
       .then(() => {
         setName('');
         setTitle('');
         setAvatar('');
+        setMeetingUrl('');
       })
       .catch((e: Error) => setError(e.message));
   }
@@ -104,7 +112,14 @@ export default function ResourcesSettingsPage() {
                     </div>
                     <div>
                       <div className="text-[14px] font-medium text-ink">{r.name}</div>
-                      <div className="text-[12px] text-ink-mute">{r.title ?? ''}</div>
+                      <div className="text-[12px] text-ink-mute">
+                        {r.title ?? ''}
+                        {r.meetingUrl && (
+                          <span className="font-mono text-ink-soft">
+                            {r.title ? ' · ' : ''}video room set
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="text-[13px] text-ink-mute">
@@ -120,6 +135,13 @@ export default function ResourcesSettingsPage() {
                     </button>
                     <button
                       type="button"
+                      className="text-[12px] text-ink-mute hover:text-ink"
+                      onClick={() => setEditingLink((curr) => (curr === r.id ? null : r.id))}
+                    >
+                      Link
+                    </button>
+                    <button
+                      type="button"
                       className="text-[12px] text-ink-mute hover:text-danger"
                       onClick={() => {
                         if (confirm(`Remove ${r.name}?`)) {
@@ -132,6 +154,9 @@ export default function ResourcesSettingsPage() {
                   </div>
                 </div>
                 {editingHours === r.id && <HoursEditor resourceId={r.id} />}
+                {editingLink === r.id && (
+                  <MeetingLinkEditor resourceId={r.id} initial={r.meetingUrl ?? ''} />
+                )}
               </div>
             ))
           ) : (
@@ -179,6 +204,16 @@ export default function ResourcesSettingsPage() {
             />
           </div>
           <div className="space-y-1.5">
+            <Label htmlFor="rmeet">Meeting link</Label>
+            <Input
+              id="rmeet"
+              type="url"
+              placeholder="optional · https://meet.google.com/…"
+              value={meetingUrl}
+              onChange={(e) => setMeetingUrl(e.target.value)}
+            />
+          </div>
+          <div className="space-y-1.5">
             <Label htmlFor="rloc">Location</Label>
             <select
               id="rloc"
@@ -199,6 +234,55 @@ export default function ResourcesSettingsPage() {
           </Button>
         </div>
       </div>
+    </div>
+  );
+}
+
+// Personal Meet / Zoom room used for this resource's online services.
+// Empty = online bookings get a generated Jitsi room instead.
+function MeetingLinkEditor({ resourceId, initial }: { resourceId: string; initial: string }) {
+  const utils = trpc.useUtils();
+  const [value, setValue] = useState(initial);
+  const [error, setError] = useState<string | null>(null);
+  const save = trpc.resource.update.useMutation({
+    onSuccess: () => utils.resource.list.invalidate(),
+  });
+
+  function onSave() {
+    const v = value.trim();
+    if (v && !v.startsWith('https://')) {
+      setError('Meeting link must start with https://');
+      return;
+    }
+    setError(null);
+    save.mutate({ id: resourceId, meetingUrl: v });
+  }
+
+  return (
+    <div className="px-5 py-4 bg-surface-mute border-t border-border">
+      <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
+        Meeting link (online services)
+      </div>
+      <div className="flex gap-3 items-center max-w-[620px]">
+        <Input
+          type="url"
+          placeholder="https://meet.google.com/abc-defg-hij or https://zoom.us/j/…"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="text-[12px] font-mono"
+        />
+        <Button size="sm" disabled={save.isPending} onClick={onSave}>
+          {save.isPending ? 'Saving…' : 'Save'}
+        </Button>
+      </div>
+      <div className="text-[12px] text-ink-mute mt-2">
+        Leave empty to give each online booking its own Jitsi room (no account needed).
+      </div>
+      {(error ?? save.error) && (
+        <div className="text-[12px] text-danger mt-2">
+          {error ?? 'Could not save — check the link is a full https:// URL.'}
+        </div>
+      )}
     </div>
   );
 }

@@ -123,6 +123,7 @@ export default async function BookingConfirmationPage({
           displayTime={displayTime}
           resourceName={resource?.name ?? ''}
           timezone={location?.timezone ?? 'UTC'}
+          meetingUrl={booking.meetingUrl}
         />
       )}
     </Shell>

@@ -121,6 +121,21 @@ export default function BookingsPage() {
                   <div className="text-[12px] text-ink-mute">
                     {b.customerEmail ?? b.customerPhone ?? '—'}
                   </div>
+                  {(b.meetingUrl || b.source) && (
+                    <div className="flex gap-2 mt-0.5 text-[11px]">
+                      {b.meetingUrl && (
+                        <a
+                          href={b.meetingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ink-mute hover:text-ink underline"
+                        >
+                          Join online
+                        </a>
+                      )}
+                      {b.source && <span className="font-mono text-ink-soft">via {b.source}</span>}
+                    </div>
+                  )}
                 </div>
                 <div className="text-[13px] text-ink-mute">{r?.name ?? '—'}</div>
                 <div>
@@ -130,6 +145,14 @@ export default function BookingsPage() {
                   >
                     {meta.label}
                   </span>
+                  {b.customerConfirmedAt && isConfirmed && (
+                    <div
+                      className="text-[10px] text-ink-mute mt-1"
+                      title={`Customer confirmed via WhatsApp on ${b.customerConfirmedAt.toLocaleString()}`}
+                    >
+                      ✓ Confirmed by customer
+                    </div>
+                  )}
                 </div>
                 <div className="flex gap-2 text-[12px]">
                   {b.paymentStatus === 'paid' && (

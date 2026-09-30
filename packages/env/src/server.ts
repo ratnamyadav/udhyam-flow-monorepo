@@ -33,6 +33,10 @@ export const serverEnvSchema = z.object({
   MSG91_SMS_TEMPLATE_ID: z.string().optional(),
   MSG91_WHATSAPP_NUMBER: z.string().optional(),
   MSG91_WHATSAPP_INTEGRATED_NUMBER: z.string().optional(),
+  // Shared secret for the MSG91 inbound WhatsApp webhook (customer button
+  // replies). Passed as `?secret=` in the webhook URL configured in MSG91.
+  // Unset → the inbound endpoint returns 503.
+  MSG91_WEBHOOK_SECRET: z.string().optional(),
   // Payments — Stripe (global) and Cashfree (India). All optional; if a
   // gateway is unconfigured the booking page treats it as `none` and skips
   // checkout for services priced in its currency.
@@ -50,6 +54,9 @@ export const serverEnvSchema = z.object({
   // map (fine for dev, logs a warning if NODE_ENV=production).
   UPSTASH_REDIS_REST_URL: z.url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
+  // Bearer token Vercel Cron sends to /api/cron/* (set it in the Vercel
+  // project and Vercel adds the header). Unset → cron endpoints return 503.
+  CRON_SECRET: z.string().optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
