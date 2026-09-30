@@ -1,17 +1,14 @@
+// Expo SDK 52+ configures Metro for monorepos automatically (watchFolders,
+// nodeModulesPaths, pnpm symlinks, and deduping react/react-native via the
+// autolinking resolver), so we only layer NativeWind on top of the defaults.
+// Do NOT set `disableHierarchicalLookup` or override `nodeModulesPaths`: with
+// pnpm's isolated layout, transitive deps (e.g. @expo/metro-runtime, the deps
+// of @udyamflow/auth) live next to their dependents under node_modules/.pnpm
+// and are only reachable via hierarchical lookup.
+require('./load-root-env');
 const { getDefaultConfig } = require('expo/metro-config');
-const { withNativeWind } = require('nativewind/metro');
-const path = require('node:path');
+const { withNativewind } = require('nativewind/metro');
 
-// Resolve sibling workspaces so Metro can find @udyamflow/* packages.
-const workspaceRoot = path.resolve(__dirname, '../..');
-const projectRoot = __dirname;
+const config = withNativewind(getDefaultConfig(__dirname));
 
-const config = getDefaultConfig(projectRoot);
-config.watchFolders = [workspaceRoot];
-config.resolver.nodeModulesPaths = [
-  path.resolve(projectRoot, 'node_modules'),
-  path.resolve(workspaceRoot, 'node_modules'),
-];
-config.resolver.disableHierarchicalLookup = true;
-
-module.exports = withNativeWind(config, { input: './global.css' });
+module.exports = config;
