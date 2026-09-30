@@ -57,11 +57,16 @@ export async function notifyConfirmed(db: Db, bookingId: string): Promise<void> 
     const when = formatInTz(b.slotStart, row.timezone, 'd MMM yyyy, HH:mm');
     const ref = referenceCodeFor(b.id);
     const name = firstName(b.customerName);
+    // Online sessions: the join link is the one thing the customer needs on
+    // the day, so it goes into every channel.
+    const link = b.meetingUrl;
 
     if (b.customerEmail) {
       await sendEmail({
         to: b.customerEmail,
-        subject: `Booking confirmed — ${row.orgName}`,
+        subject: link
+          ? `Your online session on ${when} — ${row.orgName}`
+          : `Booking confirmed — ${row.orgName}`,
         html: emailShell(
           'Your booking is confirmed',
           `<p style="color:#5e5b54;line-height:1.6;">
@@ -69,6 +74,11 @@ export async function notifyConfirmed(db: Db, bookingId: string): Promise<void> 
             at ${escapeHtml(row.orgName)} (${escapeHtml(row.locationName)}) is confirmed for
             <strong>${escapeHtml(when)}</strong> (${escapeHtml(row.timezone)}).
           </p>
+          ${
+            link
+              ? `<p style="color:#5e5b54;line-height:1.6;">Join here: <a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>`
+              : ''
+          }
           <p style="color:#9a978f;font-size:12px;">Reference: ${ref}</p>`,
         ),
       }).catch((err) => console.error('confirmation email failed', err));
@@ -77,15 +87,17 @@ export async function notifyConfirmed(db: Db, bookingId: string): Promise<void> 
     if (b.customerPhone && row.enableSms) {
       await sendSMS({
         to: b.customerPhone,
-        body: `Hi ${name}, your appointment with ${row.resourceName} on ${when} is confirmed. Ref: ${ref}`,
-        variables: { name, resource: row.resourceName, when, ref },
+        body: `Hi ${name}, your appointment with ${row.resourceName} on ${when} is confirmed. Ref: ${ref}${link ? ` Join: ${link}` : ''}`,
+        variables: { name, resource: row.resourceName, when, ref, ...(link ? { link } : {}) },
       }).catch((err) => console.error('confirmation SMS failed', err));
     }
     if (b.customerPhone && row.enableWhatsapp) {
+      // Online bookings use `booking_confirmed_online`: same four body
+      // params as `booking_confirmed` plus {{5}} = join link.
       await sendWhatsApp({
         to: b.customerPhone,
-        template: 'booking_confirmed',
-        params: [name, row.resourceName, when, ref],
+        template: link ? 'booking_confirmed_online' : 'booking_confirmed',
+        params: [name, row.resourceName, when, ref, ...(link ? [link] : [])],
       }).catch((err) => console.error('confirmation WhatsApp failed', err));
     }
   } catch (err) {

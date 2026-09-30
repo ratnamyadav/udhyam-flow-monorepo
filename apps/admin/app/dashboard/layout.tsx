@@ -7,6 +7,7 @@ const NAV = [
   { href: '/dashboard', label: 'Overview' },
   { href: '/dashboard/organizations', label: 'Organizations' },
   { href: '/dashboard/users', label: 'Users' },
+  { href: '/gst', label: 'GST thresholds' },
 ];
 
 // Gates every page under /dashboard: `user.role === 'admin'` or a 403 page.

@@ -3,12 +3,31 @@ import { TRPCError } from '@trpc/server';
 import { atomic, type Db, schema } from '@udyamflow/db';
 import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { currency } from '../lib/validate';
+import { isValidHsnSac } from '../gst/india';
+import { GST_RATES_BPS } from '../gst/tax';
+import { serviceCurrency } from '../lib/validate';
 import { publicProcedure, router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 
 // Tenant-scoped service catalog + the join table that tells the booking page
 // which resources offer each service. A service with no linked resources is
 // offered by every resource.
+
+// GST treatment per service (see ../gst/tax.ts). All optional so existing
+// callers keep working; the schema defaults to 18%, not exempt.
+const gstInput = {
+  sacCode: z
+    .string()
+    .trim()
+    .refine(isValidHsnSac, 'SAC code must be 4–8 digits')
+    .nullable()
+    .optional(),
+  gstRateBps: z
+    .number()
+    .int()
+    .refine((v) => (GST_RATES_BPS as readonly number[]).includes(v), 'Pick a GST slab')
+    .optional(),
+  gstExempt: z.boolean().optional(),
+};
 
 async function listWithResources(db: Db, organizationId: string) {
   const services = await db
@@ -79,8 +98,11 @@ export const serviceRouter = router({
         description: z.string().max(1000).optional(),
         durationMin: z.number().int().min(5).max(480),
         priceCents: z.number().int().min(0).default(0),
-        currency: currency.default('INR'),
+        currency: serviceCurrency.default('INR'),
         resourceIds: z.array(z.string()).default([]),
+        ...gstInput,
+        // Online session — bookings get a Meet/Zoom/Jitsi link.
+        isOnline: z.boolean().default(false),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -95,6 +117,10 @@ export const serviceRouter = router({
           durationMin: input.durationMin,
           priceCents: input.priceCents,
           currency: input.currency,
+          sacCode: input.sacCode,
+          gstRateBps: input.gstRateBps,
+          gstExempt: input.gstExempt,
+          isOnline: input.isOnline,
         }),
         ...(resourceIds.length > 0
           ? [
@@ -115,7 +141,9 @@ export const serviceRouter = router({
         description: z.string().max(1000).nullable().optional(),
         durationMin: z.number().int().min(5).max(480).optional(),
         priceCents: z.number().int().min(0).optional(),
-        currency: currency.optional(),
+        currency: serviceCurrency.optional(),
+        ...gstInput,
+        isOnline: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -177,6 +205,7 @@ export const serviceRouter = router({
         durationMin: s.durationMin,
         priceCents: s.priceCents,
         currency: s.currency,
+        isOnline: s.isOnline,
         resourceIds: s.resourceIds,
       }));
     }),

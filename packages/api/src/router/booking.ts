@@ -22,9 +22,11 @@ import {
 } from '../lib/time';
 import { dateStr } from '../lib/validate';
 import { notifyCancelled, notifyConfirmed, referenceCodeFor } from '../notify';
+import { resolveMeetingUrl } from '../online';
 import { expireStaleHolds, refundBooking } from '../payments/lifecycle';
 import { HOLD_MINUTES, pickProvider } from '../payments/providers';
 import { enforceRateLimit, ipKeyFromHeaders } from '../rate-limit';
+import { sanitizeSource } from '../source';
 import { publicProcedure, router, tenantProcedure } from '../trpc';
 import { upsertCustomer } from './customer';
 
@@ -38,6 +40,7 @@ type Bookable = {
   locationId: string;
   resourceId: string;
   resourceName: string;
+  resourceMeetingUrl: string | null;
   service: typeof schema.service.$inferSelect | null;
   // Services this resource offers. When non-zero, a booking must pick one —
   // otherwise a paid service could be skipped entirely.
@@ -74,6 +77,7 @@ async function resolveBookable(
     .select({
       id: schema.resource.id,
       name: schema.resource.name,
+      meetingUrl: schema.resource.meetingUrl,
       locationId: schema.location.id,
       timezone: schema.location.timezone,
     })
@@ -132,6 +136,7 @@ async function resolveBookable(
       locationId: resource.locationId,
       resourceId: resource.id,
       resourceName: resource.name,
+      resourceMeetingUrl: resource.meetingUrl,
       service,
       eligibleServiceCount: eligible.length,
       slotMin: service?.durationMin ?? profession.slotDuration,
@@ -243,6 +248,9 @@ export const bookingRouter = router({
         // Ignored — the server derives the end from the service duration.
         slotEnd: z.iso.datetime().optional(),
         intake: z.record(z.string(), z.unknown()).optional(),
+        // Raw `?source=` / `?utm_source=` from the booking link — sanitized
+        // below (junk becomes null rather than failing the booking).
+        source: z.string().max(200).optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -285,8 +293,7 @@ export const bookingRouter = router({
 
       const amountCents = b.service?.priceCents ?? 0;
       const currency = b.service?.currency ?? null;
-      const provider =
-        amountCents > 0 && currency ? await pickProvider(ctx.db, b.orgId, currency) : 'none';
+      const provider = amountCents > 0 && currency ? pickProvider(currency) : 'none';
       // Price > 0 with no gateway configured = pay at the venue.
       const requiresPayment = provider !== 'none';
       const holdExpiresAt = requiresPayment
@@ -297,6 +304,13 @@ export const bookingRouter = router({
         name: input.customerName,
         email: input.customerEmail,
         phone: input.customerPhone,
+      });
+
+      // Online services get a join link: the practitioner's own room if set,
+      // else a generated Jitsi room.
+      const meetingUrl = resolveMeetingUrl({
+        serviceIsOnline: !!b.service?.isOnline,
+        resourceMeetingUrl: b.resourceMeetingUrl,
       });
 
       const id = `bkg_${randomUUID()}`;
@@ -319,6 +333,8 @@ export const bookingRouter = router({
           holdExpiresAt,
           amountCents,
           currency,
+          meetingUrl,
+          source: sanitizeSource(input.source),
         });
       } catch (err) {
         // The DB constraints are the real race guard — a concurrent booking
@@ -336,6 +352,7 @@ export const bookingRouter = router({
         amountCents,
         currency,
         holdExpiresAt,
+        meetingUrl,
       };
     }),
 
@@ -383,6 +400,7 @@ export const bookingRouter = router({
         orgName: row.orgName,
         orgSlug: row.orgSlug,
         timezone: row.timezone,
+        meetingUrl: bk.meetingUrl,
       };
     }),
 

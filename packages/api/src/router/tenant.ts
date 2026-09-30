@@ -4,7 +4,7 @@ import { deleteObject, isTenantLogoUrl, keyFromPublicUrl } from '@udyamflow/stor
 import { fontIdFrom, readableTextOn } from '@udyamflow/tokens';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
-import { encrypt, REDACTED_SECRET } from '../crypto';
+import { REDACTED_SECRET } from '../crypto';
 import { bookingLayout, fontId, hexColor } from '../lib/validate';
 import { publicProcedure, router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 
@@ -86,27 +86,16 @@ export const tenantRouter = router({
         currency: z.enum(['USD', 'INR']).optional(),
         enableSms: z.boolean().optional(),
         enableWhatsapp: z.boolean().optional(),
-        // stripeAccountId is deliberately absent: it's only ever set by
-        // payment.connectStripe, never by the client — otherwise a tenant
-        // could point its checkouts at someone else's Connect account.
-        cashfreeMerchantId: z.string().max(100).nullable().optional(),
-        // Plain text in on the wire (HTTPS); we encrypt before write.
-        // Pass null to clear the saved key.
-        cashfreeApiKey: z.string().max(200).nullable().optional(),
+        // Payout accounts are deliberately absent: stripeAccountId is only
+        // set by payment.connectStripe and the Cashfree vendor by
+        // payment.connectCashfree — never by the client, or a tenant could
+        // point its checkouts at someone else's account.
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      // Encrypt the Cashfree key before persistence. If the UI sends the
-      // REDACTED sentinel (because it round-tripped getSettings), don't
-      // overwrite — that means the user didn't touch the field.
       const patch: typeof input = { ...input };
       if (patch.bookingHeadline === '') patch.bookingHeadline = null;
       if (patch.bookingIntro === '') patch.bookingIntro = null;
-      if (input.cashfreeApiKey === REDACTED_SECRET) {
-        delete patch.cashfreeApiKey;
-      } else if (typeof input.cashfreeApiKey === 'string' && input.cashfreeApiKey.length > 0) {
-        patch.cashfreeApiKey = encrypt(input.cashfreeApiKey);
-      }
 
       // Logos must be files we stored for this org (via the presigned upload)
       // — not arbitrary external URLs.

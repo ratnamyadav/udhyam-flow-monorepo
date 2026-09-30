@@ -20,8 +20,11 @@ export const SETTINGS_NAV: NavItem[] = [
   { href: '/settings/locations', label: 'Locations' },
   { href: '/settings/team', label: 'Team' },
   { href: '/settings/payments', label: 'Payments' },
+  { href: '/settings/invoicing', label: 'Invoicing' },
+  { href: '/settings/memberships', label: 'Memberships' },
   { href: '/settings/branding', label: 'Branding' },
   { href: '/settings/templates', label: 'Template' },
+  { href: '/settings/channels', label: 'Channels' },
   { href: '/settings/notifications', label: 'Notifications' },
 ];
 

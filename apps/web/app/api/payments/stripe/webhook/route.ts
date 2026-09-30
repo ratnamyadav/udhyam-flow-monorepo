@@ -1,7 +1,12 @@
 import { getStripe, markBookingPaid, markPaymentFailed, recordRefundTotal } from '@udyamflow/api';
+import {
+  autoInvoiceIfEnabled,
+  recordStripeInvoice,
+  syncStripeInvoiceStatus,
+} from '@udyamflow/api/invoicing';
 import { db, schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
-import type { NextRequest } from 'next/server';
+import { after, type NextRequest } from 'next/server';
 
 // Stripe webhook. Source of truth for marking bookings paid — we don't trust
 // the success_url redirect because the user can close the tab.
@@ -46,11 +51,15 @@ async function bookingForSession(event: StripeEvent, session: CheckoutSession) {
   const [booking] = await db.select().from(schema.booking).where(eq(schema.booking.id, bookingId));
   if (!booking) return null;
   const account = event.account ?? null;
+  // Bookings made before price snapshots existed carry neither the amount
+  // nor the account — only the provider can be checked for those.
+  const legacy = booking.amountCents == null;
   const matches =
     booking.paymentProvider === 'stripe' &&
-    (booking.paymentAccountId ?? null) === account &&
-    session.amount_total === booking.amountCents &&
-    session.currency?.toUpperCase() === booking.currency?.toUpperCase();
+    (legacy ||
+      ((booking.paymentAccountId ?? null) === account &&
+        session.amount_total === booking.amountCents &&
+        session.currency?.toUpperCase() === booking.currency?.toUpperCase()));
   if (!matches) {
     console.error(
       `[stripe] ignoring ${event.type} ${event.id}: does not match booking ${bookingId}`,
@@ -86,7 +95,40 @@ export async function POST(req: NextRequest) {
         break;
       }
       const booking = await bookingForSession(event, session);
-      if (booking) await markBookingPaid(db, { bookingId: booking.id, paymentId: session.id });
+      if (!booking) break;
+      const outcome = await markBookingPaid(db, { bookingId: booking.id, paymentId: session.id });
+      if (outcome !== 'confirmed') break;
+
+      // Invoicing runs after the 200 so a slow provider can't make Stripe
+      // retry the webhook. If Checkout generated an invoice (built-in Stripe
+      // invoicing), mirror it; otherwise issue via the tenant's provider.
+      const invoiceId = typeof session.invoice === 'string' ? session.invoice : session.invoice?.id;
+      const reqOpts = event.account ? { stripeAccount: event.account } : undefined;
+      after(async () => {
+        try {
+          if (invoiceId) {
+            const invoice = await stripe.invoices.retrieve(invoiceId, {}, reqOpts);
+            await recordStripeInvoice(db, {
+              organizationId: booking.organizationId,
+              bookingId: booking.id,
+              invoice,
+            });
+          } else {
+            await autoInvoiceIfEnabled(db, booking.id);
+          }
+        } catch (err) {
+          console.error(`[invoicing] post-checkout invoicing failed for ${booking.id}:`, err);
+        }
+      });
+      break;
+    }
+    case 'invoice.paid':
+    case 'invoice.voided':
+    case 'invoice.marked_uncollectible':
+    case 'invoice.finalized': {
+      // Keeps invoices issued from UdyamFlow (and the bookings they bill)
+      // in sync when the customer pays or the tenant voids in Stripe.
+      await syncStripeInvoiceStatus(db, event.data.object);
       break;
     }
     case 'checkout.session.expired':

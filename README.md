@@ -61,7 +61,10 @@ Postgres schema is split by domain in `packages/db/src/schema/`:
 - **Org** — `organization`, `member`, `invitation` (BetterAuth org plugin; orgs == tenants)
 - **Tenant** — `tenant_settings` 1:1 with `organization` (theme, profession, template, density, currency)
 - **Booking** — `location`, `resource`, `resource_hours`, `service`, `service_resource`, `booking`
-- **CRM** — `customer` (deduped per org by email, then phone)
+- **CRM** — `customer` (deduped per org by email, then phone; optional GSTIN / state for B2B invoices)
+- **Invoicing** — `invoice` (one per booking, mirrors the provider's invoice), `invoice_sequence`, `integration_connection` (encrypted OAuth tokens for accounting tools)
+- **Memberships** — `membership_plan`, `membership_subscription`, `membership_payment` (Cashfree Subscriptions)
+- **Platform** — `platform_settings` (e.g. the default GST threshold)
 
 Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant table. The tRPC `tenantProcedure` middleware reads the active org from the session (BetterAuth's `activeOrganizationId`), **verifies the caller is still a member**, and scopes all queries to it. `tenantAdminProcedure` additionally requires the `owner` or `admin` role.
 
@@ -74,7 +77,7 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | App | Port | Responsibilities |
 |---|---|---|
 | `apps/web` | 3000 | Marketing landing, pricing, sign-in/up, 5-step onboarding wizard, owner dashboard, theme customizer with live preview, three booking layouts (sidebar/stacked/inline), multi-tenant location switcher |
-| `apps/admin` | 3001 | Internal staff panel gated by `user.role === 'admin'` — platform overview, organizations and users. Shares the BetterAuth session DB with the main app |
+| `apps/admin` | 3001 | Internal staff panel gated by `user.role === 'admin'` — platform overview, organizations, users, and GST thresholds (`/gst`: platform default and per-store overrides). Shares the BetterAuth session DB with the main app |
 | `apps/mobile` | Metro 8081 | Expo app — sign-in/up, today's bookings, booking history + detail, workspace switcher, and the public booking flow with checkout. Uses `expo-secure-store` for token persistence |
 
 ### Routes (apps/web)
@@ -92,19 +95,43 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | `/settings/services` | Service catalog (duration, price, eligible resources) |
 | `/settings/team` | Invite teammates, manage members, revoke pending invites |
 | `/settings/templates` | Switch profession template |
-| `/settings/payments` | Stripe Connect onboarding, tenant Cashfree credentials, webhook setup |
-| `/bookings` | Booking history — filter by status/resource, cancel/no-show/complete |
+| `/settings/payments` | Stripe Connect onboarding, Cashfree Easy Split payout account, webhook setup |
+| `/settings/invoicing` | Pick the invoice provider (built-in GST invoices, Zoho Books, FreshBooks or Stripe Invoicing), GST profile, auto-invoicing, CSV / Tally export |
+| `/settings/notifications` | SMS / WhatsApp confirmation toggles and the WhatsApp templates reminders need |
+| `/bookings` | Booking history — filter by status/resource/date, cancel/no-show/complete, refunds, invoices |
 | `/customers` | CRM — customer list, search, detail with booking history + notes |
 | `/accept-invitation/[id]` | Accept-invitation flow for invited teammates |
 | `/api/upload/logo/presign` | Owner/admin POST — returns a presigned PUT URL for S3-compatible storage (type- and size-bound, PNG/JPEG/WebP only). The browser resizes the logo before uploading |
-| `/api/payments/stripe/webhook` | Stripe webhook — verifies signature, marks bookings paid / refunded |
-| `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC, marks bookings paid / refunded |
+| `/api/payments/stripe/webhook` | Stripe webhook — verifies signature, confirms held bookings, records refunds, records / syncs invoices |
+| `/api/integrations/freshbooks/callback` | FreshBooks OAuth redirect — stores encrypted tokens for the tenant |
+| `/api/integrations/zoho/callback` | Zoho Books OAuth redirect (multi-data-centre aware) |
+| `/api/export/invoices?format=csv\|tally&from&to` | Authed invoice export for the tenant's accountant — GST CSV or TallyPrime XML |
+| `/invoice/[id]` | Public, printable built-in GST invoice / Bill of Supply |
+| `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC + timestamp, confirms held bookings, records refunds |
 | `/forgot-password`, `/reset-password`, `/verify-email` | Password reset + email verification flows |
 | `/book/[orgSlug]/confirmation` | Post-payment confirmation (auto-refreshes until webhook lands) |
 | `/book/[orgSlug]?layout=sidebar\|stacked\|inline` | Public tenant booking page (server-rendered with the tenant's theme) |
 | `/api/auth/[...all]` | BetterAuth handler |
 | `/api/trpc/[trpc]` | tRPC fetch adapter |
 | `/api/health` | Health check (returns `{ ok, orgs }`, or `{ ok: false }` with 503) |
+| `/settings/channels` | Booking channels — `?source=` share links (Google Business Profile, Instagram, WhatsApp) + bookings by source (30 days) |
+| `/pay/[bookingId]` | Pay link from reminders — starts Stripe / Cashfree checkout for an unpaid booking |
+| `/api/cron/reminders` | Hourly Vercel Cron (`apps/web/vercel.json`, `Authorization: Bearer $CRON_SECRET`) — WhatsApp/SMS reminders ~24h before confirmed bookings |
+| `/api/notifications/whatsapp/inbound` | MSG91 inbound WhatsApp webhook (`?secret=$MSG91_WEBHOOK_SECRET`) — Confirm / Cancel / Reschedule button replies |
+| `/settings/memberships` | Recurring membership plans (Cashfree Subscriptions) + subscribers, with cancel |
+| `/book/[orgSlug]/memberships` | Public membership plans + sign-up (UPI Autopay / eNACH / card mandate) |
+| `/book/[orgSlug]/memberships/authorize?sub=…` | Opens Cashfree's mandate-approval checkout for a pending sign-up (shareable / resumable) |
+| `/book/[orgSlug]/memberships/return?sub=…` | Post-mandate landing — syncs status from Cashfree and auto-refreshes until settled |
+| `/api/payments/cashfree/subscriptions/webhook` | Cashfree Subscriptions webhook — verifies HMAC, syncs mandate status, records debits idempotently |
+
+### Memberships (Cashfree Subscriptions)
+
+Tenants sell recurring packages ("₹2,000 / month"); the customer approves a UPI Autopay, eNACH or card mandate once and Cashfree debits them every cycle. It reuses the platform `CASHFREE_CLIENT_ID` / `CASHFREE_CLIENT_SECRET` / `CASHFREE_ENV` — no new env vars. Only INR plans can be sold.
+
+- **Webhook:** in the Cashfree dashboard (Payment Gateway → Developers → Webhooks) add `https://<your-app>/api/payments/cashfree/subscriptions/webhook` for **Subscription** events (status changed, auth status, payment success / failed / cancelled). It's verified with `CASHFREE_CLIENT_SECRET`, same scheme as the PG webhook. Without it, statuses still sync when the customer lands on the return page, but recurring debits won't be recorded.
+- **Plans are immutable at Cashfree.** A plan is created there lazily on its first subscriber, and mandates are approved for its exact amount, so price and interval are fixed once saved — only name / description / active can change. To re-price, create a new plan and deactivate the old one.
+- **Sandbox testing:** leave `CASHFREE_ENV` unset (sandbox) and use sandbox keys. Create a plan in `/settings/memberships`, open `/book/<slug>/memberships`, subscribe with any email and a valid-format Indian mobile (e.g. `9999999999`), and approve the mandate on Cashfree's sandbox page (UPI test VPA `testsuccess@gocash`, or the sandbox net-banking / card simulators). Tunnel your dev server (e.g. `cloudflared` / `ngrok`) so the webhook can reach it.
+- Code: `packages/api/src/memberships/*` (fetch-based client pinned to `x-api-version: 2026-01-01`, DB orchestration, webhook parsing) and `packages/api/src/router/membership.ts`.
 
 ---
 
@@ -146,6 +173,28 @@ Required values:
 
 Everything else in `.env.example` is optional — payments, email/SMS, object storage, Sentry, Upstash — and each feature degrades gracefully when unset. See the comments in `.env.example`.
 
+Optional — invoicing:
+
+| Variable | What it is |
+|---|---|
+| `FRESHBOOKS_CLIENT_ID`, `FRESHBOOKS_CLIENT_SECRET` | FreshBooks OAuth app ([developer portal](https://my.freshbooks.com/#/developer)). Register the redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/freshbooks/callback` — FreshBooks requires `https`, so use a tunnel (e.g. ngrok) in dev |
+| `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET` | Zoho Books server-based OAuth client ([api-console.zoho.in](https://api-console.zoho.in)); redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/zoho/callback`. Enable multi-DC to accept users outside India. `ZOHO_ACCOUNTS_URL` overrides the consent host (default `https://accounts.zoho.in`) |
+
+Built-in **UdyamFlow GST invoices** need no env: set the GST profile on `/settings/invoicing` and each service's SAC code + GST slab on `/settings/services` (prices are GST-inclusive; exempt services and unregistered businesses get a Bill of Supply). Numbers run per financial year (`INV/26-27/0001`). **GST threshold:** GST can be charged only on bookings above a limit — UdyamFlow admins set the platform default and per-store overrides at `/gst` in the admin app (`:3001`), and stores can set their own on `/settings/invoicing` (store value wins; `0` = every transaction). Bookings at or below the limit get a Bill of Supply with a note. Registered businesses normally owe GST on every taxable sale, so stores should confirm with their CA.
+
+Optional — Indian payouts (Cashfree Easy Split): tenants add their bank account / UPI ID on `/settings/payments`; once Cashfree marks the vendor `ACTIVE`, INR orders carry `order_splits` (and new memberships `subscription_payment_splits`) and settle to the tenant. Easy Split must be enabled on your Cashfree account. `CASHFREE_PLATFORM_FEE_PERCENT` (default `0`) keeps a share for the platform; `CASHFREE_REQUIRE_VENDOR=true` refuses INR checkouts for tenants without an active vendor.
+
+Built-in Stripe Invoicing needs no extra env — it uses the tenant's Stripe Connect account. For invoice status sync, also subscribe the Stripe webhook (Connect events) to `invoice.paid`, `invoice.voided`, `invoice.marked_uncollectible` and `invoice.finalized`.
+
+Optional — WhatsApp reminders & two-way replies:
+
+| Variable | What it is |
+|---|---|
+| `CRON_SECRET` | Bearer token for `/api/cron/reminders` (set it in Vercel; Vercel Cron sends it automatically) |
+| `MSG91_WEBHOOK_SECRET` | Shared secret for the MSG91 inbound webhook — configure `POST {APP_URL}/api/notifications/whatsapp/inbound?secret=…` in MSG91 |
+
+WhatsApp templates to get approved on the MSG91 number (Utility, `en`): `booking_reminder` (body `{{1}}` name, `{{2}}` practitioner, `{{3}}` date/time, `{{4}}` join link or ref; quick replies Confirm / Cancel / Reschedule), `booking_reminder_pay` (same + URL button `{APP_URL}/pay/{{1}}`), and `booking_confirmed_online` (`booking_confirmed`'s four params + `{{5}}` join link).
+
 The web/admin Next apps load this `.env` from the repo root via `@next/env`'s `loadEnvConfig` in `next.config.ts`. Drizzle and the seed script load it via `dotenv-cli`. No need to duplicate per-app.
 
 ### 3. Migrate and seed the database
@@ -175,7 +224,7 @@ The browser uploads straight to the bucket with a 60-second presigned PUT (conte
 - **Stripe** (non-INR prices): set `STRIPE_SECRET_KEY`, then create **two** webhook endpoints pointing at `/api/payments/stripe/webhook`:
   1. Platform events — `checkout.session.completed`, `checkout.session.expired`, `checkout.session.async_payment_succeeded`, `checkout.session.async_payment_failed`, `charge.refunded` → secret in `STRIPE_WEBHOOK_SECRET`.
   2. "Events on connected accounts" — the same events plus `account.updated` → secret in `STRIPE_CONNECT_WEBHOOK_SECRET`.
-- **Cashfree** (INR prices): set `CASHFREE_CLIENT_ID` / `CASHFREE_CLIENT_SECRET` for the platform account and point the webhook at `/api/payments/cashfree/webhook`. Tenants can add their own Cashfree credentials in Settings → Payments.
+- **Cashfree** (INR prices): set `CASHFREE_CLIENT_ID` / `CASHFREE_CLIENT_SECRET` for the platform account and point the webhook at `/api/payments/cashfree/webhook`. Tenants register a payout account (bank or UPI + KYC) in Settings → Payments; once Cashfree marks it `ACTIVE`, each INR order is split to them via **Easy Split** (`CASHFREE_PLATFORM_FEE_PERCENT` sets the platform's share).
 
 ### 4. Run
 

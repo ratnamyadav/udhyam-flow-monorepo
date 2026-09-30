@@ -1,8 +1,9 @@
 import { TRPCError } from '@trpc/server';
 import { type Db, isConflictError, type PaymentStatus, schema } from '@udyamflow/db';
 import { and, eq, inArray, lt } from 'drizzle-orm';
+import { cashfreeRefund } from '../cashfree';
 import { notifyConfirmed } from '../notify';
-import { cashfreeCredsForBooking, cashfreeRefund, getStripe } from './providers';
+import { cashfreeOrderIdFor, getStripe } from './providers';
 
 // Booking payment state transitions shared by the tRPC routers and the
 // Stripe / Cashfree webhooks. Every transition is guarded on the current
@@ -188,17 +189,11 @@ export async function refundBooking(
       if (!pi) throw new TRPCError({ code: 'NOT_FOUND', message: 'Stripe payment missing.' });
       await stripe.refunds.create({ payment_intent: pi, amount }, reqOpts);
     } else if (booking.paymentProvider === 'cashfree') {
-      const creds = await cashfreeCredsForBooking(db, booking);
-      if (!creds) {
-        throw new TRPCError({
-          code: 'PRECONDITION_FAILED',
-          message: 'Cashfree is not configured.',
-        });
-      }
-      await cashfreeRefund(creds, {
-        orderId: booking.paymentId,
-        amountCents: amount,
-        refundId: `rfd_${booking.id.slice(-12)}_${Date.now().toString(36)}`,
+      // Split orders recover the refund from the tenant's vendor share.
+      await cashfreeRefund({
+        orderId: cashfreeOrderIdFor(booking),
+        amountPaise: amount,
+        vendorId: booking.paymentVendorId,
       });
     } else {
       throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Unknown payment provider.' });

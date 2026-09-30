@@ -30,6 +30,18 @@ export default async function AdminOverviewPage() {
         ))}
       </div>
 
+      <div className="grid grid-cols-3 gap-4 mb-10">
+        <Link
+          href="/gst"
+          className="bg-surface border border-border rounded-xl p-5 hover:border-border-strong"
+        >
+          <div className="text-[15px] font-medium text-ink">GST thresholds</div>
+          <div className="text-[12px] text-ink-mute mt-1">
+            Platform default and per-store limits for charging GST.
+          </div>
+        </Link>
+      </div>
+
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-[16px] font-medium text-ink">Newest organizations</h2>
         <Link href="/dashboard/organizations" className="text-[13px] text-ink-mute hover:text-ink">

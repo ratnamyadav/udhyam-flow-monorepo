@@ -100,6 +100,19 @@ describe('paid bookings', () => {
   });
 });
 
+describe('pay-later checkout', () => {
+  it('refuses bookings that are finished or released, whatever their payment status', async () => {
+    const f = await seedOrg(db, { currency: 'USD' });
+    const b = await paidBooking(f, 1, '15:00');
+    for (const status of ['completed', 'cancelled', 'no_show', 'expired'] as const) {
+      await db.update(schema.booking).set({ status }).where(eq(schema.booking.id, b.id));
+      await expect(
+        publicCaller(db).payment.createCheckout({ bookingId: b.id }),
+      ).rejects.toMatchObject({ code: 'PRECONDITION_FAILED' });
+    }
+  });
+});
+
 describe('payment lifecycle', () => {
   it('confirms on payment, idempotently, and never un-refunds', async () => {
     const f = await seedOrg(db, { currency: 'USD' });

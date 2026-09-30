@@ -93,6 +93,9 @@ export const booking = pgTable(
     // or `tenant` when the tenant's own Cashfree credentials were used. Null
     // means the platform account. Refunds must go back through the same one.
     paymentAccountId: text('payment_account_id'),
+    // Cashfree Easy Split vendor the payment was split to (null = platform
+    // settlement). Refunds recover from the same vendor.
+    paymentVendorId: text('payment_vendor_id'),
     // Price snapshot at booking time, so later catalog edits don't rewrite
     // what the customer was charged (or past revenue).
     amountCents: integer('amount_cents'),
@@ -102,6 +105,20 @@ export const booking = pgTable(
     cancelReason: text('cancel_reason'),
     intake: jsonb('intake').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at').notNull().defaultNow(),
+    // WhatsApp/SMS 24h reminder. The reminder cron claims a booking by setting
+    // this with a conditional `WHERE reminder_sent_at IS NULL` update before
+    // sending, so overlapping cron runs can't double-send.
+    reminderSentAt: timestamp('reminder_sent_at'),
+    // Set when the customer taps "Confirm" on the WhatsApp reminder. Purely
+    // informational (status stays `confirmed`) — shown on the bookings list.
+    customerConfirmedAt: timestamp('customer_confirmed_at'),
+    // Join link for online services: the resource's own Meet/Zoom room, or a
+    // generated Jitsi room. Snapshotted at booking time so later edits to the
+    // resource don't change links customers already have.
+    meetingUrl: text('meeting_url'),
+    // Acquisition channel from `?source=` / `?utm_source=` on the public
+    // booking page (e.g. `google`, `instagram`). Sanitized to [a-z0-9_-]{1,32}.
+    source: text('source'),
   },
   (t) => [
     index('booking_org_slot_idx').on(t.organizationId, t.slotStart),

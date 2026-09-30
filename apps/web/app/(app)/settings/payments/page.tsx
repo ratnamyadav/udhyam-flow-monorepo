@@ -1,11 +1,10 @@
-// Per-region payment routing: services in INR → Cashfree, USD → Stripe.
-// Stripe payouts go to the **tenant's own Connect account** once onboarding
-// is complete (chargesEnabled); Cashfree payouts go to the tenant's own
-// Cashfree account when they've saved credentials. Otherwise both fall back
-// to the platform account so nothing breaks.
+// Per-region payment routing: services in INR → Cashfree, everything else
+// → Stripe. Payouts go to the **tenant's own account** once onboarding is
+// complete — Stripe Connect (chargesEnabled) or a Cashfree Easy Split
+// vendor (ACTIVE). Until then we fall back to the platform account.
 
 import { getServerEnv } from '@udyamflow/env/server';
-import { CashfreeCard } from '@/components/payments/cashfree-card';
+import { CashfreePayoutCard } from '@/components/payments/cashfree-payout-card';
 import { StripeConnectCard } from '@/components/payments/stripe-connect-card';
 
 const STRIPE_EVENTS = [
@@ -15,12 +14,18 @@ const STRIPE_EVENTS = [
   'checkout.session.async_payment_failed',
   'charge.refunded',
 ];
+// Only needed when the tenant uses built-in Stripe invoicing.
+const STRIPE_INVOICE_EVENTS = [
+  'invoice.paid',
+  'invoice.voided',
+  'invoice.marked_uncollectible',
+  'invoice.finalized',
+];
 
 export default function PaymentsSettingsPage() {
   // Read at request time so on/off badges reflect deployed env, not build env.
   const env = getServerEnv();
   const stripeReady = !!env.STRIPE_SECRET_KEY && !!env.STRIPE_WEBHOOK_SECRET;
-  const cashfreeReady = !!env.CASHFREE_CLIENT_ID && !!env.CASHFREE_CLIENT_SECRET;
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
 
   return (
@@ -32,23 +37,15 @@ export default function PaymentsSettingsPage() {
         <h1 className="text-[32px] font-medium tracking-tight text-ink">Payment gateways</h1>
         <p className="text-[14px] text-ink-mute mt-2 max-w-[640px]">
           UdyamFlow routes by service currency: <strong>INR</strong> services check out via
-          Cashfree, <strong>USD</strong> services via Stripe. Free services skip checkout entirely.
-          Once you connect Stripe or save your Cashfree credentials, customer payments settle
-          directly to your own account; until then they settle to the platform account.
+          Cashfree, everything else (USD / EUR / GBP / …) via Stripe. Free services skip checkout
+          entirely. Once you connect Stripe or register a payout account for Cashfree, customer
+          payments settle directly to you; until then they settle to the platform account.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 max-w-[860px]">
         <StripeConnectCard platformReady={stripeReady} />
-        <CashfreeCard
-          platformReady={cashfreeReady}
-          missing={
-            [
-              !env.CASHFREE_CLIENT_ID && 'CASHFREE_CLIENT_ID',
-              !env.CASHFREE_CLIENT_SECRET && 'CASHFREE_CLIENT_SECRET',
-            ].filter(Boolean) as string[]
-          }
-        />
+        <CashfreePayoutCard />
       </div>
 
       <div className="mt-8 bg-surface border border-border rounded-xl p-5 max-w-[860px]">
@@ -72,14 +69,18 @@ export default function PaymentsSettingsPage() {
                 <span className="font-mono">STRIPE_CONNECT_WEBHOOK_SECRET</span>.
               </li>
             </ol>
+            <div className="text-[12px] text-ink-mute mt-2">
+              Using built-in Stripe invoicing? Also subscribe the Connect endpoint to{' '}
+              <EventList events={STRIPE_INVOICE_EVENTS} />.
+            </div>
           </div>
           <div>
             <div className="font-medium">Cashfree</div>
             <div className="font-mono mt-1">POST {appUrl}/api/payments/cashfree/webhook</div>
             <div className="text-[12px] text-ink-mute mt-1">
-              Set this as the payment webhook in the Cashfree dashboard of every account that takes
-              payments (the platform's and, if you saved your own credentials, yours). Every request
-              is signature-verified before a booking is updated.
+              Set this as the payment webhook in the platform's Cashfree dashboard (payouts to your
+              account happen through Easy Split). Every request is signature-verified with{' '}
+              <span className="font-mono">CASHFREE_CLIENT_SECRET</span> before a booking is updated.
             </div>
           </div>
         </div>

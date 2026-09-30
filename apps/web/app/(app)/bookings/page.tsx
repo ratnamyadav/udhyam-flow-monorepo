@@ -115,6 +115,15 @@ export default function BookingsPage() {
       onDone(res.paymentStatus === 'refunded' ? 'Refund issued.' : 'Partial refund issued.'),
     onError,
   });
+  const invoicing = trpc.invoicing.status.useQuery();
+  const invoices = trpc.invoicing.list.useQuery();
+  const createInvoice = trpc.invoicing.create.useMutation({
+    onSuccess: () => {
+      utils.invoicing.list.invalidate();
+      onDone('Invoice issued.');
+    },
+    onError,
+  });
   const busy = cancel.isPending || noShow.isPending || complete.isPending || refund.isPending;
 
   function onRefund(b: {
@@ -156,6 +165,8 @@ export default function BookingsPage() {
   const lastPage = pages[pages.length - 1];
   const hasMore = !!lastPage?.data && lastPage.data.length === PAGE_SIZE;
   const resById = new Map((resources.data ?? []).map((r) => [r.id, r]));
+  const invoiceByBooking = new Map((invoices.data ?? []).map((i) => [i.bookingId, i]));
+  const canInvoice = (invoicing.data?.provider ?? 'none') !== 'none';
   const selectClass =
     'text-[13px] bg-surface border border-border rounded-md px-2.5 py-1.5 text-ink';
 
@@ -242,7 +253,7 @@ export default function BookingsPage() {
       )}
 
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[160px_1fr_180px_150px_220px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
+        <div className="grid grid-cols-[160px_1fr_180px_150px_280px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
           <div>When</div>
           <div>Customer</div>
           <div>Resource</div>
@@ -271,11 +282,12 @@ export default function BookingsPage() {
             const isPendingPayment = b.status === 'pending_payment';
             const isPaid = b.paymentStatus === 'paid' || b.paymentStatus === 'partially_refunded';
             const meta = STATUS_LABELS[b.status] ?? { label: b.status, color: 'var(--color-ink)' };
+            const inv = invoiceByBooking.get(b.id);
             const payLabel = PAYMENT_LABELS[b.paymentStatus];
             return (
               <div
                 key={b.id}
-                className="grid grid-cols-[160px_1fr_180px_150px_220px] px-5 py-3.5 border-t border-border first:border-t-0 items-center hover:bg-surface-mute"
+                className="grid grid-cols-[160px_1fr_180px_150px_280px] px-5 py-3.5 border-t border-border first:border-t-0 items-center hover:bg-surface-mute"
               >
                 <div className="text-[12px] font-mono tabular-nums text-ink">
                   {b.slotStart.toLocaleString([], {
@@ -292,6 +304,21 @@ export default function BookingsPage() {
                   <div className="text-[12px] text-ink-mute">
                     {b.customerEmail ?? b.customerPhone ?? '—'}
                   </div>
+                  {(b.meetingUrl || b.source) && (
+                    <div className="flex gap-2 mt-0.5 text-[11px]">
+                      {b.meetingUrl && (
+                        <a
+                          href={b.meetingUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-ink-mute hover:text-ink underline"
+                        >
+                          Join online
+                        </a>
+                      )}
+                      {b.source && <span className="font-mono text-ink-soft">via {b.source}</span>}
+                    </div>
+                  )}
                 </div>
                 <div className="text-[13px] text-ink-mute">{r?.name ?? '—'}</div>
                 <div className="flex flex-col items-start gap-1">
@@ -307,8 +334,49 @@ export default function BookingsPage() {
                       {b.amountCents ? ` · ${money(b.amountCents, b.currency)}` : ''}
                     </span>
                   )}
+                  {b.customerConfirmedAt && isConfirmed && (
+                    <span
+                      className="text-[10px] text-ink-mute"
+                      title={`Customer confirmed via WhatsApp on ${b.customerConfirmedAt.toLocaleString()}`}
+                    >
+                      ✓ Confirmed by customer
+                    </span>
+                  )}
                 </div>
                 <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px]">
+                  {inv ? (
+                    inv.hostedUrl ? (
+                      <a
+                        href={inv.hostedUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-ink hover:underline underline-offset-2"
+                        title={`${inv.provider} invoice · ${inv.status}`}
+                      >
+                        {inv.number ? `Invoice ${inv.number}` : 'Invoice'} ↗
+                      </a>
+                    ) : (
+                      <span className="text-ink-mute" title={inv.provider}>
+                        {inv.status === 'pending' ? 'Invoicing…' : `Invoice ${inv.number ?? ''}`}
+                      </span>
+                    )
+                  ) : (
+                    canInvoice &&
+                    b.serviceId &&
+                    b.status !== 'cancelled' &&
+                    b.status !== 'expired' && (
+                      <button
+                        type="button"
+                        className="text-ink-mute hover:text-ink"
+                        onClick={() => createInvoice.mutate({ bookingId: b.id })}
+                        disabled={createInvoice.isPending}
+                      >
+                        {createInvoice.isPending && createInvoice.variables?.bookingId === b.id
+                          ? 'Invoicing…'
+                          : 'Invoice'}
+                      </button>
+                    )
+                  )}
                   {isConfirmed && (
                     <>
                       <button

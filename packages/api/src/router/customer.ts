@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { type Db, isConflictError, schema } from '@udyamflow/db';
 import { and, desc, eq, ilike, or } from 'drizzle-orm';
 import { z } from 'zod';
+import { isStateCode, isValidGstin, stateCodeFromGstin } from '../gst/india';
 import { normalizeEmail, normalizePhone } from '../lib/validate';
 import { router, tenantProcedure } from '../trpc';
 
@@ -59,6 +60,15 @@ export const customerRouter = router({
         email: z.email().nullable().optional(),
         phone: z.string().nullable().optional(),
         notes: z.string().nullable().optional(),
+        // GST invoicing: a business customer's GSTIN, or just their state
+        // (place of supply). A GSTIN implies the state.
+        gstin: z
+          .string()
+          .transform((v) => v.trim().toUpperCase())
+          .refine(isValidGstin, 'Invalid GSTIN')
+          .nullable()
+          .optional(),
+        stateCode: z.string().refine(isStateCode, 'Unknown state').nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -75,6 +85,7 @@ export const customerRouter = router({
       const { id, ...patch } = input;
       if (patch.email !== undefined) patch.email = normalizeEmail(patch.email);
       if (patch.phone !== undefined) patch.phone = normalizePhone(patch.phone);
+      if (patch.gstin) patch.stateCode = stateCodeFromGstin(patch.gstin);
       try {
         await ctx.db.update(schema.customer).set(patch).where(eq(schema.customer.id, id));
       } catch (err) {

@@ -16,6 +16,14 @@ export const timeZone = z.string().refine(isValidTimeZone, 'Unknown timezone');
 
 export const currency = z.enum(['USD', 'INR']);
 
+// Service prices can be in any ISO 4217 currency: INR checks out via
+// Cashfree, everything else via Stripe.
+export const serviceCurrency = z
+  .string()
+  .trim()
+  .transform((v) => v.toUpperCase())
+  .pipe(z.string().regex(/^[A-Z]{3}$/, 'Use a 3-letter currency code, e.g. INR, USD, EUR'));
+
 export const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
 
 export function escapeHtml(s: string): string {

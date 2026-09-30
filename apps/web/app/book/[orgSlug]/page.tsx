@@ -1,4 +1,5 @@
 import { db, schema } from '@udyamflow/db';
+import { tenantThemeStyle } from '@udyamflow/tokens';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
@@ -49,10 +50,10 @@ export default async function BookingPage({
   searchParams,
 }: {
   params: Promise<{ orgSlug: string }>;
-  searchParams: Promise<{ layout?: string }>;
+  searchParams: Promise<{ layout?: string; source?: string; utm_source?: string }>;
 }) {
   const { orgSlug } = await params;
-  const { layout: layoutParam } = await searchParams;
+  const { layout: layoutParam, source, utm_source } = await searchParams;
 
   // Resolve org + tenantSettings + active locations, resources and services.
   const [org] = await db
@@ -107,6 +108,15 @@ export default async function BookingPage({
     settings: settings ?? null,
   });
 
+  // Only advertise memberships when there's something to buy.
+  const [membershipPlan] = await db
+    .select({ id: schema.membershipPlan.id })
+    .from(schema.membershipPlan)
+    .where(
+      and(eq(schema.membershipPlan.organizationId, org.id), eq(schema.membershipPlan.active, true)),
+    )
+    .limit(1);
+
   // ?layout= previews another layout; otherwise the tenant's saved default.
   const layout: BookingLayout = isBookingLayout(layoutParam)
     ? layoutParam
@@ -114,7 +124,7 @@ export default async function BookingPage({
       ? settings?.bookingLayout
       : 'sidebar';
 
-  return (
+  const page = (
     <BookingInterface
       orgSlug={orgSlug}
       theme={theme}
@@ -137,12 +147,30 @@ export default async function BookingPage({
         durationMin: s.durationMin,
         priceCents: s.priceCents,
         currency: s.currency,
+        isOnline: s.isOnline,
         resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
       }))}
       layout={layout}
       density={settings?.density === 'compact' ? 'compact' : 'comfortable'}
       headline={settings?.bookingHeadline ?? null}
       intro={settings?.bookingIntro ?? null}
+      // Attribution (`?source=google` from Google Business Profile etc.).
+      // booking.create sanitizes it; we just forward the raw value.
+      source={(source ?? utm_source)?.slice(0, 64)}
     />
+  );
+  if (!membershipPlan) return page;
+  return (
+    <>
+      {page}
+      <div className="bg-bg pb-10 text-center" style={tenantThemeStyle(theme)}>
+        <a
+          href={`/book/${orgSlug}/memberships`}
+          className="text-[12px] text-ink-mute hover:text-ink underline-offset-2 hover:underline"
+        >
+          Memberships →
+        </a>
+      </div>
+    </>
   );
 }

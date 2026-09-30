@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { atomic, type Db, SLOT_BLOCKING_STATUSES, schema } from '@udyamflow/db';
 import { and, asc, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { meetingUrlInput } from '../online';
 import { publicProcedure, router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 
 // Tenant-scoped CRUD + a public read for the booking page. All write paths
@@ -88,6 +89,8 @@ export const resourceRouter = router({
         name: z.string().trim().min(2).max(120),
         title: z.string().max(120).optional(),
         avatar: z.string().max(4).optional(),
+        // Personal Meet/Zoom room for online services (https only).
+        meetingUrl: meetingUrlInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -104,6 +107,7 @@ export const resourceRouter = router({
           name: input.name,
           title: input.title,
           avatar: input.avatar?.toUpperCase() ?? initialsFor(input.name),
+          meetingUrl: input.meetingUrl ?? null,
         }),
         // Seed Mon–Fri 9–18 hours so the resource is immediately bookable.
         ctx.db.insert(schema.resourceHours).values(
@@ -126,6 +130,8 @@ export const resourceRouter = router({
         title: z.string().max(120).optional(),
         avatar: z.string().max(4).optional(),
         locationId: z.string().optional(),
+        // '' or null clears it.
+        meetingUrl: meetingUrlInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {

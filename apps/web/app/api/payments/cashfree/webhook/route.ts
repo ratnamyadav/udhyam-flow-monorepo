@@ -1,20 +1,21 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   bookingIdFromOrderId,
-  cashfreeWebhookSecrets,
   markBookingPaid,
   markPaymentFailed,
   recordRefundTotal,
 } from '@udyamflow/api';
+import { autoInvoiceIfEnabled } from '@udyamflow/api/invoicing';
 import { db, schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
-import type { NextRequest } from 'next/server';
+import { after, type NextRequest } from 'next/server';
 
 // Cashfree PG webhook. Signature spec:
-//   signature = base64(hmacSHA256(secret, timestamp + rawBody))
-// The secret is the Secret Key of whichever Cashfree account created the
-// order — the tenant's own account or the platform's — so we look up the
-// booking first and only accept signatures from that tenant's secrets.
+//   signature = base64(hmacSHA256(client secret, timestamp + rawBody))
+// All orders are created on the platform account (tenants are paid out via
+// Easy Split), so the platform secret signs every event. We compare in
+// constant time, reject stale timestamps, and only mark a booking paid when
+// the order amount matches its price snapshot.
 
 const MAX_SKEW_MS = 10 * 60 * 1000;
 
@@ -52,7 +53,13 @@ export async function POST(req: NextRequest) {
   }
   if (!isFresh(timestamp)) return new Response('Stale webhook', { status: 400 });
 
+  const secret = process.env.CASHFREE_CLIENT_SECRET;
+  if (!secret) return new Response('Cashfree not configured', { status: 503 });
+
   const rawBody = await req.text();
+  if (!signatureMatches(secret, timestamp, rawBody, signature)) {
+    return new Response('Bad signature', { status: 400 });
+  }
   let event: CashfreeEvent;
   try {
     event = JSON.parse(rawBody) as CashfreeEvent;
@@ -67,25 +74,20 @@ export async function POST(req: NextRequest) {
     ? await db.select().from(schema.booking).where(eq(schema.booking.id, bookingId))
     : [];
 
-  const secrets = booking
-    ? await cashfreeWebhookSecrets(db, booking.organizationId)
-    : [process.env.CASHFREE_CLIENT_SECRET].filter((s): s is string => !!s);
-  if (secrets.length === 0) return new Response('Cashfree not configured', { status: 503 });
-  if (!secrets.some((s) => signatureMatches(s, timestamp, rawBody, signature))) {
-    return new Response('Bad signature', { status: 400 });
-  }
-
   // Unknown order (e.g. a test event from the dashboard): acknowledge.
   if (!booking || !orderId) return Response.json({ received: true });
 
   if (event.type === 'PAYMENT_SUCCESS_WEBHOOK') {
     const order = event.data.order;
+    // Bookings made before price snapshots existed have no amount to check.
     const amountMatches =
-      booking.amountCents != null &&
-      Math.round((order?.order_amount ?? -1) * 100) === booking.amountCents &&
-      order?.order_currency?.toUpperCase() === booking.currency?.toUpperCase();
+      booking.amountCents == null ||
+      (Math.round((order?.order_amount ?? -1) * 100) === booking.amountCents &&
+        order?.order_currency?.toUpperCase() === booking.currency?.toUpperCase());
     if (event.data.payment?.payment_status === 'SUCCESS' && amountMatches) {
-      await markBookingPaid(db, { bookingId: booking.id, paymentId: orderId });
+      const outcome = await markBookingPaid(db, { bookingId: booking.id, paymentId: orderId });
+      // No-op unless the tenant turned on auto-invoicing.
+      if (outcome === 'confirmed') after(() => autoInvoiceIfEnabled(db, booking.id));
     } else if (!amountMatches) {
       console.error(`[cashfree] amount mismatch for booking ${booking.id}; not marking paid`);
     }

@@ -46,6 +46,7 @@ export type BookingService = {
   durationMin: number;
   priceCents: number;
   currency: string;
+  isOnline?: boolean;
   /** Empty = offered by every resource. */
   resourceIds: string[];
 };
@@ -87,6 +88,7 @@ export function BookingInterface({
   density = 'comfortable',
   headline,
   intro,
+  source,
 }: {
   orgSlug: string;
   theme: TenantTheme;
@@ -99,6 +101,8 @@ export function BookingInterface({
   headline?: string | null;
   /** Tenant's custom intro paragraph (plain text); null/blank = default. */
   intro?: string | null;
+  /** Raw `?source=` attribution, forwarded to booking.create (sanitized there). */
+  source?: string;
 }) {
   const profession = professionFor(theme.profession);
   const dense = density === 'compact';
@@ -151,6 +155,7 @@ export function BookingInterface({
     displayTime: string;
     customerName: string;
     resourceName: string;
+    meetingUrl: string | null;
   } | null>(null);
 
   function clearSelection() {
@@ -191,6 +196,7 @@ export function BookingInterface({
         displayTime: when,
         customerName: vars.customerName,
         resourceName: resource?.name ?? '',
+        meetingUrl: res.meetingUrl,
       });
       utils.booking.listSlots.invalidate();
       setSelected(null);
@@ -231,6 +237,7 @@ export function BookingInterface({
       customerPhone: customerPhone.trim() || undefined,
       slotStart: selected.start,
       slotEnd: selected.end,
+      source,
     });
   }
 
@@ -314,6 +321,7 @@ export function BookingInterface({
                 <div className="text-[13px] font-medium text-ink">{s.name}</div>
                 <div className="text-[11px] text-ink-mute font-mono">
                   {s.durationMin} min · {priceFor(s.priceCents, s.currency)}
+                  {s.isOnline && ' · Online'}
                 </div>
               </button>
             );
@@ -389,6 +397,7 @@ export function BookingInterface({
           displayTime={confirmation.displayTime}
           resourceName={confirmation.resourceName}
           timezone={timezone}
+          meetingUrl={confirmation.meetingUrl}
         />
       </div>
     );
