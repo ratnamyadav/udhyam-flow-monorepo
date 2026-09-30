@@ -1,6 +1,7 @@
 import { Link } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
+import { ResponsiveContent } from '@/components/responsive';
 import { formatDateTime, statusLabel } from '../../../lib/format';
 import { errorMessage, trpc } from '../../../lib/trpc';
 
@@ -43,47 +44,49 @@ export default function BookingsListScreen() {
         />
       }
     >
-      <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">Bookings</Text>
-      <Text className="text-3xl font-semibold text-ink mt-1">All bookings</Text>
+      <ResponsiveContent>
+        <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">Bookings</Text>
+        <Text className="text-3xl font-semibold text-ink mt-1">All bookings</Text>
 
-      <View className="bg-surface border border-border rounded-xl overflow-hidden mt-7">
-        {firstLoading ? (
-          <Text className="text-sm text-ink-mute p-6">Loading…</Text>
-        ) : bookings.length === 0 ? (
-          <Text className="text-sm text-ink-mute p-6">
-            {error ? errorMessage(error) : 'No bookings yet.'}
-          </Text>
-        ) : (
-          bookings.map((b, i) => (
-            <Link key={b.id} href={`/bookings/${b.id}`} asChild>
-              <Pressable className={`px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
-                <Text className="text-sm font-medium text-ink">{b.customerName}</Text>
-                <Text className="text-xs text-ink-mute font-mono">
-                  {formatDateTime(b.slotStart, tzByLocation.get(b.locationId))}
-                  {' · '}
-                  {statusLabel(b.status)}
-                </Text>
-              </Pressable>
-            </Link>
-          ))
-        )}
-      </View>
+        <View className="bg-surface border border-border rounded-xl overflow-hidden mt-7">
+          {firstLoading ? (
+            <Text className="text-sm text-ink-mute p-6">Loading…</Text>
+          ) : bookings.length === 0 ? (
+            <Text className="text-sm text-ink-mute p-6">
+              {error ? errorMessage(error) : 'No bookings yet.'}
+            </Text>
+          ) : (
+            bookings.map((b, i) => (
+              <Link key={b.id} href={`/bookings/${b.id}`} asChild>
+                <Pressable className={`px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
+                  <Text className="text-sm font-medium text-ink">{b.customerName}</Text>
+                  <Text className="text-xs text-ink-mute font-mono">
+                    {formatDateTime(b.slotStart, tzByLocation.get(b.locationId))}
+                    {' · '}
+                    {statusLabel(b.status)}
+                  </Text>
+                </Pressable>
+              </Link>
+            ))
+          )}
+        </View>
 
-      {error && bookings.length > 0 ? (
-        <Text className="text-sm text-danger mt-3">{errorMessage(error)}</Text>
-      ) : null}
+        {error && bookings.length > 0 ? (
+          <Text className="text-sm text-danger mt-3">{errorMessage(error)}</Text>
+        ) : null}
 
-      {hasMore || loadingMore ? (
-        <Pressable
-          onPress={() => setPageCount((n) => n + 1)}
-          disabled={loadingMore}
-          className="mt-4 bg-surface border border-border rounded-md py-3 active:opacity-90"
-        >
-          <Text className="text-ink text-center font-medium">
-            {loadingMore ? 'Loading…' : 'Load more'}
-          </Text>
-        </Pressable>
-      ) : null}
+        {hasMore || loadingMore ? (
+          <Pressable
+            onPress={() => setPageCount((n) => n + 1)}
+            disabled={loadingMore}
+            className="mt-4 bg-surface border border-border rounded-md py-3 active:opacity-90"
+          >
+            <Text className="text-ink text-center font-medium">
+              {loadingMore ? 'Loading…' : 'Load more'}
+            </Text>
+          </Pressable>
+        ) : null}
+      </ResponsiveContent>
     </ScrollView>
   );
 }

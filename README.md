@@ -17,7 +17,7 @@ udhyam-flow/
 ├── apps/
 │   ├── web/        Next.js 16 — UdyamFlow tenant-facing SaaS (full design)
 │   ├── admin/      Next.js 16 — internal staff panel (platform overview, orgs, users)
-│   └── mobile/     Expo SDK 55 + expo-router — owner app + public booking flow
+│   └── mobile/     Expo SDK 57 + expo-router — owner app + public booking flow
 ├── packages/
 │   ├── auth/       BetterAuth server + web client + Expo client
 │   ├── db/         Drizzle ORM schema + Neon Postgres client + seed
@@ -40,8 +40,8 @@ udhyam-flow/
 | Build orchestrator | **Turborepo** | 2.9 |
 | Language | **TypeScript** (Go-port `tsgo` for typecheck, `typescript` for tooling) | 7.0 beta + 6.0 |
 | Linter / formatter | **Biome** | 2.4 |
-| Web framework | **Next.js** App Router (Turbopack) | 16.2 |
-| Mobile framework | **Expo** + expo-router | SDK 55 |
+| Web framework | **Next.js** App Router (Turbopack) | 16.3 |
+| Mobile framework | **Expo** + expo-router (React Native 0.86) | SDK 57 |
 | UI styling (web) | **Tailwind CSS** v4 + shadcn-style primitives | 4.2 |
 | UI styling (mobile) | **NativeWind** v5 preview + Tailwind v4 | 5.0-preview |
 | Database | **Postgres** on **Neon** (`@neondatabase/serverless`) | latest |
@@ -142,6 +142,23 @@ Tenants sell recurring packages ("₹2,000 / month"); the customer approves a UP
 - **A Neon Postgres database** (free tier works) — or any Postgres if you swap the driver
 - For mobile dev: **Expo Go** on your phone, or **Xcode** / **Android Studio** for simulators
 - Optional: **VS Code** with the *TypeScript Native Preview* extension (for `tsgo` in the editor)
+
+### Mobile platform targets
+
+| | Target |
+|---|---|
+| Android | compile/target SDK 36 (Android 16), min SDK 24 |
+| iOS | iOS 16.4+, UIKit scene lifecycle enabled (required by the iOS 27 SDK / Xcode 27) |
+
+**Foldables, tablets and multi-window.** The app is not orientation-locked and
+runs resizable on Android (split-screen, freeform, fold/unfold without an
+activity restart — see `apps/mobile/plugins/with-large-screen-support.js`) and
+in iPad Split View / Stage Manager. Layouts adapt via window size classes in
+`apps/mobile/components/responsive.tsx` (`compact` < 600dp, `medium` < 840dp,
+`expanded` ≥ 840dp): content is width-capped and centered on wide windows, and
+the tab bar becomes a side rail. The native settings (`expo-build-properties`
+and the local config plugin) apply to development/production builds
+(`expo prebuild` / EAS), not Expo Go.
 
 ---
 

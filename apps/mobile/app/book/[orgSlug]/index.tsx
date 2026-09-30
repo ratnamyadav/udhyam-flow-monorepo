@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, type TextInputProps, View } from 'react-native';
+import { ResponsiveContent } from '@/components/responsive';
 import { type BrandColors, BrandHeader, useTenantBranding } from '../../../lib/branding';
 import { addDays, calendarDateParts, formatMoney, todayInTimeZone } from '../../../lib/format';
 import { errorMessage, trpc, trpcErrorCode } from '../../../lib/trpc';
@@ -162,233 +163,239 @@ export default function BookTenantScreen() {
       contentContainerClassName="px-6 pt-16 pb-16"
       keyboardShouldPersistTaps="handled"
     >
-      {branding ? (
-        <BrandHeader branding={branding} colors={colors} />
-      ) : (
-        <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">/{orgSlug}</Text>
-      )}
-      <Text className="text-3xl font-semibold text-ink mt-4" accessibilityRole="header">
-        {branding?.bookingHeadline?.trim() || 'Pick a slot'}
-      </Text>
-      {branding?.bookingIntro?.trim() ? (
-        <Text className="text-sm text-ink-mute mt-2 leading-relaxed">
-          {branding.bookingIntro.trim()}
+      <ResponsiveContent>
+        {branding ? (
+          <BrandHeader branding={branding} colors={colors} />
+        ) : (
+          <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">
+            /{orgSlug}
+          </Text>
+        )}
+        <Text className="text-3xl font-semibold text-ink mt-4" accessibilityRole="header">
+          {branding?.bookingHeadline?.trim() || 'Pick a slot'}
         </Text>
-      ) : null}
+        {branding?.bookingIntro?.trim() ? (
+          <Text className="text-sm text-ink-mute mt-2 leading-relaxed">
+            {branding.bookingIntro.trim()}
+          </Text>
+        ) : null}
 
-      {locationList.length > 1 ? (
-        <>
-          <SectionLabel>Location</SectionLabel>
+        {locationList.length > 1 ? (
+          <>
+            <SectionLabel>Location</SectionLabel>
+            <View className="flex-row flex-wrap gap-2">
+              {locationList.map((l) => (
+                <Chip
+                  key={l.id}
+                  colors={colors}
+                  on={l.id === effectiveLocationId}
+                  label={l.name}
+                  sub={l.address ?? undefined}
+                  onPress={() => {
+                    setLocationId(l.id);
+                    setResourceId(null);
+                    setServiceId(null);
+                    setDate(null);
+                    resetSlot();
+                  }}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
+
+        <SectionLabel>Who do you want to see?</SectionLabel>
+        {resourcesHere.length === 0 ? (
+          <Text className="text-sm text-ink-mute">No one is bookable at this location yet.</Text>
+        ) : (
           <View className="flex-row flex-wrap gap-2">
-            {locationList.map((l) => (
+            {resourcesHere.map((r) => (
               <Chip
-                key={l.id}
+                key={r.id}
                 colors={colors}
-                on={l.id === effectiveLocationId}
-                label={l.name}
-                sub={l.address ?? undefined}
+                on={r.id === resource?.id}
+                label={r.name}
+                sub={r.title ?? undefined}
                 onPress={() => {
-                  setLocationId(l.id);
-                  setResourceId(null);
-                  setServiceId(null);
-                  setDate(null);
+                  setResourceId(r.id);
                   resetSlot();
                 }}
               />
             ))}
           </View>
-        </>
-      ) : null}
+        )}
 
-      <SectionLabel>Who do you want to see?</SectionLabel>
-      {resourcesHere.length === 0 ? (
-        <Text className="text-sm text-ink-mute">No one is bookable at this location yet.</Text>
-      ) : (
-        <View className="flex-row flex-wrap gap-2">
-          {resourcesHere.map((r) => (
-            <Chip
-              key={r.id}
-              colors={colors}
-              on={r.id === resource?.id}
-              label={r.name}
-              sub={r.title ?? undefined}
-              onPress={() => {
-                setResourceId(r.id);
-                resetSlot();
-              }}
-            />
-          ))}
-        </View>
-      )}
+        {serviceRequired ? (
+          <>
+            <SectionLabel>Service</SectionLabel>
+            <View className="flex-row flex-wrap gap-2">
+              {eligibleServices.map((s) => (
+                <Chip
+                  key={s.id}
+                  colors={colors}
+                  on={s.id === service?.id}
+                  label={`${s.name} · ${s.durationMin}min`}
+                  sub={s.priceCents > 0 ? formatMoney(s.priceCents, s.currency) : undefined}
+                  onPress={() => {
+                    setServiceId(s.id);
+                    resetSlot();
+                  }}
+                />
+              ))}
+            </View>
+          </>
+        ) : null}
 
-      {serviceRequired ? (
-        <>
-          <SectionLabel>Service</SectionLabel>
-          <View className="flex-row flex-wrap gap-2">
-            {eligibleServices.map((s) => (
-              <Chip
-                key={s.id}
-                colors={colors}
-                on={s.id === service?.id}
-                label={`${s.name} · ${s.durationMin}min`}
-                sub={s.priceCents > 0 ? formatMoney(s.priceCents, s.currency) : undefined}
-                onPress={() => {
-                  setServiceId(s.id);
-                  resetSlot();
-                }}
-              />
-            ))}
+        <SectionLabel>Date</SectionLabel>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6">
+          <View className="flex-row gap-2 px-6">
+            {days.map((d, i) => {
+              const on = d === effectiveDate;
+              const parts = calendarDateParts(d);
+              return (
+                <Pressable
+                  key={d}
+                  onPress={() => {
+                    setDate(d);
+                    resetSlot();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${i === 0 ? 'Today, ' : ''}${parts.weekday} ${parts.day} ${parts.month}`}
+                  className={`w-14 items-center py-2 border ${on ? '' : 'bg-surface border-border'}`}
+                  style={[{ borderRadius: colors.radius }, on ? selectedStyle(colors) : null]}
+                >
+                  <Text
+                    className={`text-[10px] uppercase font-mono ${on ? '' : 'text-ink-mute'}`}
+                    style={on ? { color: colors.accentFg } : undefined}
+                  >
+                    {i === 0 ? 'Today' : parts.weekday}
+                  </Text>
+                  <Text
+                    className={`text-lg font-semibold ${on ? '' : 'text-ink'}`}
+                    style={on ? { color: colors.accentFg } : undefined}
+                  >
+                    {parts.day}
+                  </Text>
+                  <Text
+                    className={`text-[10px] ${on ? '' : 'text-ink-mute'}`}
+                    style={on ? { color: colors.accentFg } : undefined}
+                  >
+                    {parts.month}
+                  </Text>
+                </Pressable>
+              );
+            })}
           </View>
-        </>
-      ) : null}
+        </ScrollView>
 
-      <SectionLabel>Date</SectionLabel>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} className="-mx-6">
-        <View className="flex-row gap-2 px-6">
-          {days.map((d, i) => {
-            const on = d === effectiveDate;
-            const parts = calendarDateParts(d);
-            return (
-              <Pressable
-                key={d}
-                onPress={() => {
-                  setDate(d);
-                  resetSlot();
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`${i === 0 ? 'Today, ' : ''}${parts.weekday} ${parts.day} ${parts.month}`}
-                className={`w-14 items-center py-2 border ${on ? '' : 'bg-surface border-border'}`}
-                style={[{ borderRadius: colors.radius }, on ? selectedStyle(colors) : null]}
-              >
-                <Text
-                  className={`text-[10px] uppercase font-mono ${on ? '' : 'text-ink-mute'}`}
-                  style={on ? { color: colors.accentFg } : undefined}
+        <SectionLabel>
+          {`${dayLabel.weekday} ${dayLabel.day} ${dayLabel.month}`}
+          {slotsTimezone ? ` · ${slotsTimezone}` : ''}
+        </SectionLabel>
+        {serviceRequired && !service ? (
+          <Text className="text-sm text-ink-mute py-3">
+            Choose a service to see available times.
+          </Text>
+        ) : slotsQuery.isLoading ? (
+          <Text className="text-sm text-ink-mute py-3">Loading availability…</Text>
+        ) : slotsQuery.error ? (
+          <Text className="text-sm text-danger py-3">{errorMessage(slotsQuery.error)}</Text>
+        ) : slots.length === 0 ? (
+          <Text className="text-sm text-ink-mute py-3">
+            No free slots on this day. Try another date or person.
+          </Text>
+        ) : (
+          <View className="flex-row flex-wrap gap-2">
+            {slots.map((s) => {
+              const on = selected?.start === s.start;
+              return (
+                <Pressable
+                  key={s.start}
+                  onPress={() => {
+                    setSelected(s);
+                    create.reset();
+                  }}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${dayLabel.weekday} ${dayLabel.day} ${dayLabel.month} at ${s.displayTime}`}
+                  className={`px-3 py-2 border ${on ? '' : 'border-border'}`}
+                  style={[{ borderRadius: colors.radius }, on ? selectedStyle(colors) : null]}
                 >
-                  {i === 0 ? 'Today' : parts.weekday}
-                </Text>
-                <Text
-                  className={`text-lg font-semibold ${on ? '' : 'text-ink'}`}
-                  style={on ? { color: colors.accentFg } : undefined}
-                >
-                  {parts.day}
-                </Text>
-                <Text
-                  className={`text-[10px] ${on ? '' : 'text-ink-mute'}`}
-                  style={on ? { color: colors.accentFg } : undefined}
-                >
-                  {parts.month}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <Text
+                    className={`text-[13px] font-mono ${on ? '' : 'text-ink'}`}
+                    style={on ? { color: colors.accentFg } : undefined}
+                  >
+                    {s.displayTime}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        <SectionLabel>Your details</SectionLabel>
+        <View className="gap-3">
+          <Field
+            label="Name"
+            value={name}
+            onChangeText={setName}
+            placeholder="Full name"
+            autoCapitalize="words"
+            autoComplete="name"
+            textContentType="name"
+          />
+          <Field
+            label="Email"
+            value={email}
+            onChangeText={setEmail}
+            placeholder="optional"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            keyboardType="email-address"
+            textContentType="emailAddress"
+          />
+          <Field
+            label="Phone"
+            value={phone}
+            onChangeText={setPhone}
+            placeholder="optional"
+            autoComplete="tel"
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+          />
         </View>
-      </ScrollView>
 
-      <SectionLabel>
-        {`${dayLabel.weekday} ${dayLabel.day} ${dayLabel.month}`}
-        {slotsTimezone ? ` · ${slotsTimezone}` : ''}
-      </SectionLabel>
-      {serviceRequired && !service ? (
-        <Text className="text-sm text-ink-mute py-3">Choose a service to see available times.</Text>
-      ) : slotsQuery.isLoading ? (
-        <Text className="text-sm text-ink-mute py-3">Loading availability…</Text>
-      ) : slotsQuery.error ? (
-        <Text className="text-sm text-danger py-3">{errorMessage(slotsQuery.error)}</Text>
-      ) : slots.length === 0 ? (
-        <Text className="text-sm text-ink-mute py-3">
-          No free slots on this day. Try another date or person.
-        </Text>
-      ) : (
-        <View className="flex-row flex-wrap gap-2">
-          {slots.map((s) => {
-            const on = selected?.start === s.start;
-            return (
-              <Pressable
-                key={s.start}
-                onPress={() => {
-                  setSelected(s);
-                  create.reset();
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`${dayLabel.weekday} ${dayLabel.day} ${dayLabel.month} at ${s.displayTime}`}
-                className={`px-3 py-2 border ${on ? '' : 'border-border'}`}
-                style={[{ borderRadius: colors.radius }, on ? selectedStyle(colors) : null]}
-              >
-                <Text
-                  className={`text-[13px] font-mono ${on ? '' : 'text-ink'}`}
-                  style={on ? { color: colors.accentFg } : undefined}
-                >
-                  {s.displayTime}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      )}
+        {create.error ? (
+          <Text className="text-[12px] text-danger mt-3">{errorMessage(create.error)}</Text>
+        ) : null}
 
-      <SectionLabel>Your details</SectionLabel>
-      <View className="gap-3">
-        <Field
-          label="Name"
-          value={name}
-          onChangeText={setName}
-          placeholder="Full name"
-          autoCapitalize="words"
-          autoComplete="name"
-          textContentType="name"
-        />
-        <Field
-          label="Email"
-          value={email}
-          onChangeText={setEmail}
-          placeholder="optional"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          keyboardType="email-address"
-          textContentType="emailAddress"
-        />
-        <Field
-          label="Phone"
-          value={phone}
-          onChangeText={setPhone}
-          placeholder="optional"
-          autoComplete="tel"
-          keyboardType="phone-pad"
-          textContentType="telephoneNumber"
-        />
-      </View>
-
-      {create.error ? (
-        <Text className="text-[12px] text-danger mt-3">{errorMessage(create.error)}</Text>
-      ) : null}
-
-      <Pressable
-        onPress={submit}
-        disabled={!canSubmit}
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canSubmit }}
-        className={`mt-6 py-3.5 ${canSubmit ? '' : 'bg-surface-mute'}`}
-        style={[
-          { borderRadius: colors.radius },
-          canSubmit ? { backgroundColor: colors.accent } : null,
-        ]}
-      >
-        <Text
-          className={`text-center font-medium ${canSubmit ? '' : 'text-ink-mute'}`}
-          style={canSubmit ? { color: colors.accentFg } : undefined}
+        <Pressable
+          onPress={submit}
+          disabled={!canSubmit}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canSubmit }}
+          className={`mt-6 py-3.5 ${canSubmit ? '' : 'bg-surface-mute'}`}
+          style={[
+            { borderRadius: colors.radius },
+            canSubmit ? { backgroundColor: colors.accent } : null,
+          ]}
         >
-          {redirecting
-            ? 'Opening payment…'
-            : create.isPending
-              ? 'Booking…'
-              : selected
-                ? `Confirm ${selected.displayTime}`
-                : 'Pick a slot'}
-        </Text>
-      </Pressable>
+          <Text
+            className={`text-center font-medium ${canSubmit ? '' : 'text-ink-mute'}`}
+            style={canSubmit ? { color: colors.accentFg } : undefined}
+          >
+            {redirecting
+              ? 'Opening payment…'
+              : create.isPending
+                ? 'Booking…'
+                : selected
+                  ? `Confirm ${selected.displayTime}`
+                  : 'Pick a slot'}
+          </Text>
+        </Pressable>
+      </ResponsiveContent>
     </ScrollView>
   );
 }

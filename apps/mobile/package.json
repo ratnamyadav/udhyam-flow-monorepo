@@ -19,6 +19,7 @@
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/tokens": "workspace:*",
     "expo": "catalog:",
+    "expo-build-properties": "catalog:",
     "expo-constants": "catalog:",
     "expo-linking": "catalog:",
     "expo-network": "catalog:",
@@ -40,7 +41,7 @@
     "tailwindcss": "catalog:"
   },
   "devDependencies": {
-    "@babel/core": "7.27.1",
+    "@babel/core": "7.29.7",
     "@tailwindcss/postcss": "catalog:",
     "@types/react": "catalog:",
     "@typescript/native-preview": "catalog:",
