@@ -145,6 +145,55 @@ async function chargedCents(db: Db, booking: Booking): Promise<number | null> {
   return svc?.priceCents ?? null;
 }
 
+type StripeClient = NonNullable<ReturnType<typeof getStripe>>;
+type StripeReqOpts = { stripeAccount: string } | undefined;
+
+// The Stripe account a booking's payment lives on. Checkout payments record
+// it at checkout time (null = platform). Invoice payments (`in_…`, from
+// invoicing) are always issued on the tenant's Connect account; bookings paid
+// that way before the account was recorded fall back to the tenant's.
+async function stripeAccountForBooking(db: Db, booking: Booking): Promise<string | undefined> {
+  if (booking.paymentAccountId?.startsWith('acct_')) return booking.paymentAccountId;
+  if (!booking.paymentId?.startsWith('in_')) return undefined;
+  const [tenant] = await db
+    .select({ accountId: schema.tenantSettings.stripeAccountId })
+    .from(schema.tenantSettings)
+    .where(eq(schema.tenantSettings.organizationId, booking.organizationId));
+  return tenant?.accountId ?? undefined;
+}
+
+// What to refund: the payment behind a Checkout Session (`cs_…`) or behind a
+// paid invoice (`in_…`). Invoices expose it through Invoice Payments (the
+// invoice object itself no longer carries `payment_intent`).
+export async function stripeRefundTarget(
+  stripe: StripeClient,
+  paymentId: string,
+  reqOpts: StripeReqOpts,
+): Promise<{ payment_intent: string } | { charge: string }> {
+  if (paymentId.startsWith('in_')) {
+    const payments = await stripe.invoicePayments.list(
+      { invoice: paymentId, status: 'paid', limit: 1 },
+      reqOpts,
+    );
+    const payment = payments.data[0]?.payment;
+    const pi =
+      typeof payment?.payment_intent === 'string'
+        ? payment.payment_intent
+        : payment?.payment_intent?.id;
+    if (pi) return { payment_intent: pi };
+    const charge = typeof payment?.charge === 'string' ? payment.charge : payment?.charge?.id;
+    if (charge) return { charge };
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'No payment found on this Stripe invoice.' });
+  }
+  const session = await stripe.checkout.sessions.retrieve(paymentId, {}, reqOpts);
+  const pi =
+    typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id;
+  if (!pi) throw new TRPCError({ code: 'NOT_FOUND', message: 'Stripe payment missing.' });
+  return { payment_intent: pi };
+}
+
 // Issues a refund through the gateway that took the payment, against the
 // same merchant account. `amountCents` omitted = everything not yet refunded.
 export async function refundBooking(
@@ -177,17 +226,10 @@ export async function refundBooking(
       if (!stripe) {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripe is not configured.' });
       }
-      // Only Connect-routed payments live on the tenant's account.
-      const reqOpts = booking.paymentAccountId?.startsWith('acct_')
-        ? { stripeAccount: booking.paymentAccountId }
-        : undefined;
-      const session = await stripe.checkout.sessions.retrieve(booking.paymentId, {}, reqOpts);
-      const pi =
-        typeof session.payment_intent === 'string'
-          ? session.payment_intent
-          : session.payment_intent?.id;
-      if (!pi) throw new TRPCError({ code: 'NOT_FOUND', message: 'Stripe payment missing.' });
-      await stripe.refunds.create({ payment_intent: pi, amount }, reqOpts);
+      const account = await stripeAccountForBooking(db, booking);
+      const reqOpts = account ? { stripeAccount: account } : undefined;
+      const target = await stripeRefundTarget(stripe, booking.paymentId, reqOpts);
+      await stripe.refunds.create({ ...target, amount }, reqOpts);
     } else if (booking.paymentProvider === 'cashfree') {
       // Split orders recover the refund from the tenant's vendor share.
       await cashfreeRefund({

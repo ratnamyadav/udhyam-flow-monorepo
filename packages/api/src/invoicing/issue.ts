@@ -449,7 +449,13 @@ export async function recordStripeInvoice(
 
 // Stripe `invoice.paid` / `invoice.voided` etc. Keeps our mirror (and the
 // booking's payment status, for invoices that were sent unpaid) in sync.
-export async function syncStripeInvoiceStatus(db: Db, inv: StripeInvoiceLike) {
+// `account` is the webhook event's Connect account: recorded on the booking
+// so a later refund goes back through the account that took the money.
+export async function syncStripeInvoiceStatus(
+  db: Db,
+  inv: StripeInvoiceLike,
+  opts: { account?: string | null } = {},
+) {
   if (!inv.id) return;
   const status = mapStripeInvoiceStatus(inv.status);
   const [row] = await db
@@ -460,7 +466,16 @@ export async function syncStripeInvoiceStatus(db: Db, inv: StripeInvoiceLike) {
   if (row && status === 'paid') {
     await db
       .update(schema.booking)
-      .set({ paymentStatus: 'paid', paymentProvider: 'stripe', paymentId: inv.id })
+      .set({
+        paymentStatus: 'paid',
+        paymentProvider: 'stripe',
+        paymentId: inv.id,
+        paymentAccountId: opts.account ?? null,
+        paidAt: new Date(),
+        // Snapshot what was actually charged, for refunds and revenue.
+        amountCents: inv.total,
+        currency: inv.currency.toUpperCase(),
+      })
       .where(
         and(
           eq(schema.booking.id, row.bookingId),

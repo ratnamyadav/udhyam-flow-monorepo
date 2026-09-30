@@ -128,7 +128,7 @@ export async function POST(req: NextRequest) {
     case 'invoice.finalized': {
       // Keeps invoices issued from UdyamFlow (and the bookings they bill)
       // in sync when the customer pays or the tenant voids in Stripe.
-      await syncStripeInvoiceStatus(db, event.data.object);
+      await syncStripeInvoiceStatus(db, event.data.object, { account: event.account ?? null });
       break;
     }
     case 'checkout.session.expired':
