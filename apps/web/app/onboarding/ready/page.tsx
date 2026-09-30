@@ -1,25 +1,47 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCallback, useEffect, useRef } from 'react';
 import { useOnboarding } from '@/components/onboarding/store';
 import { StepHeading, WizardFooter } from '@/components/onboarding/wizard-shell';
 
-export default function StepReady() {
-  const { state, reset } = useOnboarding();
-  const slug = state.slug || 'your-workspace';
+function bookingUrl(slug: string) {
+  const base = (process.env.NEXT_PUBLIC_APP_URL ?? 'https://udyamflow.com').replace(/\/+$/, '');
+  return `${base.replace(/^https?:\/\//, '')}/book/${slug}`;
+}
 
-  // Clear the wizard store once the user lands here — they've committed.
-  useEffect(() => {
-    return () => reset();
+export default function StepReady() {
+  const router = useRouter();
+  const { state, hydrated, reset } = useOnboarding();
+  const slug = state.slug || 'your-workspace';
+  const created = !!state.organizationId;
+
+  const leaving = useRef(false);
+  const finish = useCallback(() => {
+    leaving.current = true;
+    reset();
   }, [reset]);
+
+  // Nothing has been created yet — send the user back to finish the wizard.
+  useEffect(() => {
+    if (hydrated && !created && !leaving.current) router.replace('/onboarding/locations');
+  }, [hydrated, created, router]);
+
+  // The wizard draft is cleared when the user leaves via one of the links
+  // below (an explicit action), not on unmount — StrictMode's mount/unmount
+  // double-invoke would otherwise wipe the state while this page is showing.
+  if (!hydrated || !created) {
+    return <div className="flex-1 px-20 py-16 text-[13px] text-ink-mute">Loading…</div>;
+  }
 
   const cards = [
     {
       title: 'Your booking page',
-      body: `Share ${slug}.udyamflow.com or your custom domain.`,
+      body: `Share ${bookingUrl(slug)} with your customers.`,
       cta: 'Open booking page',
       href: `/book/${slug}`,
+      newTab: true,
     },
     {
       title: 'Owner dashboard',
@@ -48,6 +70,9 @@ export default function StepReady() {
             <Link
               key={c.title}
               href={c.href}
+              onClick={c.newTab ? undefined : finish}
+              target={c.newTab ? '_blank' : undefined}
+              rel={c.newTab ? 'noopener noreferrer' : undefined}
               className="bg-surface border border-border rounded-xl p-5 hover:border-border-strong transition-colors block"
             >
               <div className="text-sm font-medium text-ink mb-1">{c.title}</div>
@@ -61,7 +86,7 @@ export default function StepReady() {
           Free for 6 months · No card on file
         </div>
       </div>
-      <WizardFooter step="ready" prevHref="/onboarding/locations" />
+      <WizardFooter step="ready" onFinish={finish} />
     </>
   );
 }

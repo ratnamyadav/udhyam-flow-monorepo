@@ -1,8 +1,8 @@
-import { signIn } from '@udyamflow/auth/expo-client';
 import { Link, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { ResponsiveContent } from '../components/responsive';
+import { ResponsiveContent } from '@/components/responsive';
+import { signIn } from '@/lib/auth';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -14,12 +14,17 @@ export default function SignInScreen() {
   async function onSubmit() {
     setPending(true);
     setError(null);
-    const res = await signIn.email({ email, password });
+    const res = await signIn.email({ email: email.trim(), password });
     setPending(false);
     if (res.error) {
-      setError(res.error.message ?? 'Could not sign in');
+      setError(
+        res.error.code === 'EMAIL_NOT_VERIFIED'
+          ? 'Verify your email first — check your inbox for the link, then sign in.'
+          : (res.error.message ?? 'Could not sign in'),
+      );
       return;
     }
+    // The (app) layout sends users without an organization to /no-organization.
     router.replace('/(app)');
   }
 
@@ -32,6 +37,7 @@ export default function SignInScreen() {
         <Text className="text-xs text-ink-mute uppercase tracking-wider mb-1.5">Email</Text>
         <TextInput
           autoCapitalize="none"
+          autoCorrect={false}
           keyboardType="email-address"
           autoComplete="email"
           value={email}
@@ -48,7 +54,7 @@ export default function SignInScreen() {
           className="border border-border rounded-md px-3 py-3 bg-surface text-ink mb-2"
         />
 
-        {error ? <Text className="text-red-600 text-sm mb-2">{error}</Text> : null}
+        {error ? <Text className="text-danger text-sm mb-2">{error}</Text> : null}
 
         <Pressable
           onPress={onSubmit}

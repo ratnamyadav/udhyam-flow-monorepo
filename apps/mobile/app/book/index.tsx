@@ -1,7 +1,8 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, View } from 'react-native';
-import { ResponsiveContent } from '../../components/responsive';
+import { ResponsiveContent } from '@/components/responsive';
+import { parseWorkspaceCode } from '../../lib/booking-link';
 
 // Entry point for the customer booking flow. Customers paste / type the
 // tenant's workspace code (the slug) and we hand them off to the per-tenant
@@ -11,10 +12,7 @@ export default function BookEntryScreen() {
   const router = useRouter();
   const [code, setCode] = useState('');
 
-  const trimmed = code
-    .trim()
-    .toLowerCase()
-    .replace(/^https?:\/\/[^/]+\/book\//, '');
+  const trimmed = parseWorkspaceCode(code);
   const canGo = /^[a-z0-9-]+$/.test(trimmed) && trimmed.length >= 2;
 
   return (
@@ -35,6 +33,11 @@ export default function BookEntryScreen() {
           <TextInput
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardType="url"
+            returnKeyType="go"
+            onSubmitEditing={() => {
+              if (canGo) router.push(`/book/${trimmed}`);
+            }}
             placeholder="e.g. patel-clinic"
             value={code}
             onChangeText={setCode}

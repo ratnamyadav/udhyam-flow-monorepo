@@ -12,6 +12,8 @@
     "clean": "turbo clean && rm -rf node_modules",
     "db:push": "pnpm --filter @udyamflow/db db:push",
     "db:generate": "pnpm --filter @udyamflow/db db:generate",
+    "db:migrate": "pnpm --filter @udyamflow/db db:migrate",
+    "db:constraints": "pnpm --filter @udyamflow/db db:constraints",
     "db:seed": "pnpm --filter @udyamflow/db db:seed",
     "db:backfill-customers": "pnpm --filter @udyamflow/db db:backfill-customers",
     "test": "turbo test"
@@ -23,5 +25,10 @@
   },
   "engines": {
     "node": ">=20.10.0"
+  },
+  "pnpm": {
+    "overrides": {
+      "@expo/metro-config>lightningcss": "1.30.1"
+    }
   }
 }

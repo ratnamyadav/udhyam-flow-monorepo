@@ -1,8 +1,18 @@
 'use client';
 
-import type { TenantTheme } from '@udyamflow/tokens';
+import { type TenantTheme, tenantThemeToCssVars } from '@udyamflow/tokens';
+import { createContext, useContext } from 'react';
 import { TenantThemeProvider } from '@/components/theme/tenant-theme-provider';
 import { type OrgOption, Topbar } from './topbar';
+
+// The active workspace's theme as resolved by the (app) layout — name, slug,
+// saved colors. Lets client pages (e.g. Settings → Branding) link to the
+// public booking page without another round-trip.
+const ActiveThemeContext = createContext<TenantTheme | null>(null);
+
+export function useActiveTheme() {
+  return useContext(ActiveThemeContext);
+}
 
 export function AppShell({
   theme,
@@ -21,10 +31,18 @@ export function AppShell({
 }) {
   return (
     <TenantThemeProvider theme={theme} density={density ?? 'comfortable'}>
-      <div className="min-h-screen bg-bg">
-        <Topbar orgs={orgs} activeOrgId={activeOrgId} activeTheme={theme} user={user} />
-        <div>{children}</div>
-      </div>
+      <ActiveThemeContext.Provider value={theme}>
+        {/* Tenant vars inline too, so the server-rendered first paint is already
+            branded — TenantThemeProvider only reaches <html> after hydration. */}
+        <div
+          className="min-h-screen bg-bg"
+          style={tenantThemeToCssVars(theme)}
+          data-density={density ?? 'comfortable'}
+        >
+          <Topbar orgs={orgs} activeOrgId={activeOrgId} activeTheme={theme} user={user} />
+          <div>{children}</div>
+        </div>
+      </ActiveThemeContext.Provider>
     </TenantThemeProvider>
   );
 }

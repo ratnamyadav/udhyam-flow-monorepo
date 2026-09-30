@@ -1,6 +1,8 @@
 'use client';
 
 import { authClient } from '@udyamflow/auth/client';
+import { useState } from 'react';
+import { safeCallbackUrl } from '@/lib/safe-redirect';
 import { trpc } from '@/lib/trpc/react';
 
 // Renders enabled social-login buttons. Hidden entirely when nothing is
@@ -8,6 +10,22 @@ import { trpc } from '@/lib/trpc/react';
 
 export function SocialButtons({ callbackUrl }: { callbackUrl: string }) {
   const providers = trpc.auth.providers.useQuery(undefined, { staleTime: 60_000 });
+  const [error, setError] = useState<string | null>(null);
+  const [pending, setPending] = useState(false);
+  const target = safeCallbackUrl(callbackUrl);
+
+  async function google() {
+    setError(null);
+    setPending(true);
+    try {
+      const res = await authClient.signIn.social({ provider: 'google', callbackURL: target });
+      if (res.error) setError(res.error.message ?? 'Could not start Google sign-in');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not start Google sign-in');
+    } finally {
+      setPending(false);
+    }
+  }
 
   if (!providers.data) return null;
   const any = providers.data.google;
@@ -18,15 +36,15 @@ export function SocialButtons({ callbackUrl }: { callbackUrl: string }) {
       {providers.data.google && (
         <button
           type="button"
-          onClick={() => {
-            void authClient.signIn.social({ provider: 'google', callbackURL: callbackUrl });
-          }}
-          className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-md border border-border bg-surface text-[13px] font-medium text-ink hover:bg-surface-mute transition-colors"
+          onClick={google}
+          disabled={pending}
+          className="w-full disabled:opacity-60 flex items-center justify-center gap-2 px-3 py-2.5 rounded-md border border-border bg-surface text-[13px] font-medium text-ink hover:bg-surface-mute transition-colors"
         >
           <GoogleMark />
           Continue with Google
         </button>
       )}
+      {error && <div className="text-[12px] text-danger">{error}</div>}
       <div className="flex items-center gap-3 text-[11px] text-ink-soft uppercase tracking-wider font-mono">
         <div className="flex-1 h-px bg-border" />
         or with email

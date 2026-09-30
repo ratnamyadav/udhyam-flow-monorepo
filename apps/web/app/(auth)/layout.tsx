@@ -13,7 +13,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
           <div className="text-xs uppercase tracking-wider text-ink-mute mb-3">Customer story</div>
           <p
             className="text-[22px] text-ink leading-relaxed"
-            style={{ fontFamily: '"Fraunces", Georgia, serif' }}
+            style={{ fontFamily: 'var(--font-fraunces), Georgia, serif' }}
           >
             "We replaced three booking tools and a spreadsheet with UdyamFlow. Same evening we were
             taking patients again."

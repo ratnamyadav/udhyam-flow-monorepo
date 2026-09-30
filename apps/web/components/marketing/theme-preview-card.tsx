@@ -1,4 +1,9 @@
-// Static preview of the theme customizer for the marketing page.
+import { fontStack, readableTextOn, TENANT_THEMES } from '@udyamflow/tokens';
+
+// Static preview of the theme customizer for the marketing page, dressed in
+// the Kavya demo tenant's theme.
+const kavya = TENANT_THEMES.kavya;
+
 export function ThemePreviewCard() {
   return (
     <div className="rounded-xl border border-border bg-bg p-7 shadow-[0_12px_32px_rgba(0,0,0,.06)]">
@@ -13,9 +18,9 @@ export function ThemePreviewCard() {
       </div>
       <div className="grid grid-cols-3 gap-2 mb-6">
         {[
-          { label: 'Clinic', accent: '#0f766e' },
-          { label: 'Tutor', accent: '#7c3aed' },
-          { label: 'Sports', accent: '#ea580c' },
+          { label: 'Clinic', accent: TENANT_THEMES.patel.accent },
+          { label: 'Tutor', accent: kavya.accent },
+          { label: 'Sports', accent: TENANT_THEMES.baseline.accent },
         ].map((p, i) => (
           <div
             key={p.label}
@@ -36,8 +41,13 @@ export function ThemePreviewCard() {
         ))}
       </div>
       <div
-        className="mt-6 px-3.5 py-2.5 rounded-lg text-xs text-white font-medium text-center"
-        style={{ background: '#7c3aed' }}
+        className="mt-6 px-3.5 py-2.5 text-xs font-medium text-center"
+        style={{
+          background: kavya.accent,
+          color: readableTextOn(kavya.accent),
+          borderRadius: kavya.radius,
+          fontFamily: fontStack(kavya.fontDisplay),
+        }}
       >
         Book a lesson
       </div>

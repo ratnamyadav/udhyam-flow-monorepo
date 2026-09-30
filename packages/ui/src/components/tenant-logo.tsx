@@ -14,7 +14,7 @@ export function TenantLogo({
   return (
     <div className={cn('flex items-center gap-2.5', className)}>
       <div
-        className="grid place-items-center h-8 w-8 text-[11px] font-semibold tracking-wider text-white"
+        className="grid place-items-center h-8 w-8 text-[11px] font-semibold tracking-wider text-[var(--accent-fg,#fff)]"
         style={{
           background: 'var(--accent)',
           borderRadius: 'calc(var(--radius) - 2px)',

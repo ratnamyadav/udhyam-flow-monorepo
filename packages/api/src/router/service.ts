@@ -1,134 +1,194 @@
 import { randomUUID } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
-import { schema } from '@udyamflow/db';
-import { and, eq, inArray } from 'drizzle-orm';
+import { atomic, type Db, schema } from '@udyamflow/db';
+import { and, asc, eq, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
-import { publicProcedure, router, tenantProcedure } from '../trpc';
+import { isValidHsnSac } from '../gst/india';
+import { GST_RATES_BPS } from '../gst/tax';
+import { serviceCurrency } from '../lib/validate';
+import { publicProcedure, router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 
 // Tenant-scoped service catalog + the join table that tells the booking page
-// which resources offer each service.
+// which resources offer each service. A service with no linked resources is
+// offered by every resource.
+
+// GST treatment per service (see ../gst/tax.ts). All optional so existing
+// callers keep working; the schema defaults to 18%, not exempt.
+const gstInput = {
+  sacCode: z
+    .string()
+    .trim()
+    .refine(isValidHsnSac, 'SAC code must be 4–8 digits')
+    .nullable()
+    .optional(),
+  gstRateBps: z
+    .number()
+    .int()
+    .refine((v) => (GST_RATES_BPS as readonly number[]).includes(v), 'Pick a GST slab')
+    .optional(),
+  gstExempt: z.boolean().optional(),
+};
+
+async function listWithResources(db: Db, organizationId: string) {
+  const services = await db
+    .select()
+    .from(schema.service)
+    .where(
+      and(eq(schema.service.organizationId, organizationId), isNull(schema.service.archivedAt)),
+    )
+    .orderBy(asc(schema.service.createdAt));
+  if (services.length === 0) return [];
+  const links = await db
+    .select()
+    .from(schema.serviceResource)
+    .where(
+      inArray(
+        schema.serviceResource.serviceId,
+        services.map((s) => s.id),
+      ),
+    );
+  return services.map((s) => ({
+    ...s,
+    resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
+  }));
+}
+
+// Rejects resource ids from other tenants (or archived ones) before they're
+// linked — the public booking page trusts these links.
+async function assertOwnedResources(db: Db, organizationId: string, ids: string[]) {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return unique;
+  const owned = await db
+    .select({ id: schema.resource.id })
+    .from(schema.resource)
+    .where(
+      and(
+        inArray(schema.resource.id, unique),
+        eq(schema.resource.organizationId, organizationId),
+        isNull(schema.resource.archivedAt),
+      ),
+    );
+  if (owned.length !== unique.length) {
+    throw new TRPCError({ code: 'NOT_FOUND', message: 'Resource not found' });
+  }
+  return unique;
+}
+
+async function assertOwnedService(db: Db, organizationId: string, id: string) {
+  const [owned] = await db
+    .select({ id: schema.service.id })
+    .from(schema.service)
+    .where(
+      and(
+        eq(schema.service.id, id),
+        eq(schema.service.organizationId, organizationId),
+        isNull(schema.service.archivedAt),
+      ),
+    );
+  if (!owned) throw new TRPCError({ code: 'NOT_FOUND', message: 'Service not found' });
+}
 
 export const serviceRouter = router({
-  list: tenantProcedure.query(async ({ ctx }) => {
-    const services = await ctx.db
-      .select()
-      .from(schema.service)
-      .where(eq(schema.service.organizationId, ctx.organizationId));
-    if (services.length === 0) return [];
-    const links = await ctx.db
-      .select()
-      .from(schema.serviceResource)
-      .where(
-        inArray(
-          schema.serviceResource.serviceId,
-          services.map((s) => s.id),
-        ),
-      );
-    return services.map((s) => ({
-      ...s,
-      resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
-    }));
-  }),
+  list: tenantProcedure.query(({ ctx }) => listWithResources(ctx.db, ctx.organizationId)),
 
-  create: tenantProcedure
+  create: tenantAdminProcedure
     .input(
       z.object({
-        name: z.string().min(2),
-        description: z.string().optional(),
+        name: z.string().trim().min(2).max(120),
+        description: z.string().max(1000).optional(),
         durationMin: z.number().int().min(5).max(480),
         priceCents: z.number().int().min(0).default(0),
-        currency: z.string().length(3).default('INR'),
+        currency: serviceCurrency.default('INR'),
         resourceIds: z.array(z.string()).default([]),
+        ...gstInput,
+        // Online session — bookings get a Meet/Zoom/Jitsi link.
+        isOnline: z.boolean().default(false),
       }),
     )
     .mutation(async ({ ctx, input }) => {
+      const resourceIds = await assertOwnedResources(ctx.db, ctx.organizationId, input.resourceIds);
       const id = `svc_${randomUUID()}`;
-      await ctx.db.insert(schema.service).values({
-        id,
-        organizationId: ctx.organizationId,
-        name: input.name,
-        description: input.description,
-        durationMin: input.durationMin,
-        priceCents: input.priceCents,
-        currency: input.currency,
-      });
-      if (input.resourceIds.length > 0) {
-        await ctx.db
-          .insert(schema.serviceResource)
-          .values(input.resourceIds.map((rid) => ({ serviceId: id, resourceId: rid })))
-          .onConflictDoNothing();
-      }
+      await atomic(ctx.db, [
+        ctx.db.insert(schema.service).values({
+          id,
+          organizationId: ctx.organizationId,
+          name: input.name,
+          description: input.description,
+          durationMin: input.durationMin,
+          priceCents: input.priceCents,
+          currency: input.currency,
+          sacCode: input.sacCode,
+          gstRateBps: input.gstRateBps,
+          gstExempt: input.gstExempt,
+          isOnline: input.isOnline,
+        }),
+        ...(resourceIds.length > 0
+          ? [
+              ctx.db
+                .insert(schema.serviceResource)
+                .values(resourceIds.map((rid) => ({ serviceId: id, resourceId: rid }))),
+            ]
+          : []),
+      ]);
       return { id };
     }),
 
-  update: tenantProcedure
+  update: tenantAdminProcedure
     .input(
       z.object({
         id: z.string(),
-        name: z.string().min(2).optional(),
-        description: z.string().optional(),
+        name: z.string().trim().min(2).max(120).optional(),
+        description: z.string().max(1000).nullable().optional(),
         durationMin: z.number().int().min(5).max(480).optional(),
         priceCents: z.number().int().min(0).optional(),
-        currency: z.string().length(3).optional(),
+        currency: serviceCurrency.optional(),
+        ...gstInput,
+        isOnline: z.boolean().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const [owned] = await ctx.db
-        .select({ id: schema.service.id })
-        .from(schema.service)
-        .where(
-          and(
-            eq(schema.service.id, input.id),
-            eq(schema.service.organizationId, ctx.organizationId),
-          ),
-        );
-      if (!owned) throw new TRPCError({ code: 'NOT_FOUND', message: 'Service not found' });
+      await assertOwnedService(ctx.db, ctx.organizationId, input.id);
       const { id, ...patch } = input;
       await ctx.db.update(schema.service).set(patch).where(eq(schema.service.id, id));
       return { ok: true };
     }),
 
-  remove: tenantProcedure.input(z.object({ id: z.string() })).mutation(async ({ ctx, input }) => {
-    const [owned] = await ctx.db
-      .select({ id: schema.service.id })
-      .from(schema.service)
-      .where(
-        and(eq(schema.service.id, input.id), eq(schema.service.organizationId, ctx.organizationId)),
-      );
-    if (!owned) throw new TRPCError({ code: 'NOT_FOUND', message: 'Service not found' });
-    await ctx.db.delete(schema.service).where(eq(schema.service.id, input.id));
-    return { ok: true };
-  }),
-
-  setResources: tenantProcedure
-    .input(z.object({ serviceId: z.string(), resourceIds: z.array(z.string()) }))
+  // Archived, not deleted — past bookings still resolve the service name.
+  remove: tenantAdminProcedure
+    .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [owned] = await ctx.db
-        .select({ id: schema.service.id })
-        .from(schema.service)
-        .where(
-          and(
-            eq(schema.service.id, input.serviceId),
-            eq(schema.service.organizationId, ctx.organizationId),
-          ),
-        );
-      if (!owned) throw new TRPCError({ code: 'NOT_FOUND', message: 'Service not found' });
-
+      await assertOwnedService(ctx.db, ctx.organizationId, input.id);
       await ctx.db
-        .delete(schema.serviceResource)
-        .where(eq(schema.serviceResource.serviceId, input.serviceId));
-      if (input.resourceIds.length > 0) {
-        await ctx.db
-          .insert(schema.serviceResource)
-          .values(
-            input.resourceIds.map((rid) => ({ serviceId: input.serviceId, resourceId: rid })),
-          );
-      }
+        .update(schema.service)
+        .set({ archivedAt: new Date() })
+        .where(eq(schema.service.id, input.id));
       return { ok: true };
     }),
 
-  // Public read for the booking page — services offered by an org, filtered
-  // by which resources can perform them.
+  setResources: tenantAdminProcedure
+    .input(z.object({ serviceId: z.string(), resourceIds: z.array(z.string()) }))
+    .mutation(async ({ ctx, input }) => {
+      await assertOwnedService(ctx.db, ctx.organizationId, input.serviceId);
+      const resourceIds = await assertOwnedResources(ctx.db, ctx.organizationId, input.resourceIds);
+      await atomic(ctx.db, [
+        ctx.db
+          .delete(schema.serviceResource)
+          .where(eq(schema.serviceResource.serviceId, input.serviceId)),
+        ...(resourceIds.length > 0
+          ? [
+              ctx.db
+                .insert(schema.serviceResource)
+                .values(
+                  resourceIds.map((rid) => ({ serviceId: input.serviceId, resourceId: rid })),
+                ),
+            ]
+          : []),
+      ]);
+      return { ok: true };
+    }),
+
+  // Public read for the booking page — services offered by an org, each with
+  // the resources that perform it (empty = all of them).
   listForTenant: publicProcedure
     .input(z.object({ orgSlug: z.string() }))
     .query(async ({ ctx, input }) => {
@@ -137,23 +197,16 @@ export const serviceRouter = router({
         .from(schema.organization)
         .where(eq(schema.organization.slug, input.orgSlug));
       if (!org) return [];
-      const services = await ctx.db
-        .select()
-        .from(schema.service)
-        .where(eq(schema.service.organizationId, org.id));
-      if (services.length === 0) return [];
-      const links = await ctx.db
-        .select()
-        .from(schema.serviceResource)
-        .where(
-          inArray(
-            schema.serviceResource.serviceId,
-            services.map((s) => s.id),
-          ),
-        );
+      const services = await listWithResources(ctx.db, org.id);
       return services.map((s) => ({
-        ...s,
-        resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        durationMin: s.durationMin,
+        priceCents: s.priceCents,
+        currency: s.currency,
+        isOnline: s.isOnline,
+        resourceIds: s.resourceIds,
       }));
     }),
 });

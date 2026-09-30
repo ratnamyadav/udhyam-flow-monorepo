@@ -1,11 +1,12 @@
 'use client';
 
-import { authClient, signIn } from '@udyamflow/auth/client';
+import { signIn } from '@udyamflow/auth/client';
 import { Button, Input, Label } from '@udyamflow/ui';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
 import { SocialButtons } from '@/components/auth/social-buttons';
+import { safeCallbackUrl } from '@/lib/safe-redirect';
 
 export default function SignInPage() {
   return (
@@ -20,26 +21,35 @@ export default function SignInPage() {
 function SignInInner() {
   const router = useRouter();
   const params = useSearchParams();
-  const callbackUrl = params.get('callbackUrl') ?? '/dashboard';
+  // Only same-origin relative paths — never bounce users to another site.
+  const callbackUrl = safeCallbackUrl(params.get('callbackUrl'));
+  const signUpHref =
+    callbackUrl === '/dashboard'
+      ? '/sign-up'
+      : `/sign-up?callbackUrl=${encodeURIComponent(callbackUrl)}`;
   const resetOk = params.get('reset') === 'ok';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  void authClient; // keep import for later social handlers
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setPending(true);
     setError(null);
-    const res = await signIn.email({ email, password });
-    setPending(false);
-    if (res.error) {
-      setError(res.error.message ?? 'Could not sign in');
-      return;
+    try {
+      const res = await signIn.email({ email, password });
+      if (res.error) {
+        setError(res.error.message ?? 'Could not sign in');
+        return;
+      }
+      router.push(callbackUrl);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not sign in');
+    } finally {
+      setPending(false);
     }
-    router.push(callbackUrl);
   }
 
   return (
@@ -47,7 +57,7 @@ function SignInInner() {
       <h1 className="text-[32px] font-medium tracking-tight text-ink mb-2">Welcome back</h1>
       <p className="text-[14px] text-ink-mute mb-8">
         Don't have an account?{' '}
-        <Link href="/sign-up" className="text-ink underline underline-offset-4">
+        <Link href={signUpHref} className="text-ink underline underline-offset-4">
           Start free
         </Link>
       </p>

@@ -44,7 +44,12 @@ function ResetPasswordInner() {
     setStatus('submitting');
     setError(null);
     try {
-      await authClient.resetPassword({ token, newPassword: password });
+      const res = await authClient.resetPassword({ token, newPassword: password });
+      if (res.error) {
+        setStatus('error');
+        setError(res.error.message ?? 'Could not reset password — the link may have expired.');
+        return;
+      }
       router.replace('/sign-in?reset=ok');
     } catch (e) {
       setStatus('error');

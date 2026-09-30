@@ -7,8 +7,12 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./root": "./src/root.ts",
-    "./trpc": "./src/trpc.ts"
+    "./trpc": "./src/trpc.ts",
+    "./invoicing": "./src/invoicing/index.ts",
+    "./export": "./src/export/accounting.ts",
+    "./gst": "./src/gst/index.ts",
+    "./whatsapp": "./src/whatsapp/index.ts",
+    "./memberships": "./src/memberships/index.ts"
   },
   "scripts": {
     "lint": "biome check src",
@@ -20,6 +24,7 @@
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/db": "workspace:*",
     "@udyamflow/notifications": "workspace:*",
+    "@udyamflow/storage": "workspace:*",
     "@udyamflow/tokens": "workspace:*",
     "date-fns": "catalog:",
     "date-fns-tz": "catalog:",
@@ -28,6 +33,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@udyamflow/tsconfig": "workspace:*",

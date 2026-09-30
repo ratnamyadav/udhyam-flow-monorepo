@@ -4,10 +4,10 @@ import Link from 'next/link';
 export function MarketingNav({ activeHref }: { activeHref?: string }) {
   const items = [
     { href: '/', label: 'Product' },
-    { href: '/templates', label: 'Templates' },
+    { href: '/#templates', label: 'Templates' },
+    { href: '/#features', label: 'Features' },
+    { href: '/#locations', label: 'Multi-location' },
     { href: '/pricing', label: 'Pricing' },
-    { href: '/customers', label: 'Customers' },
-    { href: '/docs', label: 'Docs' },
   ];
 
   return (

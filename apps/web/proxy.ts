@@ -5,7 +5,7 @@ import { type NextRequest, NextResponse } from 'next/server';
 // authed shell and bounces them to /sign-in with a callbackUrl.
 const SESSION_COOKIE_NAMES = ['better-auth.session_token', '__Secure-better-auth.session_token'];
 
-const AUTHED_PREFIXES = ['/dashboard', '/bookings', '/settings', '/onboarding'];
+const AUTHED_PREFIXES = ['/dashboard', '/bookings', '/customers', '/settings', '/onboarding'];
 
 export function proxy(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -22,5 +22,11 @@ export function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/bookings/:path*', '/settings/:path*', '/onboarding/:path*'],
+  matcher: [
+    '/dashboard/:path*',
+    '/bookings/:path*',
+    '/customers/:path*',
+    '/settings/:path*',
+    '/onboarding/:path*',
+  ],
 };

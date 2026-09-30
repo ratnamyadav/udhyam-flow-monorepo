@@ -1,14 +1,32 @@
-import { useSession } from '@udyamflow/auth/expo-client';
 import { Redirect, Tabs } from 'expo-router';
-import { useWindowClass } from '../../components/responsive';
+import { ActivityIndicator, View } from 'react-native';
+import { useWindowClass } from '@/components/responsive';
+import { useSession } from '@/lib/auth';
+import { isNoOrganizationError, trpc } from '../../lib/trpc';
 
 export default function AppLayout() {
   const { data: session, isPending } = useSession();
   // On wide windows (unfolded foldables, tablets) the tab bar becomes a side
   // rail, freeing vertical space and keeping nav within thumb reach.
   const sideRail = useWindowClass() !== 'compact';
-  if (isPending) return null;
+  // Resolves the organization tenant calls will use (the server falls back to
+  // the user's first membership). PRECONDITION_FAILED ⇒ no organization yet.
+  const membership = trpc.auth.activeMembership.useQuery(undefined, {
+    enabled: !!session,
+    retry: false,
+    meta: { handlesNoOrganization: true },
+  });
+
+  if (isPending || (session && membership.isLoading)) {
+    return (
+      <View className="flex-1 bg-bg items-center justify-center">
+        <ActivityIndicator color="#1a1815" />
+      </View>
+    );
+  }
   if (!session) return <Redirect href="/sign-in" />;
+  if (isNoOrganizationError(membership.error)) return <Redirect href="/no-organization" />;
+
   return (
     <Tabs
       screenOptions={{

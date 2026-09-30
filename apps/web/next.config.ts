@@ -31,6 +31,7 @@ const config: NextConfig = {
     '@udyamflow/auth',
     '@udyamflow/db',
     '@udyamflow/env',
+    '@udyamflow/storage',
     '@udyamflow/tokens',
     '@udyamflow/ui',
   ],

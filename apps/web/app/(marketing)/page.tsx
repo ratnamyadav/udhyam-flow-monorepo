@@ -46,7 +46,7 @@ export default function MarketingLandingPage() {
             <em
               className="not-italic"
               style={{
-                fontFamily: '"Fraunces", Georgia, serif',
+                fontFamily: 'var(--font-fraunces), Georgia, serif',
                 fontStyle: 'italic',
                 fontWeight: 400,
               }}
@@ -109,7 +109,7 @@ export default function MarketingLandingPage() {
               <span
                 key={n}
                 style={{
-                  fontFamily: i % 2 ? '"Fraunces", serif' : 'inherit',
+                  fontFamily: i % 2 ? 'var(--font-fraunces), Georgia, serif' : 'inherit',
                   fontStyle: i % 2 ? 'italic' : 'normal',
                   opacity: 0.7,
                 }}
@@ -124,7 +124,8 @@ export default function MarketingLandingPage() {
       <TemplatesGrid />
 
       <section
-        className="px-14 py-30 bg-surface border-y border-border"
+        id="features"
+        className="px-14 py-30 bg-surface border-y border-border scroll-mt-20"
         style={{ padding: '120px 56px' }}
       >
         <div className="max-w-[1280px] mx-auto">
@@ -135,7 +136,7 @@ export default function MarketingLandingPage() {
             Your booking page should look like{' '}
             <em
               style={{
-                fontFamily: '"Fraunces", serif',
+                fontFamily: 'var(--font-fraunces), Georgia, serif',
                 fontWeight: 400,
                 fontStyle: 'italic',
                 color: '#c8704a',
@@ -173,7 +174,11 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      <section className="px-14 py-30 max-w-[1280px] mx-auto" style={{ padding: '120px 56px' }}>
+      <section
+        id="locations"
+        className="px-14 py-30 max-w-[1280px] mx-auto scroll-mt-20"
+        style={{ padding: '120px 56px' }}
+      >
         <div className="grid grid-cols-2 gap-20">
           <div>
             <div

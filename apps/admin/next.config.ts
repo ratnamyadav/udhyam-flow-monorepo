@@ -18,9 +18,12 @@ if (!process.env.NEXT_PHASE?.includes('page-data')) {
 const config: NextConfig = {
   reactStrictMode: true,
   transpilePackages: [
+    '@udyamflow/api',
     '@udyamflow/auth',
     '@udyamflow/db',
     '@udyamflow/env',
+    '@udyamflow/notifications',
+    '@udyamflow/storage',
     '@udyamflow/tokens',
     '@udyamflow/ui',
   ],

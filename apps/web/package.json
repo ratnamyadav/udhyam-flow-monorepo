@@ -11,6 +11,8 @@
     "check-types": "tsgo --noEmit"
   },
   "dependencies": {
+    "@next/env": "catalog:",
+    "@sentry/nextjs": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/react-query": "catalog:",
@@ -19,12 +21,9 @@
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/db": "workspace:*",
     "@udyamflow/env": "workspace:*",
+    "@udyamflow/storage": "workspace:*",
     "@udyamflow/tokens": "workspace:*",
     "@udyamflow/ui": "workspace:*",
-    "@next/env": "catalog:",
-    "@aws-sdk/client-s3": "catalog:",
-    "@aws-sdk/s3-request-presigner": "catalog:",
-    "@sentry/nextjs": "catalog:",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "next": "catalog:",

@@ -4,11 +4,13 @@ import { PROFESSIONS, type ProfessionId, TEMPLATES } from '@udyamflow/tokens';
 import { Button } from '@udyamflow/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { useActiveRole } from '@/components/app-shell/use-role';
 import { trpc } from '@/lib/trpc/react';
 
 export default function TemplatePickerPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const { isAdmin } = useActiveRole();
   const settings = trpc.tenant.getSettings.useQuery();
   const update = trpc.tenant.updateSettings.useMutation({
     onSuccess: () => {
@@ -123,12 +125,18 @@ export default function TemplatePickerPage() {
             {update.error && (
               <span className="text-[12px] text-danger">{update.error.message}</span>
             )}
-            <Button
-              disabled={!dirty || update.isPending}
-              onClick={() => update.mutate({ templateId: selected, profession: selected })}
-            >
-              {update.isPending ? 'Applying…' : dirty ? 'Apply template' : 'Current template'}
-            </Button>
+            {isAdmin ? (
+              <Button
+                disabled={!dirty || update.isPending}
+                onClick={() => update.mutate({ templateId: selected, profession: selected })}
+              >
+                {update.isPending ? 'Applying…' : dirty ? 'Apply template' : 'Current template'}
+              </Button>
+            ) : (
+              <span className="text-[12px] text-ink-soft">
+                Only owners and admins can change the template.
+              </span>
+            )}
           </div>
         </div>
       </div>

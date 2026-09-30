@@ -17,15 +17,27 @@ type SettingsRow = {
   currency: string;
 };
 
-// Builds a TenantTheme (used by TenantThemeProvider) from DB rows. Falls back
-// to the Patel demo theme if settings are missing — keeps unauthed/demo paths
-// rendering correctly.
+// Builds a TenantTheme (used by TenantThemeProvider) from DB rows. An org
+// without a settings row gets neutral defaults under its own name; only a
+// missing org (demo/marketing paths) falls back to the Patel demo theme.
 export function settingsToTheme(args: {
   org: { id: string; name: string; slug: string; logo: string | null } | null;
   settings: SettingsRow | null;
 }): TenantTheme {
   const { org, settings } = args;
-  if (!org || !settings) return TENANT_THEMES.patel;
+  if (!org) return TENANT_THEMES.patel;
+  if (!settings) {
+    const initials = org.name.slice(0, 2).toUpperCase();
+    return {
+      ...TENANT_THEMES.patel,
+      id: org.id,
+      slug: org.slug,
+      name: org.name,
+      logo: org.logo ?? initials,
+      logoUrl: null,
+      location: '',
+    };
+  }
 
   return {
     id: org.id as TenantTheme['id'],

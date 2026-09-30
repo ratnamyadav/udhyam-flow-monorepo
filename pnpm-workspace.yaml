@@ -15,17 +15,19 @@ catalog:
   "@next/env": 16.3.7
   next-themes: 0.4.6
 
-  # Expo — SDK 57 (React Native 0.86). Keep these in lockstep with
-  # `expo/bundledNativeModules.json`; run `pnpm --filter @udyamflow/mobile exec expo install --check`
-  # after bumping.
+  # Expo — versions must match `expo/bundledNativeModules.json` for SDK 57
+  # (check with `pnpm --filter @udyamflow/mobile exec expo install --check`).
   expo: 57.0.26
   expo-router: 57.0.24
-  "@expo/metro-runtime": 57.0.16
   expo-secure-store: 57.0.4
   expo-linking: 57.0.11
   expo-status-bar: 57.0.1
   expo-constants: 57.0.20
   expo-build-properties: 57.0.22
+  expo-web-browser: 57.0.3
+  # Optional peer of @better-auth/expo (dynamic import in its client; Metro
+  # needs it resolvable).
+  expo-network: 57.0.2
   react-native: 0.86.3
   react-native-safe-area-context: 5.7.0
   react-native-screens: 4.26.2
@@ -39,7 +41,7 @@ catalog:
   postcss: 8.5.5
   autoprefixer: 10.4.21
   nativewind: 5.0.0-preview.3
-  react-native-css: 3.0.7
+  react-native-css: 3.0.1
   class-variance-authority: 0.7.1
   clsx: 2.1.1
   tailwind-merge: 3.5.0
@@ -80,4 +82,14 @@ catalog:
   stripe: 22.2.2
   sharp: 0.34.4
   vitest: 3.2.4
+  "@electric-sql/pglite": 0.3.15
   "@vitest/coverage-v8": 3.2.4
+
+# React Native's renderer requires the *exact* React version it was built
+# against (RN 0.86 / Expo SDK 57 → React 19.2.3), which differs from the web
+# apps' React. Expo's autolinking resolver dedupes react/react-dom to the app's
+# own copy, so the mobile app pins these via `catalog:mobile`.
+catalogs:
+  mobile:
+    react: 19.2.3
+    react-dom: 19.2.3
