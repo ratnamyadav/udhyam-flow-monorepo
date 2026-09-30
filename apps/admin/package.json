@@ -19,6 +19,7 @@
     "@udyamflow/tokens": "workspace:*",
     "@udyamflow/ui": "workspace:*",
     "better-auth": "catalog:",
+    "drizzle-orm": "catalog:",
     "next": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:"

@@ -33,6 +33,23 @@ export const booking = pgTable('booking', {
   paymentStatus: text('payment_status').notNull().default('unpaid'),
   paymentProvider: text('payment_provider'),
   paymentId: text('payment_id'),
+  // Cashfree Easy Split vendor the payment was split to (null = platform
+  // settlement). Refunds recover from the same vendor.
+  paymentVendorId: text('payment_vendor_id'),
   intake: jsonb('intake').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
+  // WhatsApp/SMS 24h reminder. The reminder cron claims a booking by setting
+  // this with a conditional `WHERE reminder_sent_at IS NULL` update before
+  // sending, so overlapping cron runs can't double-send.
+  reminderSentAt: timestamp('reminder_sent_at'),
+  // Set when the customer taps "Confirm" on the WhatsApp reminder. Purely
+  // informational (status stays `confirmed`) — shown on the bookings list.
+  customerConfirmedAt: timestamp('customer_confirmed_at'),
+  // Join link for online services: the resource's own Meet/Zoom room, or a
+  // generated Jitsi room. Snapshotted at booking time so later edits to the
+  // resource don't change links customers already have.
+  meetingUrl: text('meeting_url'),
+  // Acquisition channel from `?source=` / `?utm_source=` on the public
+  // booking page (e.g. `google`, `instagram`). Sanitized to [a-z0-9_-]{1,32}.
+  source: text('source'),
 });

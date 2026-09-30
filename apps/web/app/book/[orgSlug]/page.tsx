@@ -1,5 +1,6 @@
 import { db, schema } from '@udyamflow/db';
-import { eq } from 'drizzle-orm';
+import { tenantThemeStyle } from '@udyamflow/tokens';
+import { and, eq } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BookingInterface } from '@/components/booking/booking-interface';
@@ -33,10 +34,10 @@ export default async function BookingPage({
   searchParams,
 }: {
   params: Promise<{ orgSlug: string }>;
-  searchParams: Promise<{ layout?: string }>;
+  searchParams: Promise<{ layout?: string; source?: string; utm_source?: string }>;
 }) {
   const { orgSlug } = await params;
-  const { layout: layoutParam } = await searchParams;
+  const { layout: layoutParam, source, utm_source } = await searchParams;
 
   // Resolve org + tenantSettings + first location + resources in one shot.
   const [org] = await db
@@ -71,11 +72,20 @@ export default async function BookingPage({
     settings: settings ?? null,
   });
 
+  // Only advertise memberships when there's something to buy.
+  const [membershipPlan] = await db
+    .select({ id: schema.membershipPlan.id })
+    .from(schema.membershipPlan)
+    .where(
+      and(eq(schema.membershipPlan.organizationId, org.id), eq(schema.membershipPlan.active, true)),
+    )
+    .limit(1);
+
   const layout: Layout = LAYOUTS.includes(layoutParam as Layout)
     ? (layoutParam as Layout)
     : 'sidebar';
 
-  return (
+  const page = (
     <BookingInterface
       orgSlug={orgSlug}
       theme={theme}
@@ -93,8 +103,26 @@ export default async function BookingPage({
         durationMin: s.durationMin,
         priceCents: s.priceCents,
         currency: s.currency,
+        isOnline: s.isOnline,
       }))}
       layout={layout}
+      // Attribution (`?source=google` from Google Business Profile etc.).
+      // booking.create sanitizes it; we just forward the raw value.
+      source={(source ?? utm_source)?.slice(0, 64)}
     />
+  );
+  if (!membershipPlan) return page;
+  return (
+    <>
+      {page}
+      <div className="bg-bg pb-10 text-center" style={tenantThemeStyle(theme)}>
+        <a
+          href={`/book/${orgSlug}/memberships`}
+          className="text-[12px] text-ink-mute hover:text-ink underline-offset-2 hover:underline"
+        >
+          Memberships →
+        </a>
+      </div>
+    </>
   );
 }

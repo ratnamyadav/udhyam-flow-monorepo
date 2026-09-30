@@ -1,7 +1,8 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { autoInvoiceIfEnabled } from '@udyamflow/api/invoicing';
 import { db, schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
-import type { NextRequest } from 'next/server';
+import { after, type NextRequest } from 'next/server';
 
 // Cashfree PG webhook. Signature spec:
 //   signature = base64(hmacSHA256(secret, timestamp + rawBody))
@@ -44,6 +45,8 @@ export async function POST(req: NextRequest) {
       .update(schema.booking)
       .set({ paymentStatus: 'paid' })
       .where(eq(schema.booking.id, bookingId));
+    // No-op unless the tenant turned on auto-invoicing.
+    after(() => autoInvoiceIfEnabled(db, bookingId));
   } else if (event.type === 'PAYMENT_FAILED_WEBHOOK') {
     await db
       .update(schema.booking)

@@ -2,6 +2,13 @@
 
 import { Button, Input, Label } from '@udyamflow/ui';
 import { useState } from 'react';
+import {
+  defaultServiceGst,
+  type ServiceGst,
+  ServiceGstEditor,
+  ServiceGstInputs,
+  useSuggestedGst,
+} from '@/components/services/service-gst';
 import { trpc } from '@/lib/trpc/react';
 
 function priceFor(cents: number, currency: string) {
@@ -26,12 +33,20 @@ export default function ServicesSettingsPage() {
   const setRes = trpc.service.setResources.useMutation({
     onSuccess: () => utils.service.list.invalidate(),
   });
+  // Online-session toggle (join link on bookings) — see OnlineToggle below.
+  const setOnline = trpc.service.update.useMutation({
+    onSuccess: () => utils.service.list.invalidate(),
+  });
 
   const [name, setName] = useState('');
   const [duration, setDuration] = useState(30);
   const [price, setPrice] = useState(0);
   const [currency, setCurrency] = useState('INR');
   const [picked, setPicked] = useState<string[]>([]);
+  const suggestedGst = useSuggestedGst();
+  const [gst, setGst] = useState<ServiceGst | null>(null);
+  const gstValue = gst ?? defaultServiceGst(suggestedGst);
+  const [isOnline, setIsOnline] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function onCreate() {
@@ -47,12 +62,18 @@ export default function ServicesSettingsPage() {
         priceCents: Math.round(price * 100),
         currency,
         resourceIds: picked,
+        sacCode: gstValue.sacCode.trim() || null,
+        gstRateBps: gstValue.gstRateBps,
+        gstExempt: gstValue.gstExempt,
+        isOnline,
       })
       .then(() => {
         setName('');
         setDuration(30);
         setPrice(0);
         setPicked([]);
+        setGst(null);
+        setIsOnline(false);
       })
       .catch((e: Error) => setError(e.message));
   }
@@ -92,6 +113,7 @@ export default function ServicesSettingsPage() {
                   {s.description && (
                     <div className="text-[12px] text-ink-mute">{s.description}</div>
                   )}
+                  {s.currency === 'INR' && <ServiceGstEditor service={s} />}
                   <div className="mt-2 flex flex-wrap gap-1">
                     {(resources.data ?? []).map((r) => {
                       const on = s.resourceIds.includes(r.id);
@@ -112,6 +134,11 @@ export default function ServicesSettingsPage() {
                       );
                     })}
                   </div>
+                  <OnlineToggle
+                    checked={s.isOnline}
+                    disabled={setOnline.isPending}
+                    onChange={(v) => setOnline.mutate({ id: s.id, isOnline: v })}
+                  />
                 </div>
                 <div className="text-[13px] font-mono text-ink-mute">{s.durationMin} min</div>
                 <div className="text-[13px] font-mono text-ink">
@@ -188,6 +215,7 @@ export default function ServicesSettingsPage() {
               <option value="GBP">GBP — £</option>
             </select>
           </div>
+          {currency === 'INR' && <ServiceGstInputs value={gstValue} onChange={setGst} />}
           <div className="space-y-1.5">
             <Label>Available with</Label>
             <div className="flex flex-wrap gap-1">
@@ -211,6 +239,7 @@ export default function ServicesSettingsPage() {
               })}
             </div>
           </div>
+          <OnlineToggle checked={isOnline} onChange={setIsOnline} />
           {error && <div className="text-[12px] text-danger">{error}</div>}
           <Button onClick={onCreate} disabled={create.isPending} className="w-full">
             {create.isPending ? 'Adding…' : '+ Add service'}
@@ -218,5 +247,29 @@ export default function ServicesSettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// Online sessions get a video link on every booking: the practitioner's own
+// Meet/Zoom room (Resources → Meeting link) or a generated Jitsi room.
+function OnlineToggle({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <label className="mt-2 flex items-center gap-1.5 text-[12px] text-ink-mute">
+      <input
+        type="checkbox"
+        checked={checked}
+        disabled={disabled}
+        onChange={(e) => onChange(e.target.checked)}
+      />
+      <span>Online session (video link)</span>
+    </label>
   );
 }

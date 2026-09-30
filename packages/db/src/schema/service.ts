@@ -2,7 +2,7 @@
 // new patient", "60-min deep tissue"). A booking is for one service; a
 // service can be offered by multiple resources via the join table.
 
-import { integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
+import { boolean, integer, pgTable, primaryKey, text, timestamp } from 'drizzle-orm/pg-core';
 import { organization } from './org';
 import { resource } from './resource';
 
@@ -16,6 +16,17 @@ export const service = pgTable('service', {
   durationMin: integer('duration_min').notNull().default(30),
   priceCents: integer('price_cents').notNull().default(0),
   currency: text('currency').notNull().default('INR'),
+  // GST: SAC code for the service and its rate in basis points (1800 =
+  // 18%). Prices are tax-inclusive — the invoice backs the tax out of
+  // priceCents so it always totals what the customer paid.
+  sacCode: text('sac_code'),
+  gstRateBps: integer('gst_rate_bps').notNull().default(1800),
+  // Exempt services (e.g. healthcare by a clinical establishment) go on a
+  // Bill of Supply with no tax.
+  gstExempt: boolean('gst_exempt').notNull().default(false),
+  // Online session (video call) — bookings get a meeting link instead of
+  // relying on the location address.
+  isOnline: boolean('is_online').notNull().default(false),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });
 
