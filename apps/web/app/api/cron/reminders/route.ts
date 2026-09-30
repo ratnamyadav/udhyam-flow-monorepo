@@ -2,9 +2,9 @@ import { bearerToken, runReminders, secretsMatch } from '@udyamflow/api/whatsapp
 import { db } from '@udyamflow/db';
 import type { NextRequest } from 'next/server';
 
-// Hourly reminder cron (see apps/web/vercel.json). Vercel Cron sends
-// `Authorization: Bearer ${CRON_SECRET}` when CRON_SECRET is set on the
-// project; anything else gets a 401. Sends WhatsApp (with Confirm / Cancel /
+// Hourly reminder cron, triggered by .github/workflows/reminders.yml (any
+// scheduler works) with `Authorization: Bearer ${CRON_SECRET}`; anything else
+// gets a 401. Sends WhatsApp (with Confirm / Cancel /
 // Reschedule buttons) or SMS for confirmed bookings starting in ~24h.
 
 export async function GET(req: NextRequest) {

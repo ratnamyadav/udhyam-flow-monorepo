@@ -116,7 +116,7 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | `/api/health` | Health check (returns `{ ok, orgs }`, or `{ ok: false }` with 503) |
 | `/settings/channels` | Booking channels — `?source=` share links (Google Business Profile, Instagram, WhatsApp) + bookings by source (30 days) |
 | `/pay/[bookingId]` | Pay link from reminders — starts Stripe / Cashfree checkout for an unpaid booking |
-| `/api/cron/reminders` | Hourly Vercel Cron (`apps/web/vercel.json`, `Authorization: Bearer $CRON_SECRET`) — WhatsApp/SMS reminders ~24h before confirmed bookings |
+| `/api/cron/reminders` | Hourly cron via GitHub Actions (`.github/workflows/reminders.yml`, `Authorization: Bearer $CRON_SECRET`; set the `REMINDERS_APP_URL` + `CRON_SECRET` repo secrets) — WhatsApp/SMS reminders ~24h before confirmed bookings |
 | `/api/notifications/whatsapp/inbound` | MSG91 inbound WhatsApp webhook (`?secret=$MSG91_WEBHOOK_SECRET`) — Confirm / Cancel / Reschedule button replies |
 | `/settings/memberships` | Recurring membership plans (Cashfree Subscriptions) + subscribers, with cancel |
 | `/book/[orgSlug]/memberships` | Public membership plans + sign-up (UPI Autopay / eNACH / card mandate) |
@@ -190,7 +190,7 @@ Optional — WhatsApp reminders & two-way replies:
 
 | Variable | What it is |
 |---|---|
-| `CRON_SECRET` | Bearer token for `/api/cron/reminders` (set it in Vercel; Vercel Cron sends it automatically) |
+| `CRON_SECRET` | Bearer token for `/api/cron/reminders` — set it on the web app and as a GitHub Actions secret (with `REMINDERS_APP_URL`) for the hourly reminders workflow |
 | `MSG91_WEBHOOK_SECRET` | Shared secret for the MSG91 inbound webhook — configure `POST {APP_URL}/api/notifications/whatsapp/inbound?secret=…` in MSG91 |
 
 WhatsApp templates to get approved on the MSG91 number (Utility, `en`): `booking_reminder` (body `{{1}}` name, `{{2}}` practitioner, `{{3}}` date/time, `{{4}}` join link or ref; quick replies Confirm / Cancel / Reschedule), `booking_reminder_pay` (same + URL button `{APP_URL}/pay/{{1}}`), and `booking_confirmed_online` (`booking_confirmed`'s four params + `{{5}}` join link).

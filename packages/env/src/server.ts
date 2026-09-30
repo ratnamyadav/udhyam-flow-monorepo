@@ -99,8 +99,8 @@ export const serverEnvSchema = z.object({
   // map (fine for dev, logs a warning if NODE_ENV=production).
   UPSTASH_REDIS_REST_URL: z.url().optional(),
   UPSTASH_REDIS_REST_TOKEN: z.string().optional(),
-  // Bearer token Vercel Cron sends to /api/cron/* (set it in the Vercel
-  // project and Vercel adds the header). Unset → cron endpoints return 503.
+  // Bearer token the hourly scheduler (.github/workflows/reminders.yml) sends
+  // to /api/cron/*. Unset → cron endpoints return 503.
   CRON_SECRET: z.string().optional(),
 });
 
