@@ -7,7 +7,6 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./root": "./src/root.ts",
     "./trpc": "./src/trpc.ts"
   },
   "scripts": {
@@ -28,6 +27,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "catalog:",
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@udyamflow/tsconfig": "workspace:*",

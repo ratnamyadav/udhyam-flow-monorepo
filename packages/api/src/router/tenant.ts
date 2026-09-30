@@ -2,7 +2,10 @@ import { schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 import { encrypt, REDACTED_SECRET } from '../crypto';
-import { router, tenantProcedure } from '../trpc';
+import { fontStack, hexColor } from '../lib/validate';
+import { router, tenantAdminProcedure, tenantProcedure } from '../trpc';
+
+const profession = z.enum(['doctor', 'teacher', 'sports', 'salon', 'therapist', 'fitness']);
 
 export const tenantRouter = router({
   getSettings: tenantProcedure.query(async ({ ctx }) => {
@@ -20,29 +23,31 @@ export const tenantRouter = router({
     };
   }),
 
-  updateSettings: tenantProcedure
+  updateSettings: tenantAdminProcedure
     .input(
       z.object({
-        accent: z.string().optional(),
-        accentSoft: z.string().optional(),
-        accentInk: z.string().optional(),
+        accent: hexColor.optional(),
+        accentSoft: hexColor.optional(),
+        accentInk: hexColor.optional(),
         radius: z.number().int().min(0).max(24).optional(),
         density: z.enum(['compact', 'comfortable']).optional(),
-        fontDisplay: z.string().optional(),
-        fontUi: z.string().optional(),
+        fontDisplay: fontStack.optional(),
+        fontUi: fontStack.optional(),
         logoText: z.string().max(4).optional(),
         // `null` clears the URL (revert to letter badge), undefined leaves it alone.
         logoUrl: z.string().url().nullable().optional(),
-        profession: z.string().optional(),
-        templateId: z.string().optional(),
+        profession: profession.optional(),
+        templateId: profession.optional(),
         currency: z.enum(['USD', 'INR']).optional(),
         enableSms: z.boolean().optional(),
         enableWhatsapp: z.boolean().optional(),
-        stripeAccountId: z.string().nullable().optional(),
-        cashfreeMerchantId: z.string().nullable().optional(),
+        // stripeAccountId is deliberately absent: it's only ever set by
+        // payment.connectStripe, never by the client — otherwise a tenant
+        // could point its checkouts at someone else's Connect account.
+        cashfreeMerchantId: z.string().max(100).nullable().optional(),
         // Plain text in on the wire (HTTPS); we encrypt before write.
         // Pass null to clear the saved key.
-        cashfreeApiKey: z.string().nullable().optional(),
+        cashfreeApiKey: z.string().max(200).nullable().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
