@@ -236,17 +236,27 @@ Per-workspace scripts (run with `pnpm --filter <name> <script>`):
 
 The UI follows a **Linear / Notion-inspired** aesthetic — Inter for UI, Fraunces for italic accents, JetBrains Mono for tabular bits. The palette is a warm-slate neutral with one signature **accent color per tenant**.
 
-Theming is driven by CSS variables on `<html>`, set at runtime by `<TenantThemeProvider>` from the active org's `tenant_settings` row:
+Theming is driven by CSS variables, set at runtime by `<TenantThemeProvider>` (authed shell) or inline on the public booking page from the org's `tenant_settings` row (`tenantThemeToCssVars` in `packages/tokens`):
 
 ```css
 --accent       /* tenant brand color */
 --accent-soft  /* light tint of accent */
---accent-ink   /* dark variant for text on accent backgrounds */
+--accent-ink   /* dark variant for text on accent-soft backgrounds */
+--accent-fg    /* text on the accent: white or ink, whichever has better contrast */
 --radius       /* corner radius */
 --font-display /* heading font */
+--font-ui      /* body font */
 ```
 
-Components in `packages/ui` (`Button`, `Input`, `Label`, `Card`, `TenantLogo`) read these vars instead of hardcoding colors, so swapping tenants in the location-switcher repaints the whole authed shell instantly.
+What tenants can customize (Settings → Branding):
+
+- **Logo** — image upload (PNG/JPEG/WebP, resized in the browser) or a 2–4 letter badge
+- **Colors** — presets or any custom accent; the soft and ink shades are derived automatically (`deriveAccentPalette`) and can be overridden, with live WCAG contrast warnings (`paletteWarnings`)
+- **Fonts** — heading and body font from a curated list (`FONT_OPTIONS`: Inter, DM Sans, Nunito, Space Grotesk, Fraunces, Playfair Display, Lora). Settings store the font **id**; `fontStack(id)` maps it to the `next/font` CSS variable, so every option actually loads
+- **Corner radius** and **density**
+- **Booking page** — default layout (sidebar / stacked / inline; `?layout=` still overrides), custom headline and intro text
+
+Components in `packages/ui` (`Button`, `Input`, `Label`, `Card`, `TenantLogo`) read these vars instead of hardcoding colors, so switching workspaces repaints the whole authed shell instantly. The mobile booking flow gets the same brand from the public `tenant.publicBranding` query.
 
 Three demo tenants ship with the seed:
 - **Dr. Patel's Family Clinic** — teal `#0f766e`, profession: doctor
