@@ -1,7 +1,7 @@
 'use client';
 
 import { authClient, signOut } from '@udyamflow/auth/client';
-import type { TenantTheme } from '@udyamflow/tokens';
+import { readableTextOn, type TenantTheme } from '@udyamflow/tokens';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -27,6 +27,7 @@ const NAV = [
   { href: '/settings/team', label: 'Team' },
   { href: '/settings/payments', label: 'Payments' },
   { href: '/settings/branding', label: 'Branding' },
+  { href: '/settings/notifications', label: 'Notifications' },
   { href: '/settings/templates', label: 'Template' },
 ];
 
@@ -93,8 +94,12 @@ export function Topbar({
             className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-mute transition-colors disabled:opacity-50"
           >
             <div
-              className="w-7 h-7 grid place-items-center text-white text-[10px] font-semibold overflow-hidden"
-              style={{ background: activeTheme.accent, borderRadius: 'calc(var(--radius) - 2px)' }}
+              className="w-7 h-7 grid place-items-center text-[10px] font-semibold overflow-hidden"
+              style={{
+                background: activeTheme.accent,
+                color: readableTextOn(activeTheme.accent),
+                borderRadius: 'calc(var(--radius) - 2px)',
+              }}
             >
               {activeTheme.logoUrl ? (
                 // Tenant logos are external R2 URLs, not local assets.
@@ -131,8 +136,12 @@ export function Topbar({
                     disabled={isPending}
                   >
                     <div
-                      className="w-6 h-6 grid place-items-center text-white text-[10px] font-semibold overflow-hidden"
-                      style={{ background: o.accent, borderRadius: 6 }}
+                      className="w-6 h-6 grid place-items-center text-[10px] font-semibold overflow-hidden"
+                      style={{
+                        background: o.accent,
+                        color: readableTextOn(o.accent),
+                        borderRadius: 6,
+                      }}
                     >
                       {o.logoUrl ? (
                         <img

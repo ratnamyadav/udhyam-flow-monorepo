@@ -3,10 +3,8 @@ import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BookingInterface } from '@/components/booking/booking-interface';
+import { type BookingLayout, isBookingLayout } from '@/lib/booking-copy';
 import { settingsToTheme } from '@/lib/theme';
-
-type Layout = 'sidebar' | 'stacked' | 'inline';
-const LAYOUTS = ['sidebar', 'stacked', 'inline'] as const;
 
 export async function generateMetadata({
   params,
@@ -91,9 +89,12 @@ export default async function BookingPage({
     settings: settings ?? null,
   });
 
-  const layout: Layout = LAYOUTS.includes(layoutParam as Layout)
-    ? (layoutParam as Layout)
-    : 'sidebar';
+  // ?layout= previews another layout; otherwise the tenant's saved default.
+  const layout: BookingLayout = isBookingLayout(layoutParam)
+    ? layoutParam
+    : isBookingLayout(settings?.bookingLayout)
+      ? settings?.bookingLayout
+      : 'sidebar';
 
   return (
     <BookingInterface
@@ -121,6 +122,9 @@ export default async function BookingPage({
         resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
       }))}
       layout={layout}
+      density={settings?.density === 'compact' ? 'compact' : 'comfortable'}
+      headline={settings?.bookingHeadline ?? null}
+      intro={settings?.bookingIntro ?? null}
     />
   );
 }

@@ -1,4 +1,8 @@
+import { readableTextOn, TENANT_THEMES } from '@udyamflow/tokens';
+
 // Visual representation of the location switcher experience for the marketing page.
+const ACCENT = TENANT_THEMES.patel.accent;
+
 export function LocationsPreview() {
   const locs = [
     { name: 'Bandra Clinic', addr: 'Mumbai · 12 staff', count: 84 },
@@ -10,7 +14,10 @@ export function LocationsPreview() {
     <div className="rounded-xl border border-border bg-surface p-2">
       <div className="flex items-center justify-between p-3 border-b border-border">
         <div className="flex items-center gap-2 text-sm font-medium text-ink">
-          <div className="w-6 h-6 rounded-md bg-[#0f766e] text-white grid place-items-center text-[10px] font-semibold">
+          <div
+            className="w-6 h-6 rounded-md grid place-items-center text-[10px] font-semibold"
+            style={{ background: ACCENT, color: readableTextOn(ACCENT) }}
+          >
             PC
           </div>
           Patel Clinic

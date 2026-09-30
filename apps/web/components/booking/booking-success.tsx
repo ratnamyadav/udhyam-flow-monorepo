@@ -3,7 +3,8 @@
 import type { TenantTheme } from '@udyamflow/tokens';
 
 // Confirmation card shown after a successful booking.create. Mirrors the
-// tenant theme so the moment of "you're booked" still feels on-brand.
+// tenant theme so the moment of "you're booked" still feels on-brand. Must be
+// rendered inside a container carrying the tenant CSS vars (tenantThemeStyle).
 export function BookingSuccess({
   theme,
   referenceCode,
@@ -22,15 +23,15 @@ export function BookingSuccess({
   return (
     <div className="max-w-[460px] mx-auto">
       <div
-        className="w-12 h-12 grid place-items-center text-white text-xl font-semibold mb-5"
-        style={{ background: theme.accent, borderRadius: theme.radius }}
+        className="w-12 h-12 grid place-items-center text-xl font-semibold mb-5"
+        style={{ background: theme.accent, color: 'var(--accent-fg)', borderRadius: theme.radius }}
         aria-hidden
       >
         ✓
       </div>
       <h1
         className="text-[28px] m-0 font-medium tracking-tight text-ink"
-        style={{ fontFamily: theme.fontDisplay, lineHeight: 1.15 }}
+        style={{ fontFamily: 'var(--font-display)', lineHeight: 1.15 }}
       >
         You're booked, {customerName.split(' ')[0]}.
       </h1>

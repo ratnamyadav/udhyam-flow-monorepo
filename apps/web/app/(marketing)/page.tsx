@@ -46,7 +46,7 @@ export default function MarketingLandingPage() {
             <em
               className="not-italic"
               style={{
-                fontFamily: '"Fraunces", Georgia, serif',
+                fontFamily: 'var(--font-fraunces), Georgia, serif',
                 fontStyle: 'italic',
                 fontWeight: 400,
               }}
@@ -109,7 +109,7 @@ export default function MarketingLandingPage() {
               <span
                 key={n}
                 style={{
-                  fontFamily: i % 2 ? '"Fraunces", serif' : 'inherit',
+                  fontFamily: i % 2 ? 'var(--font-fraunces), Georgia, serif' : 'inherit',
                   fontStyle: i % 2 ? 'italic' : 'normal',
                   opacity: 0.7,
                 }}
@@ -136,7 +136,7 @@ export default function MarketingLandingPage() {
             Your booking page should look like{' '}
             <em
               style={{
-                fontFamily: '"Fraunces", serif',
+                fontFamily: 'var(--font-fraunces), Georgia, serif',
                 fontWeight: 400,
                 fontStyle: 'italic',
                 color: '#c8704a',

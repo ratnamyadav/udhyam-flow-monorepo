@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { type ReactNode, useMemo, useState } from 'react';
 import { Pressable, ScrollView, Text, TextInput, type TextInputProps, View } from 'react-native';
+import { type BrandColors, BrandHeader, useTenantBranding } from '../../../lib/branding';
 import { addDays, calendarDateParts, formatMoney, todayInTimeZone } from '../../../lib/format';
 import { errorMessage, trpc, trpcErrorCode } from '../../../lib/trpc';
 
@@ -20,6 +21,7 @@ export default function BookTenantScreen() {
   const locations = trpc.location.listForTenant.useQuery({ orgSlug });
   const resources = trpc.resource.listForTenant.useQuery({ orgSlug });
   const services = trpc.service.listForTenant.useQuery({ orgSlug });
+  const { branding, colors } = useTenantBranding(orgSlug);
 
   const [locationId, setLocationId] = useState<string | null>(null);
   const [resourceId, setResourceId] = useState<string | null>(null);
@@ -160,8 +162,19 @@ export default function BookTenantScreen() {
       contentContainerClassName="px-6 pt-16 pb-16"
       keyboardShouldPersistTaps="handled"
     >
-      <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">/{orgSlug}</Text>
-      <Text className="text-3xl font-semibold text-ink mt-1">Pick a slot</Text>
+      {branding ? (
+        <BrandHeader branding={branding} colors={colors} />
+      ) : (
+        <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">/{orgSlug}</Text>
+      )}
+      <Text className="text-3xl font-semibold text-ink mt-4" accessibilityRole="header">
+        {branding?.bookingHeadline?.trim() || 'Pick a slot'}
+      </Text>
+      {branding?.bookingIntro?.trim() ? (
+        <Text className="text-sm text-ink-mute mt-2 leading-relaxed">
+          {branding.bookingIntro.trim()}
+        </Text>
+      ) : null}
 
       {locationList.length > 1 ? (
         <>
@@ -170,6 +183,7 @@ export default function BookTenantScreen() {
             {locationList.map((l) => (
               <Chip
                 key={l.id}
+                colors={colors}
                 on={l.id === effectiveLocationId}
                 label={l.name}
                 sub={l.address ?? undefined}
@@ -194,6 +208,7 @@ export default function BookTenantScreen() {
           {resourcesHere.map((r) => (
             <Chip
               key={r.id}
+              colors={colors}
               on={r.id === resource?.id}
               label={r.name}
               sub={r.title ?? undefined}
@@ -213,6 +228,7 @@ export default function BookTenantScreen() {
             {eligibleServices.map((s) => (
               <Chip
                 key={s.id}
+                colors={colors}
                 on={s.id === service?.id}
                 label={`${s.name} · ${s.durationMin}min`}
                 sub={s.priceCents > 0 ? formatMoney(s.priceCents, s.currency) : undefined}
@@ -239,19 +255,28 @@ export default function BookTenantScreen() {
                   setDate(d);
                   resetSlot();
                 }}
-                className={`w-14 items-center py-2 rounded-md border ${
-                  on ? 'bg-ink border-ink' : 'bg-surface border-border'
-                }`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${i === 0 ? 'Today, ' : ''}${parts.weekday} ${parts.day} ${parts.month}`}
+                className={`w-14 items-center py-2 border ${on ? '' : 'bg-surface border-border'}`}
+                style={[{ borderRadius: colors.radius }, on ? selectedStyle(colors) : null]}
               >
                 <Text
-                  className={`text-[10px] uppercase font-mono ${on ? 'text-bg' : 'text-ink-mute'}`}
+                  className={`text-[10px] uppercase font-mono ${on ? '' : 'text-ink-mute'}`}
+                  style={on ? { color: colors.accentFg } : undefined}
                 >
                   {i === 0 ? 'Today' : parts.weekday}
                 </Text>
-                <Text className={`text-lg font-semibold ${on ? 'text-bg' : 'text-ink'}`}>
+                <Text
+                  className={`text-lg font-semibold ${on ? '' : 'text-ink'}`}
+                  style={on ? { color: colors.accentFg } : undefined}
+                >
                   {parts.day}
                 </Text>
-                <Text className={`text-[10px] ${on ? 'text-bg' : 'text-ink-mute'}`}>
+                <Text
+                  className={`text-[10px] ${on ? '' : 'text-ink-mute'}`}
+                  style={on ? { color: colors.accentFg } : undefined}
+                >
                   {parts.month}
                 </Text>
               </Pressable>
@@ -285,9 +310,16 @@ export default function BookTenantScreen() {
                   setSelected(s);
                   create.reset();
                 }}
-                className={`px-3 py-2 rounded-md border ${on ? 'bg-ink border-ink' : 'border-border'}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                accessibilityLabel={`${dayLabel.weekday} ${dayLabel.day} ${dayLabel.month} at ${s.displayTime}`}
+                className={`px-3 py-2 border ${on ? '' : 'border-border'}`}
+                style={[{ borderRadius: colors.radius }, on ? selectedStyle(colors) : null]}
               >
-                <Text className={`text-[13px] font-mono ${on ? 'text-bg' : 'text-ink'}`}>
+                <Text
+                  className={`text-[13px] font-mono ${on ? '' : 'text-ink'}`}
+                  style={on ? { color: colors.accentFg } : undefined}
+                >
                   {s.displayTime}
                 </Text>
               </Pressable>
@@ -336,9 +368,18 @@ export default function BookTenantScreen() {
       <Pressable
         onPress={submit}
         disabled={!canSubmit}
-        className={`mt-6 rounded-md py-3.5 ${canSubmit ? 'bg-ink' : 'bg-surface-mute'}`}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: !canSubmit }}
+        className={`mt-6 py-3.5 ${canSubmit ? '' : 'bg-surface-mute'}`}
+        style={[
+          { borderRadius: colors.radius },
+          canSubmit ? { backgroundColor: colors.accent } : null,
+        ]}
       >
-        <Text className={`text-center font-medium ${canSubmit ? 'text-bg' : 'text-ink-mute'}`}>
+        <Text
+          className={`text-center font-medium ${canSubmit ? '' : 'text-ink-mute'}`}
+          style={canSubmit ? { color: colors.accentFg } : undefined}
+        >
           {redirecting
             ? 'Opening payment…'
             : create.isPending
@@ -360,24 +401,46 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
+// Selected chip / date / slot: accent background with readable text.
+function selectedStyle(colors: BrandColors) {
+  return { backgroundColor: colors.accent, borderColor: colors.accent };
+}
+
 function Chip({
   label,
   sub,
   on,
   onPress,
+  colors,
 }: {
   label: string;
   sub?: string;
   on: boolean;
   onPress: () => void;
+  colors: BrandColors;
 }) {
   return (
     <Pressable
       onPress={onPress}
-      className={`px-3 py-2 rounded-md border ${on ? 'border-ink bg-surface' : 'border-border'}`}
+      accessibilityRole="button"
+      accessibilityState={{ selected: on }}
+      className={`px-3 py-2 border ${on ? '' : 'border-border'}`}
+      style={[{ borderRadius: colors.radius }, on ? selectedStyle(colors) : null]}
     >
-      <Text className={`text-[13px] ${on ? 'text-ink' : 'text-ink-mute'}`}>{label}</Text>
-      {sub ? <Text className="text-[11px] text-ink-soft mt-0.5">{sub}</Text> : null}
+      <Text
+        className={`text-[13px] ${on ? 'font-medium' : 'text-ink-mute'}`}
+        style={on ? { color: colors.accentFg } : undefined}
+      >
+        {label}
+      </Text>
+      {sub ? (
+        <Text
+          className={`text-[11px] mt-0.5 ${on ? '' : 'text-ink-soft'}`}
+          style={on ? { color: colors.accentFg, opacity: 0.85 } : undefined}
+        >
+          {sub}
+        </Text>
+      ) : null}
     </Pressable>
   );
 }

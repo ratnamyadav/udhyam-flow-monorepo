@@ -1,8 +1,8 @@
 // Fonts a tenant can choose for their booking page. Settings store the font
-// `id`; `fontStack()` turns it into a CSS font-family. The web app loads each
-// font with next/font, which registers it under a hashed family name exposed
-// only through the CSS variable below — a literal `"Fraunces"` stack would
-// silently fall back to Georgia.
+// `id` and `fontStack()` turns it into a CSS font-family that reads the
+// CSS variable next/font sets for it (apps/web/app/layout.tsx). Storing ids
+// rather than free-form stacks means every choice is a font the app actually
+// loads, and the API can validate it against a fixed list.
 
 export type FontId =
   | 'inter'

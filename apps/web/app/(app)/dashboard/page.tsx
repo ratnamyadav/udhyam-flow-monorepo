@@ -192,7 +192,7 @@ export default function DashboardPage() {
               href={`/book/${orgSlug}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-3.5 py-2 rounded-md text-[13px] font-medium text-white"
+              className="px-3.5 py-2 rounded-md text-[13px] font-medium text-[var(--accent-fg)]"
               style={{ background: 'var(--accent)' }}
             >
               + New booking
@@ -287,7 +287,7 @@ export default function DashboardPage() {
                 {resources.data.map((r) => (
                   <div key={r.id} className="flex items-center gap-2.5">
                     <div
-                      className="w-7 h-7 grid place-items-center text-white text-[10px] font-semibold"
+                      className="w-7 h-7 grid place-items-center text-[var(--accent-fg)] text-[10px] font-semibold"
                       style={{ background: 'var(--accent)', borderRadius: 6 }}
                     >
                       {r.avatar ?? r.name.slice(0, 2).toUpperCase()}

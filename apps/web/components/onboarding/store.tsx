@@ -1,5 +1,6 @@
 'use client';
 
+import { type FontId, fontIdFrom } from '@udyamflow/tokens';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import { browserTimezone } from '@/lib/timezones';
 
@@ -15,7 +16,8 @@ export type OnboardingState = {
   accentSoft: string;
   accentInk: string;
   radius: number;
-  fontDisplay: string;
+  /** Heading font id from FONT_OPTIONS (not a CSS stack). */
+  fontDisplay: FontId;
   locations: Array<{
     id: string;
     name: string;
@@ -36,7 +38,7 @@ const DEFAULTS: OnboardingState = {
   accentSoft: '#ccfbf1',
   accentInk: '#134e4a',
   radius: 8,
-  fontDisplay: '"Inter", system-ui, sans-serif',
+  fontDisplay: 'inter',
   locations: [],
 };
 
@@ -67,7 +69,9 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
           timezone: l.timezone || browserTimezone(),
           currency: l.currency === 'USD' ? ('USD' as const) : ('INR' as const),
         }));
-        setState({ ...DEFAULTS, ...saved, locations });
+        // Drafts from before font ids stored a CSS stack.
+        const fontDisplay = fontIdFrom(saved.fontDisplay);
+        setState({ ...DEFAULTS, ...saved, fontDisplay, locations });
       }
     } catch {
       // ignore — sessionStorage unavailable or malformed

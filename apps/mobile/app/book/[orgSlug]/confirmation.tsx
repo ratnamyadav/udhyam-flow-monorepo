@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import { type ReactNode, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
+import { type BrandColors, BrandHeader, useTenantBranding } from '../../../lib/branding';
 import { formatDateTime, formatMoney, formatTime } from '../../../lib/format';
 import { errorMessage, trpc } from '../../../lib/trpc';
 
@@ -48,6 +49,7 @@ export default function ConfirmationScreen() {
     },
   );
   const createCheckout = trpc.payment.createCheckout.useMutation();
+  const { branding, colors } = useTenantBranding(orgSlug);
 
   const data = status.data;
   const reference = data?.referenceCode ?? ref ?? '——————';
@@ -113,7 +115,12 @@ export default function ConfirmationScreen() {
       tone: 'bad',
     };
     actions = (
-      <PrimaryButton label="Try payment again" onPress={payNow} busy={createCheckout.isPending} />
+      <PrimaryButton
+        colors={colors}
+        label="Try payment again"
+        onPress={payNow}
+        busy={createCheckout.isPending}
+      />
     );
   } else if (data.status === 'pending_payment') {
     view = {
@@ -128,7 +135,12 @@ export default function ConfirmationScreen() {
     };
     actions = (
       <>
-        <PrimaryButton label="Open payment page" onPress={payNow} busy={createCheckout.isPending} />
+        <PrimaryButton
+          colors={colors}
+          label="Open payment page"
+          onPress={payNow}
+          busy={createCheckout.isPending}
+        />
         {pollTimedOut ? <SecondaryButton label="Check again" onPress={checkAgain} /> : null}
       </>
     );
@@ -139,7 +151,7 @@ export default function ConfirmationScreen() {
       body: "Payment wasn't completed in time, so the slot was released. Pick a new time to book again.",
       tone: 'bad',
     };
-    actions = <PrimaryButton label="Pick a new time" onPress={bookAgain} />;
+    actions = <PrimaryButton colors={colors} label="Pick a new time" onPress={bookAgain} />;
   } else if (data.status === 'cancelled') {
     view = {
       badge: '×',
@@ -150,7 +162,7 @@ export default function ConfirmationScreen() {
           : 'This booking was cancelled.',
       tone: 'bad',
     };
-    actions = <PrimaryButton label="Book again" onPress={bookAgain} />;
+    actions = <PrimaryButton colors={colors} label="Book again" onPress={bookAgain} />;
   } else {
     view = { badge: '•', title: 'Booking', body: `Status: ${data.status}`, tone: 'wait' };
   }
@@ -163,22 +175,36 @@ export default function ConfirmationScreen() {
       className="flex-1 bg-bg"
       contentContainerClassName="flex-grow items-center justify-center px-8 py-16"
     >
+      {branding ? (
+        <View className="self-stretch mb-10">
+          <BrandHeader branding={branding} colors={colors} />
+        </View>
+      ) : null}
       <View
-        className={`w-12 h-12 rounded-md items-center justify-center mb-5 ${
-          view.tone === 'ok' ? 'bg-ink' : view.tone === 'bad' ? 'bg-danger' : 'bg-surface-mute'
+        className={`w-12 h-12 items-center justify-center mb-5 ${
+          view.tone === 'bad' ? 'bg-danger' : view.tone === 'wait' ? 'bg-surface-mute' : ''
         }`}
+        style={[
+          { borderRadius: colors.radius },
+          view.tone === 'ok' ? { backgroundColor: colors.accent } : null,
+        ]}
       >
         {polling ? (
           <ActivityIndicator color="#1a1815" />
         ) : (
           <Text
-            className={`text-xl font-semibold ${view.tone === 'wait' ? 'text-ink' : 'text-bg'}`}
+            className={`text-xl font-semibold ${
+              view.tone === 'wait' ? 'text-ink' : view.tone === 'bad' ? 'text-bg' : ''
+            }`}
+            style={view.tone === 'ok' ? { color: colors.accentFg } : undefined}
           >
             {view.badge}
           </Text>
         )}
       </View>
-      <Text className="text-3xl font-semibold text-ink text-center">{view.title}</Text>
+      <Text className="text-3xl font-semibold text-ink text-center" accessibilityRole="header">
+        {view.title}
+      </Text>
       {view.body ? (
         <Text className="text-sm text-ink-mute mt-3 text-center leading-relaxed">{view.body}</Text>
       ) : null}
@@ -229,18 +255,24 @@ function PrimaryButton({
   label,
   onPress,
   busy,
+  colors,
 }: {
   label: string;
   onPress: () => void;
   busy?: boolean;
+  colors: BrandColors;
 }) {
   return (
     <Pressable
       onPress={onPress}
       disabled={busy}
-      className={`bg-ink rounded-md py-3.5 active:opacity-90 ${busy ? 'opacity-60' : ''}`}
+      accessibilityRole="button"
+      className={`py-3.5 active:opacity-90 ${busy ? 'opacity-60' : ''}`}
+      style={{ backgroundColor: colors.accent, borderRadius: colors.radius }}
     >
-      <Text className="text-bg text-center font-medium">{busy ? 'Opening…' : label}</Text>
+      <Text className="text-center font-medium" style={{ color: colors.accentFg }}>
+        {busy ? 'Opening…' : label}
+      </Text>
     </Pressable>
   );
 }

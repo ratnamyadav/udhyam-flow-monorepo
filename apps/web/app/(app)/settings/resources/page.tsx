@@ -114,7 +114,7 @@ export default function ResourcesSettingsPage() {
                   <div className="grid grid-cols-[1fr_180px_160px] px-5 py-3.5 items-center hover:bg-surface-mute">
                     <div className="flex items-center gap-2.5">
                       <div
-                        className="w-7 h-7 grid place-items-center text-white text-[10px] font-semibold"
+                        className="w-7 h-7 grid place-items-center text-[var(--accent-fg)] text-[10px] font-semibold"
                         style={{ background: 'var(--accent)', borderRadius: 6 }}
                       >
                         {r.avatar ?? r.name.slice(0, 2).toUpperCase()}
