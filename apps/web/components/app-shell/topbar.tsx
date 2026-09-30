@@ -2,7 +2,6 @@
 
 import { authClient, signOut } from '@udyamflow/auth/client';
 import type { TenantTheme } from '@udyamflow/tokens';
-import { Button } from '@udyamflow/ui';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
@@ -45,21 +44,33 @@ export function Topbar({
   const pathname = usePathname();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [openLoc, setOpenLoc] = useState(false);
+  // Workspace (organization) switcher — not to be confused with a
+  // business's physical locations, which live under Settings → Locations.
+  const [openOrg, setOpenOrg] = useState(false);
   const [openUser, setOpenUser] = useState(false);
+  const [switchError, setSwitchError] = useState<string | null>(null);
 
-  const locRef = useRef<HTMLDivElement>(null);
+  const orgRef = useRef<HTMLDivElement>(null);
   const userRef = useRef<HTMLDivElement>(null);
-  const closeLoc = useCallback(() => setOpenLoc(false), []);
+  const closeOrg = useCallback(() => setOpenOrg(false), []);
   const closeUser = useCallback(() => setOpenUser(false), []);
-  useOutsideClick(locRef, closeLoc, openLoc);
+  useOutsideClick(orgRef, closeOrg, openOrg);
   useOutsideClick(userRef, closeUser, openUser);
 
   function switchOrg(id: string) {
+    setSwitchError(null);
     startTransition(async () => {
-      await authClient.organization.setActive({ organizationId: id });
-      setOpenLoc(false);
-      router.refresh();
+      try {
+        const res = await authClient.organization.setActive({ organizationId: id });
+        if (res.error) {
+          setSwitchError(res.error.message ?? 'Could not switch workspace');
+          return;
+        }
+        setOpenOrg(false);
+        router.refresh();
+      } catch (e) {
+        setSwitchError(e instanceof Error ? e.message : 'Could not switch workspace');
+      }
     });
   }
 
@@ -74,10 +85,10 @@ export function Topbar({
   return (
     <div className="relative flex items-center justify-between px-7 py-3 border-b border-border bg-surface">
       <div className="flex items-center gap-6">
-        <div ref={locRef} className="relative">
+        <div ref={orgRef} className="relative">
           <button
             type="button"
-            onClick={() => setOpenLoc((v) => !v)}
+            onClick={() => setOpenOrg((v) => !v)}
             disabled={isPending || orgs.length === 0}
             className="flex items-center gap-2.5 px-2.5 py-1.5 rounded-lg hover:bg-surface-mute transition-colors disabled:opacity-50"
           >
@@ -86,8 +97,7 @@ export function Topbar({
               style={{ background: activeTheme.accent, borderRadius: 'calc(var(--radius) - 2px)' }}
             >
               {activeTheme.logoUrl ? (
-                // biome-ignore lint/performance/noImgElement: tenant logos are
-                // external R2 URLs, not local assets — next/image isn't needed.
+                // Tenant logos are external R2 URLs, not local assets.
                 <img
                   src={activeTheme.logoUrl}
                   alt={activeTheme.name}
@@ -107,7 +117,7 @@ export function Topbar({
             </div>
             <span className="text-ink-soft text-xs ml-1">⌄</span>
           </button>
-          {openLoc && orgs.length > 0 && (
+          {openOrg && orgs.length > 0 && (
             <div className="absolute top-14 left-7 z-20 bg-surface border border-border rounded-xl p-1.5 shadow-[0_12px_32px_rgba(0,0,0,.08)] min-w-[280px]">
               {orgs.map((o) => {
                 const active = o.id === activeOrgId;
@@ -125,7 +135,6 @@ export function Topbar({
                       style={{ background: o.accent, borderRadius: 6 }}
                     >
                       {o.logoUrl ? (
-                        // biome-ignore lint/performance/noImgElement: external R2 URL
                         <img
                           src={o.logoUrl}
                           alt={o.name}
@@ -143,6 +152,9 @@ export function Topbar({
                   </button>
                 );
               })}
+              {switchError && (
+                <div className="px-3 py-2 text-[12px] text-danger">{switchError}</div>
+              )}
               <div className="border-t border-border my-1" />
               <Link
                 href="/onboarding/account"
@@ -174,9 +186,12 @@ export function Topbar({
         </nav>
       </div>
       <div ref={userRef} className="flex items-center gap-2 relative">
-        <Button variant="ghost" size="sm">
+        <a
+          href="mailto:support@udyamflow.com"
+          className="text-[13px] px-3 py-1.5 rounded-md text-ink-mute hover:text-ink hover:bg-surface-mute transition-colors"
+        >
           Help
-        </Button>
+        </a>
         <button
           type="button"
           onClick={() => setOpenUser((v) => !v)}

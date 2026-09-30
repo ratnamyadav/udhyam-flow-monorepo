@@ -3,6 +3,7 @@
 import { Input, Label } from '@udyamflow/ui';
 import { useOnboarding } from '@/components/onboarding/store';
 import { StepHeading, WizardFooter } from '@/components/onboarding/wizard-shell';
+import { withAlpha } from '@/lib/color';
 
 const COLOR_PRESETS = [
   { accent: '#0f766e', soft: '#ccfbf1', ink: '#134e4a' },
@@ -114,7 +115,7 @@ export default function StepBrand() {
                     borderRadius: state.radius,
                     borderColor: i === 1 ? state.accent : 'var(--color-border)',
                     color: i === 1 ? state.accent : 'var(--color-ink-mute)',
-                    background: i === 1 ? `${state.accent}10` : 'transparent',
+                    background: i === 1 ? withAlpha(state.accent, '10') : 'transparent',
                   }}
                 >
                   {s}

@@ -1,5 +1,5 @@
 import { db, schema } from '@udyamflow/db';
-import { eq } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { BookingInterface } from '@/components/booking/booking-interface';
@@ -38,7 +38,7 @@ export default async function BookingPage({
   const { orgSlug } = await params;
   const { layout: layoutParam } = await searchParams;
 
-  // Resolve org + tenantSettings + first location + resources in one shot.
+  // Resolve org + tenantSettings + active locations, resources and services.
   const [org] = await db
     .select()
     .from(schema.organization)
@@ -50,21 +50,41 @@ export default async function BookingPage({
     .from(schema.tenantSettings)
     .where(eq(schema.tenantSettings.organizationId, org.id));
 
+  // Archived (soft-deleted) rows never show up on the public page.
   const locations = await db
     .select()
     .from(schema.location)
-    .where(eq(schema.location.organizationId, org.id));
-  const firstLocation = locations[0];
+    .where(and(eq(schema.location.organizationId, org.id), isNull(schema.location.archivedAt)))
+    .orderBy(schema.location.createdAt);
+  const locationIds = new Set(locations.map((l) => l.id));
 
-  const resources = await db
-    .select()
-    .from(schema.resource)
-    .where(eq(schema.resource.organizationId, org.id));
+  const resources = (
+    await db
+      .select()
+      .from(schema.resource)
+      .where(and(eq(schema.resource.organizationId, org.id), isNull(schema.resource.archivedAt)))
+      .orderBy(schema.resource.createdAt)
+  ).filter((r) => locationIds.has(r.locationId));
 
   const services = await db
     .select()
     .from(schema.service)
-    .where(eq(schema.service.organizationId, org.id));
+    .where(and(eq(schema.service.organizationId, org.id), isNull(schema.service.archivedAt)))
+    .orderBy(schema.service.createdAt);
+
+  // Which resources offer each service. Empty = offered by every resource.
+  const links =
+    services.length > 0
+      ? await db
+          .select()
+          .from(schema.serviceResource)
+          .where(
+            inArray(
+              schema.serviceResource.serviceId,
+              services.map((s) => s.id),
+            ),
+          )
+      : [];
 
   const theme = settingsToTheme({
     org: { id: org.id, name: org.name, slug: org.slug, logo: org.logo },
@@ -79,13 +99,18 @@ export default async function BookingPage({
     <BookingInterface
       orgSlug={orgSlug}
       theme={theme}
-      locationId={firstLocation?.id ?? null}
-      timezone={firstLocation?.timezone ?? 'UTC'}
+      locations={locations.map((l) => ({
+        id: l.id,
+        name: l.name,
+        address: l.address,
+        timezone: l.timezone,
+      }))}
       resources={resources.map((r) => ({
         id: r.id,
         name: r.name,
         title: r.title,
         avatar: r.avatar,
+        locationId: r.locationId,
       }))}
       services={services.map((s) => ({
         id: s.id,
@@ -93,6 +118,7 @@ export default async function BookingPage({
         durationMin: s.durationMin,
         priceCents: s.priceCents,
         currency: s.currency,
+        resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
       }))}
       layout={layout}
     />

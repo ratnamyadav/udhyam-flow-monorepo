@@ -1,16 +1,27 @@
-// Per-region payment routing: services in INR → Cashfree, everything else
-// → Stripe. Stripe payouts go to the **tenant's own Connect account** once
-// onboarding is complete (chargesEnabled). Until then we fall back to the
-// platform account so nothing breaks.
+// Per-region payment routing: services in INR → Cashfree, USD → Stripe.
+// Stripe payouts go to the **tenant's own Connect account** once onboarding
+// is complete (chargesEnabled); Cashfree payouts go to the tenant's own
+// Cashfree account when they've saved credentials. Otherwise both fall back
+// to the platform account so nothing breaks.
 
 import { getServerEnv } from '@udyamflow/env/server';
+import { CashfreeCard } from '@/components/payments/cashfree-card';
 import { StripeConnectCard } from '@/components/payments/stripe-connect-card';
+
+const STRIPE_EVENTS = [
+  'checkout.session.completed',
+  'checkout.session.expired',
+  'checkout.session.async_payment_succeeded',
+  'checkout.session.async_payment_failed',
+  'charge.refunded',
+];
 
 export default function PaymentsSettingsPage() {
   // Read at request time so on/off badges reflect deployed env, not build env.
   const env = getServerEnv();
   const stripeReady = !!env.STRIPE_SECRET_KEY && !!env.STRIPE_WEBHOOK_SECRET;
   const cashfreeReady = !!env.CASHFREE_CLIENT_ID && !!env.CASHFREE_CLIENT_SECRET;
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
 
   return (
     <div className="px-12 py-10 max-w-[1280px] mx-auto">
@@ -21,25 +32,22 @@ export default function PaymentsSettingsPage() {
         <h1 className="text-[32px] font-medium tracking-tight text-ink">Payment gateways</h1>
         <p className="text-[14px] text-ink-mute mt-2 max-w-[640px]">
           UdyamFlow routes by service currency: <strong>INR</strong> services check out via
-          Cashfree, everything else (USD / EUR / GBP / …) via Stripe. Free services skip checkout
-          entirely. Once connected, customer payments settle directly to your own Stripe / Cashfree
-          account.
+          Cashfree, <strong>USD</strong> services via Stripe. Free services skip checkout entirely.
+          Once you connect Stripe or save your Cashfree credentials, customer payments settle
+          directly to your own account; until then they settle to the platform account.
         </p>
       </div>
 
       <div className="grid grid-cols-2 gap-4 max-w-[860px]">
         <StripeConnectCard platformReady={stripeReady} />
-        <GatewayCard
-          name="Cashfree"
-          subtitle="India · INR"
-          ready={cashfreeReady}
+        <CashfreeCard
+          platformReady={cashfreeReady}
           missing={
             [
               !env.CASHFREE_CLIENT_ID && 'CASHFREE_CLIENT_ID',
               !env.CASHFREE_CLIENT_SECRET && 'CASHFREE_CLIENT_SECRET',
             ].filter(Boolean) as string[]
           }
-          docsUrl="https://docs.cashfree.com/docs/pg-new"
         />
       </div>
 
@@ -47,71 +55,48 @@ export default function PaymentsSettingsPage() {
         <div className="text-[12px] uppercase tracking-wider font-mono text-ink-soft mb-2">
           Webhook endpoints
         </div>
-        <div className="text-[13px] font-mono text-ink space-y-1">
-          <div>POST {process.env.NEXT_PUBLIC_APP_URL}/api/payments/stripe/webhook</div>
-          <div>POST {process.env.NEXT_PUBLIC_APP_URL}/api/payments/cashfree/webhook</div>
-        </div>
-        <div className="text-[12px] text-ink-mute mt-2">
-          Configure these in your gateway dashboard. The signing secret in your env
-          (STRIPE_WEBHOOK_SECRET / CASHFREE_CLIENT_SECRET) is what verifies the request. For Stripe
-          Connect, also enable the <span className="font-mono">account.updated</span> event.
+        <div className="text-[13px] text-ink space-y-4">
+          <div>
+            <div className="font-medium">Stripe — two endpoints, same URL</div>
+            <div className="font-mono mt-1">POST {appUrl}/api/payments/stripe/webhook</div>
+            <ol className="text-[12px] text-ink-mute mt-2 space-y-1.5 list-decimal pl-5">
+              <li>
+                <strong className="text-ink">Platform endpoint</strong> ("Events on your account"):{' '}
+                <EventList events={STRIPE_EVENTS} />. Put its signing secret in{' '}
+                <span className="font-mono">STRIPE_WEBHOOK_SECRET</span>.
+              </li>
+              <li>
+                <strong className="text-ink">Connect endpoint</strong> ("Events on connected
+                accounts"): the same events plus <span className="font-mono">account.updated</span>.
+                Put its signing secret in{' '}
+                <span className="font-mono">STRIPE_CONNECT_WEBHOOK_SECRET</span>.
+              </li>
+            </ol>
+          </div>
+          <div>
+            <div className="font-medium">Cashfree</div>
+            <div className="font-mono mt-1">POST {appUrl}/api/payments/cashfree/webhook</div>
+            <div className="text-[12px] text-ink-mute mt-1">
+              Set this as the payment webhook in the Cashfree dashboard of every account that takes
+              payments (the platform's and, if you saved your own credentials, yours). Every request
+              is signature-verified before a booking is updated.
+            </div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function GatewayCard({
-  name,
-  subtitle,
-  ready,
-  missing,
-  docsUrl,
-}: {
-  name: string;
-  subtitle: string;
-  ready: boolean;
-  missing: string[];
-  docsUrl: string;
-}) {
+function EventList({ events }: { events: string[] }) {
   return (
-    <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="flex items-center justify-between mb-1">
-        <div className="text-[15px] font-medium text-ink">{name}</div>
-        <span
-          className="text-[10px] uppercase tracking-wider font-mono px-2 py-0.5 rounded"
-          style={{
-            background: ready ? 'var(--accent-soft)' : 'var(--color-surface-mute)',
-            color: ready ? 'var(--accent-ink)' : 'var(--color-ink-mute)',
-          }}
-        >
-          {ready ? 'Connected' : 'Not configured'}
+    <>
+      {events.map((e, i) => (
+        <span key={e}>
+          {i > 0 ? ', ' : ''}
+          <span className="font-mono">{e}</span>
         </span>
-      </div>
-      <div className="text-[12px] text-ink-mute">{subtitle}</div>
-      {!ready && missing.length > 0 && (
-        <div className="mt-3 text-[12px] text-ink-mute">
-          Set in your environment:
-          <div className="mt-1 flex flex-wrap gap-1.5">
-            {missing.map((m) => (
-              <span
-                key={m}
-                className="text-[11px] px-2 py-0.5 rounded font-mono bg-surface-mute text-ink"
-              >
-                {m}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-      <a
-        href={docsUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="mt-4 inline-block text-[12px] text-ink-mute hover:text-ink underline-offset-2 hover:underline"
-      >
-        Setup docs →
-      </a>
-    </div>
+      ))}
+    </>
   );
 }

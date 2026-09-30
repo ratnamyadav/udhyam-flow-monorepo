@@ -3,12 +3,36 @@
 import { signUp } from '@udyamflow/auth/client';
 import { Button, Input, Label } from '@udyamflow/ui';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense, useState } from 'react';
 import { SocialButtons } from '@/components/auth/social-buttons';
+import { safeCallbackUrl } from '@/lib/safe-redirect';
+import { trpc } from '@/lib/trpc/react';
 
+const DEFAULT_CALLBACK = '/onboarding/account';
+
+// useSearchParams forces dynamic rendering — wrap in Suspense.
 export default function SignUpPage() {
+  return (
+    <Suspense
+      fallback={<div className="w-full max-w-[400px] text-[13px] text-ink-mute">Loading…</div>}
+    >
+      <SignUpInner />
+    </Suspense>
+  );
+}
+
+function SignUpInner() {
   const router = useRouter();
+  const params = useSearchParams();
+  // Preserved so invitees land back on /accept-invitation/… after signing up.
+  const callbackUrl = safeCallbackUrl(params.get('callbackUrl'), DEFAULT_CALLBACK);
+  const signInHref =
+    callbackUrl === DEFAULT_CALLBACK
+      ? '/sign-in'
+      : `/sign-in?callbackUrl=${encodeURIComponent(callbackUrl)}`;
+  const providers = trpc.auth.providers.useQuery(undefined, { staleTime: 60_000 });
+
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,17 +43,33 @@ export default function SignUpPage() {
     e.preventDefault();
     setPending(true);
     setError(null);
-    const res = await signUp.email({ name, email, password });
-    setPending(false);
-    if (res.error) {
-      setError(res.error.message ?? 'Could not create account');
-      return;
+    try {
+      const res = await signUp.email({ name, email, password, callbackURL: callbackUrl });
+      if (res.error) {
+        setError(res.error.message ?? 'Could not create account');
+        return;
+      }
+      // When the server requires email verification there's no session yet —
+      // hold on /verify-email (which carries the callback through). Otherwise
+      // go straight on.
+      const verified = !!(res.data && 'user' in res.data && res.data.user?.emailVerified);
+      // If the providers lookup hasn't landed, infer from the response: no
+      // session token means the server is waiting on verification.
+      const hasSession = !!(res.data && 'token' in res.data && res.data.token);
+      const needsVerification = providers.data
+        ? providers.data.emailVerificationRequired && !verified
+        : !hasSession;
+      if (needsVerification) {
+        const qs = new URLSearchParams({ email: email.trim(), callbackUrl });
+        router.push(`/verify-email?${qs.toString()}`);
+      } else {
+        router.push(callbackUrl);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not create account');
+    } finally {
+      setPending(false);
     }
-    // If email verification is required server-side, the sign-up call
-    // doesn't yet have an active session — route through /verify-email
-    // (which polls until verified) instead of straight to onboarding.
-    const verified = res.data && 'user' in res.data && res.data.user?.emailVerified;
-    router.push(verified ? '/onboarding/account' : '/verify-email');
   }
 
   return (
@@ -39,12 +79,12 @@ export default function SignUpPage() {
       </h1>
       <p className="text-[14px] text-ink-mute mb-8">
         Already have an account?{' '}
-        <Link href="/sign-in" className="text-ink underline underline-offset-4">
+        <Link href={signInHref} className="text-ink underline underline-offset-4">
           Sign in
         </Link>
       </p>
 
-      <SocialButtons callbackUrl="/onboarding/account" />
+      <SocialButtons callbackUrl={callbackUrl} />
 
       <div className="space-y-4">
         <div className="space-y-1.5">

@@ -3,7 +3,13 @@
 import { Button, Input, Label } from '@udyamflow/ui';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
+import { MemberNote, useActiveRole } from '@/components/app-shell/use-role';
+import { isHexColor } from '@/lib/color';
 import { trpc } from '@/lib/trpc/react';
+
+// Must agree with the presign route's cap (app/api/upload/logo/presign).
+const MAX_LOGO_BYTES = 2 * 1024 * 1024;
+const LOGO_TYPES = ['image/png', 'image/jpeg', 'image/webp'];
 
 const PRESETS = [
   { id: 'teal', accent: '#0f766e', soft: '#ccfbf1', ink: '#134e4a', label: 'Clinic teal' },
@@ -22,6 +28,7 @@ const FONTS = [
 export default function BrandingSettingsPage() {
   const router = useRouter();
   const utils = trpc.useUtils();
+  const { isAdmin } = useActiveRole();
   const settingsQuery = trpc.tenant.getSettings.useQuery();
   const updateSettings = trpc.tenant.updateSettings.useMutation({
     onSuccess: () => {
@@ -41,6 +48,7 @@ export default function BrandingSettingsPage() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
   // Hydrate from DB once it lands.
   useEffect(() => {
@@ -58,11 +66,16 @@ export default function BrandingSettingsPage() {
 
   async function onUploadLogo(rawFile: File) {
     setUploadError(null);
+    if (!LOGO_TYPES.includes(rawFile.type)) {
+      setUploadError('Use a PNG, JPG or WebP image.');
+      return;
+    }
     setUploading(true);
     try {
       // Client-side resize first — keeps R2 storage + CDN egress tiny.
       const { resizeImageForUpload } = await import('@/lib/resize-image');
       const file = await resizeImageForUpload(rawFile);
+      if (file.size > MAX_LOGO_BYTES) throw new Error('Image is larger than 2 MB after resizing.');
 
       // Step 1: ask the server for a presigned PUT URL.
       const presignRes = await fetch('/api/upload/logo/presign', {
@@ -99,8 +112,15 @@ export default function BrandingSettingsPage() {
   }
 
   async function onRemoveLogo() {
+    setUploadError(null);
+    const previous = logoUrl;
     setLogoUrl(null);
-    await updateSettings.mutateAsync({ logoUrl: null });
+    try {
+      await updateSettings.mutateAsync({ logoUrl: null });
+    } catch (e) {
+      setLogoUrl(previous);
+      setUploadError(e instanceof Error ? e.message : 'Could not remove logo');
+    }
   }
 
   function applyPreset(p: (typeof PRESETS)[number]) {
@@ -110,15 +130,30 @@ export default function BrandingSettingsPage() {
   }
 
   async function onSave() {
-    await updateSettings.mutateAsync({
-      logoText: logo,
-      accent,
-      accentSoft,
-      accentInk,
-      radius,
-      density,
-      fontDisplay,
-    });
+    setFormError(null);
+    const bad = [
+      ['Accent', accent],
+      ['Accent soft', accentSoft],
+      ['Accent ink', accentInk],
+    ].find(([, v]) => !isHexColor(v ?? ''));
+    if (bad) {
+      setFormError(`${bad[0]} color must be a hex value like #0f766e.`);
+      return;
+    }
+    try {
+      await updateSettings.mutateAsync({
+        logoText: logo,
+        accent,
+        accentSoft,
+        accentInk,
+        radius,
+        density,
+        fontDisplay,
+      });
+    } catch {
+      // Shown via updateSettings.error below.
+      return;
+    }
     setSaved(true);
     setTimeout(() => setSaved(false), 1500);
   }
@@ -136,6 +171,8 @@ export default function BrandingSettingsPage() {
         </p>
       </div>
 
+      {!isAdmin && <MemberNote what="change branding" />}
+
       <div className="grid grid-cols-[420px_1fr] gap-8">
         <div className="space-y-6">
           <Section title="Logo">
@@ -145,7 +182,6 @@ export default function BrandingSettingsPage() {
                 style={{ background: accent, borderRadius: radius }}
               >
                 {logoUrl ? (
-                  // biome-ignore lint/performance/noImgElement: external R2 URL
                   <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
                 ) : (
                   logo
@@ -164,7 +200,8 @@ export default function BrandingSettingsPage() {
                 {uploading ? 'Uploading…' : logoUrl ? 'Replace image' : 'Upload image'}
                 <input
                   type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  accept={LOGO_TYPES.join(',')}
+                  disabled={!isAdmin || uploading}
                   className="hidden"
                   onChange={(e) => {
                     const file = e.target.files?.[0];
@@ -173,7 +210,7 @@ export default function BrandingSettingsPage() {
                   }}
                 />
               </label>
-              {logoUrl && (
+              {logoUrl && isAdmin && (
                 <button
                   type="button"
                   className="text-[12px] text-ink-mute hover:text-danger"
@@ -185,7 +222,7 @@ export default function BrandingSettingsPage() {
             </div>
             {uploadError && <div className="mt-2 text-[12px] text-danger">{uploadError}</div>}
             <div className="mt-2 text-[11px] text-ink-soft">
-              PNG, JPG, WebP, or SVG. Max 1 MB. Square images render best.
+              PNG, JPG, or WebP. Max 2 MB. Square images render best.
             </div>
           </Section>
 
@@ -209,16 +246,20 @@ export default function BrandingSettingsPage() {
             <div className="flex items-center gap-3">
               <input
                 type="color"
-                value={accent}
+                value={isHexColor(accent) ? accent : '#000000'}
                 onChange={(e) => setAccent(e.target.value)}
                 className="w-10 h-10 rounded cursor-pointer border border-border"
               />
               <Input
                 value={accent}
-                onChange={(e) => setAccent(e.target.value)}
+                onChange={(e) => setAccent(e.target.value.trim())}
                 className="flex-1 font-mono"
+                aria-invalid={!isHexColor(accent)}
               />
             </div>
+            {!isHexColor(accent) && (
+              <div className="text-[11px] text-danger">Use a 6-digit hex color like #0f766e.</div>
+            )}
           </Section>
 
           <Section title="Corner radius">
@@ -282,9 +323,16 @@ export default function BrandingSettingsPage() {
             <NotificationToggles />
           </Section>
 
-          <Button onClick={onSave} disabled={updateSettings.isPending}>
-            {updateSettings.isPending ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
-          </Button>
+          {isAdmin ? (
+            <Button onClick={onSave} disabled={updateSettings.isPending}>
+              {updateSettings.isPending ? 'Saving…' : saved ? 'Saved ✓' : 'Save changes'}
+            </Button>
+          ) : (
+            <div className="text-[12px] text-ink-soft">
+              Only owners and admins can save branding changes.
+            </div>
+          )}
+          {formError && <div className="text-[12px] text-danger">{formError}</div>}
           {updateSettings.error && (
             <div className="text-[12px] text-danger">{updateSettings.error.message}</div>
           )}
@@ -383,6 +431,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 
 function NotificationToggles() {
   const utils = trpc.useUtils();
+  const { isAdmin } = useActiveRole();
   const status = trpc.notifications.status.useQuery();
   const settings = trpc.tenant.getSettings.useQuery();
   const update = trpc.tenant.updateSettings.useMutation({
@@ -400,7 +449,7 @@ function NotificationToggles() {
         <input
           type="checkbox"
           checked={sms}
-          disabled={!configured || update.isPending}
+          disabled={!configured || !isAdmin || update.isPending}
           onChange={(e) => update.mutate({ enableSms: e.target.checked })}
         />
       </label>
@@ -409,10 +458,11 @@ function NotificationToggles() {
         <input
           type="checkbox"
           checked={wa}
-          disabled={!configured || update.isPending}
+          disabled={!configured || !isAdmin || update.isPending}
           onChange={(e) => update.mutate({ enableWhatsapp: e.target.checked })}
         />
       </label>
+      {update.error && <div className="text-[11px] text-danger">{update.error.message}</div>}
       {!configured && (
         <div className="text-[11px] text-ink-soft">
           MSG91 is not configured on the server — set MSG91_AUTH_KEY to enable these toggles.

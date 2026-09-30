@@ -7,17 +7,27 @@ import {
   tenantThemeStyle,
 } from '@udyamflow/tokens';
 import { Input, Label } from '@udyamflow/ui';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { withAlpha } from '@/lib/color';
+import { addDaysYmd, ymdInZone } from '@/lib/timezones';
 import { trpc } from '@/lib/trpc/react';
 import { BookingSuccess } from './booking-success';
 
 type Layout = 'sidebar' | 'stacked' | 'inline';
+
+export type BookingLocation = {
+  id: string;
+  name: string;
+  address: string | null;
+  timezone: string;
+};
 
 export type BookingResource = {
   id: string;
   name: string;
   title: string | null;
   avatar: string | null;
+  locationId: string;
 };
 
 export type BookingService = {
@@ -26,9 +36,17 @@ export type BookingService = {
   durationMin: number;
   priceCents: number;
   currency: string;
+  /** Empty = offered by every resource. */
+  resourceIds: string[];
 };
 
 type Slot = { start: string; end: string; displayTime: string };
+type SelectedSlot = Slot & { date: string };
+
+// How many days customers can pick from, and how many columns the inline
+// "week" layout renders at once.
+const BOOKING_WINDOW_DAYS = 14;
+const WEEK_COLUMNS = 5;
 
 function priceFor(cents: number, currency: string) {
   if (cents === 0) return 'Free';
@@ -39,45 +57,69 @@ function priceFor(cents: number, currency: string) {
   }
 }
 
+/** Calendar label for a YYYY-MM-DD string (already in the location's tz). */
+function dayLabel(ymd: string, opts: Intl.DateTimeFormatOptions) {
+  return new Date(`${ymd}T12:00:00.000Z`).toLocaleDateString([], { ...opts, timeZone: 'UTC' });
+}
+
 export function BookingInterface({
   orgSlug,
   theme,
+  locations,
   resources,
   services = [],
-  locationId,
-  timezone,
   layout,
 }: {
   orgSlug: string;
   theme: TenantTheme;
+  locations: BookingLocation[];
   resources: BookingResource[];
   services?: BookingService[];
-  locationId: string | null;
-  timezone: string;
   layout: Layout;
 }) {
   const profession = PROFESSIONS[theme.profession as ProfessionId] ?? PROFESSIONS.doctor;
-  const [resourceIdx, setResourceIdx] = useState(0);
-  const resource = resources[resourceIdx] ?? null;
-  const [serviceId, setServiceId] = useState<string | undefined>(undefined);
+  const utils = trpc.useUtils();
 
-  // Fetch real slots from the active resource + location. Disabled until we
-  // have both (no resources / no location → empty state).
-  const slotsQuery = trpc.booking.listSlots.useQuery(
-    {
-      orgSlug,
-      locationId: locationId ?? '',
-      resourceId: resource?.id ?? '',
-      serviceId,
-    },
-    { enabled: !!resource && !!locationId },
+  // --- Location → resource → service selection -------------------------------
+  const [locationId, setLocationId] = useState<string | null>(locations[0]?.id ?? null);
+  const location = locations.find((l) => l.id === locationId) ?? locations[0] ?? null;
+  const timezone = location?.timezone ?? 'UTC';
+
+  const visibleResources = useMemo(
+    () => resources.filter((r) => r.locationId === location?.id),
+    [resources, location?.id],
   );
-  const slots: Slot[] = slotsQuery.data?.slots ?? [];
+  const [resourceId, setResourceId] = useState<string | null>(null);
+  const resource = visibleResources.find((r) => r.id === resourceId) ?? visibleResources[0] ?? null;
 
-  const [selected, setSelected] = useState<Slot | null>(null);
+  // Only services this resource offers (empty resourceIds = offered by all).
+  const eligibleServices = useMemo(
+    () =>
+      resource
+        ? services.filter((s) => s.resourceIds.length === 0 || s.resourceIds.includes(resource.id))
+        : [],
+    [services, resource],
+  );
+  const [serviceId, setServiceId] = useState<string | null>(null);
+  // Default to the first eligible service — the server requires one whenever
+  // the resource offers any.
+  const service = eligibleServices.find((s) => s.id === serviceId) ?? eligibleServices[0] ?? null;
+
+  // --- Date selection (in the location's timezone) ---------------------------
+  const today = ymdInZone(new Date(), timezone);
+  const days = useMemo(
+    () => Array.from({ length: BOOKING_WINDOW_DAYS }, (_, i) => addDaysYmd(today, i)),
+    [today],
+  );
+  const [pickedDate, setPickedDate] = useState<string | null>(null);
+  const date = pickedDate && days.includes(pickedDate) ? pickedDate : today;
+
+  const [selected, setSelected] = useState<SelectedSlot | null>(null);
   const [customerName, setCustomerName] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [formError, setFormError] = useState<string | null>(null);
+  const [redirecting, setRedirecting] = useState(false);
   const [confirmation, setConfirmation] = useState<{
     referenceCode: string;
     displayTime: string;
@@ -85,54 +127,79 @@ export function BookingInterface({
     resourceName: string;
   } | null>(null);
 
+  function clearSelection() {
+    setSelected(null);
+    setFormError(null);
+  }
+
   const createCheckout = trpc.payment.createCheckout.useMutation();
   const create = trpc.booking.create.useMutation({
     onSuccess: async (res, vars) => {
-      const slot = slots.find((s) => s.start === vars.slotStart);
-      // If the picked service has a price + a provider is configured for its
-      // currency, the booking is `unpaid` until the gateway webhook flips it.
-      // Redirect to checkout before showing the confirmation card.
-      if (serviceId) {
+      if (res.requiresPayment) {
+        // Paid service with a gateway configured — the slot is held while the
+        // customer pays. Never show "You're booked" before payment lands.
+        setRedirecting(true);
         try {
-          const checkout = await createCheckout.mutateAsync({
-            bookingId: res.id,
-            returnUrl: `${window.location.origin}/book/${orgSlug}/confirmation`,
-          });
+          const checkout = await createCheckout.mutateAsync({ bookingId: res.id });
           window.location.assign(checkout.redirectUrl);
-          return;
         } catch (err) {
-          // Provider unset / free service → fall through to the success card.
-          if (!(err instanceof Error && err.message.includes('No payment provider'))) {
-            console.warn('payment.createCheckout failed', err);
-          }
+          setRedirecting(false);
+          setFormError(
+            err instanceof Error && err.message
+              ? `Couldn't start payment: ${err.message}`
+              : "Couldn't start payment. Please try again.",
+          );
+          utils.booking.listSlots.invalidate();
         }
+        return;
       }
+      if (res.status !== 'confirmed') {
+        setFormError('Your booking could not be confirmed. Please try again.');
+        return;
+      }
+      const when = selected
+        ? `${dayLabel(selected.date, { weekday: 'short', month: 'short', day: 'numeric' })}, ${selected.displayTime}`
+        : '';
       setConfirmation({
         referenceCode: res.referenceCode,
-        displayTime: slot?.displayTime ?? '',
+        displayTime: when,
         customerName: vars.customerName,
         resourceName: resource?.name ?? '',
       });
-      slotsQuery.refetch();
+      utils.booking.listSlots.invalidate();
       setSelected(null);
       setCustomerName('');
       setCustomerEmail('');
       setCustomerPhone('');
     },
+    onError: (err) => {
+      setFormError(err.message || 'Could not complete the booking.');
+      if (err.data?.code === 'CONFLICT') {
+        // Someone else grabbed it — refresh availability and drop the pick.
+        setSelected(null);
+        utils.booking.listSlots.invalidate();
+      }
+    },
   });
 
-  function selectSlot(s: Slot) {
-    setSelected(s);
+  function selectSlot(s: Slot, slotDate: string) {
+    setSelected({ ...s, date: slotDate });
+    setFormError(null);
     create.reset();
   }
 
   function submit() {
-    if (!selected || !resource || !locationId) return;
+    if (!selected || !resource || !location) return;
+    if (eligibleServices.length > 0 && !service) {
+      setFormError('Please choose a service.');
+      return;
+    }
+    setFormError(null);
     create.mutate({
       orgSlug,
       resourceId: resource.id,
-      locationId,
-      serviceId,
+      locationId: location.id,
+      serviceId: service?.id,
       customerName: customerName.trim(),
       customerEmail: customerEmail.trim() || undefined,
       customerPhone: customerPhone.trim() || undefined,
@@ -141,28 +208,63 @@ export function BookingInterface({
     });
   }
 
-  // Service picker — only renders if the tenant has a non-empty catalog.
+  const LocationPicker =
+    locations.length > 1 ? (
+      <div className="mb-5">
+        <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-2">
+          Location
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {locations.map((l) => {
+            const sel = l.id === location?.id;
+            return (
+              <button
+                key={l.id}
+                type="button"
+                onClick={() => {
+                  setLocationId(l.id);
+                  setResourceId(null);
+                  setServiceId(null);
+                  setPickedDate(null);
+                  clearSelection();
+                }}
+                className="border rounded-md px-3 py-2 text-left transition-colors"
+                style={{
+                  borderColor: sel ? theme.accent : 'var(--color-border)',
+                  background: sel ? withAlpha(theme.accent, '10') : 'var(--color-surface)',
+                }}
+              >
+                <div className="text-[13px] font-medium text-ink">{l.name}</div>
+                {l.address && <div className="text-[11px] text-ink-mute">{l.address}</div>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    ) : null;
+
+  // Service picker — only renders if this resource offers any service.
   const ServicePicker =
-    services.length > 0 ? (
+    eligibleServices.length > 0 ? (
       <div className="mb-5">
         <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-2">
           Service
         </div>
         <div className="grid grid-cols-2 gap-2">
-          {services.map((s) => {
-            const sel = serviceId === s.id;
+          {eligibleServices.map((s) => {
+            const sel = service?.id === s.id;
             return (
               <button
                 key={s.id}
                 type="button"
                 onClick={() => {
                   setServiceId(s.id);
-                  setSelected(null);
+                  clearSelection();
                 }}
                 className="border rounded-md px-3 py-2 text-left transition-colors"
                 style={{
                   borderColor: sel ? theme.accent : 'var(--color-border)',
-                  background: sel ? `${theme.accent}10` : 'var(--color-surface)',
+                  background: sel ? withAlpha(theme.accent, '10') : 'var(--color-surface)',
                 }}
               >
                 <div className="text-[13px] font-medium text-ink">{s.name}</div>
@@ -176,8 +278,46 @@ export function BookingInterface({
       </div>
     ) : null;
 
-  const canSubmit = !!selected && customerName.trim().length >= 2 && !create.isPending;
+  const DatePicker = (
+    <div className="mb-4 flex gap-1.5 overflow-x-auto pb-1">
+      {days.map((d) => {
+        const sel = d === date;
+        return (
+          <button
+            key={d}
+            type="button"
+            onClick={() => {
+              setPickedDate(d);
+              clearSelection();
+            }}
+            className="shrink-0 border px-2.5 py-1.5 text-center transition-colors"
+            style={{
+              borderRadius: theme.radius,
+              borderColor: sel ? theme.accent : 'var(--color-border)',
+              background: sel ? theme.accent : 'var(--color-surface)',
+              color: sel ? '#fff' : 'var(--color-ink)',
+            }}
+          >
+            <div className="text-[10px] uppercase tracking-wider font-mono opacity-80">
+              {d === today ? 'Today' : dayLabel(d, { weekday: 'short' })}
+            </div>
+            <div className="text-[13px] font-medium tabular-nums">
+              {dayLabel(d, { day: 'numeric', month: 'short' })}
+            </div>
+          </button>
+        );
+      })}
+    </div>
+  );
+
+  const canSubmit =
+    !!selected &&
+    customerName.trim().length >= 2 &&
+    (eligibleServices.length === 0 || !!service) &&
+    !create.isPending &&
+    !redirecting;
   const styleVars = tenantThemeStyle(theme);
+  const dateHeading = `${date === today ? 'Today' : dayLabel(date, { weekday: 'long', month: 'short', day: 'numeric' })} · ${timezone}`;
 
   // Early-out success state — replaces the whole interface.
   if (confirmation) {
@@ -210,85 +350,79 @@ export function BookingInterface({
         >
           {theme.name}
         </div>
-        <div className="text-[12px] text-ink-mute">{theme.location || profession.name}</div>
+        <div className="text-[12px] text-ink-mute">
+          {location?.name || theme.location || profession.name}
+        </div>
       </div>
     </div>
   );
 
+  const pickResource = (id: string) => {
+    setResourceId(id);
+    setServiceId(null);
+    clearSelection();
+  };
+
   const ResourcesList =
-    resources.length > 0 ? (
+    visibleResources.length > 0 ? (
       <div className="space-y-2">
-        {resources.map((r, i) => (
-          <button
-            key={r.id}
-            type="button"
-            onClick={() => {
-              setResourceIdx(i);
-              setSelected(null);
-            }}
-            className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-colors text-left"
-            style={{
-              background: i === resourceIdx ? `${theme.accent}10` : 'transparent',
-              border: i === resourceIdx ? `1px solid ${theme.accent}40` : '1px solid transparent',
-            }}
-          >
-            <div
-              className="w-8 h-8 grid place-items-center text-[11px] font-semibold"
+        {visibleResources.map((r) => {
+          const sel = r.id === resource?.id;
+          return (
+            <button
+              key={r.id}
+              type="button"
+              onClick={() => pickResource(r.id)}
+              className="w-full flex items-center gap-2.5 px-2.5 py-2 rounded-md transition-colors text-left"
               style={{
-                background: i === resourceIdx ? theme.accent : 'var(--color-surface-mute)',
-                color: i === resourceIdx ? '#fff' : 'var(--color-ink-mute)',
-                borderRadius: 'calc(var(--radius) - 2px)',
+                background: sel ? withAlpha(theme.accent, '10') : 'transparent',
+                border: sel
+                  ? `1px solid ${withAlpha(theme.accent, '40')}`
+                  : '1px solid transparent',
               }}
             >
-              {r.avatar ?? r.name.slice(0, 2).toUpperCase()}
-            </div>
-            <div>
-              <div className="text-[13px] font-medium text-ink">{r.name}</div>
-              <div className="text-[11px] text-ink-mute">{r.title ?? ''}</div>
-            </div>
-          </button>
-        ))}
+              <div
+                className="w-8 h-8 grid place-items-center text-[11px] font-semibold"
+                style={{
+                  background: sel ? theme.accent : 'var(--color-surface-mute)',
+                  color: sel ? '#fff' : 'var(--color-ink-mute)',
+                  borderRadius: 'calc(var(--radius) - 2px)',
+                }}
+              >
+                {r.avatar ?? r.name.slice(0, 2).toUpperCase()}
+              </div>
+              <div>
+                <div className="text-[13px] font-medium text-ink">{r.name}</div>
+                <div className="text-[11px] text-ink-mute">{r.title ?? ''}</div>
+              </div>
+            </button>
+          );
+        })}
       </div>
     ) : (
       <div className="text-[12px] text-ink-mute">
-        No {profession.resourcePlural.toLowerCase()} yet.
+        No {profession.resourcePlural.toLowerCase()} at this location yet.
       </div>
     );
 
+  const slotArgs = {
+    orgSlug,
+    locationId: location?.id ?? '',
+    resourceId: resource?.id ?? '',
+    serviceId: service?.id,
+  };
+  const slotsEnabled = !!resource && !!location;
+
   const SlotGrid = (
-    <div>
-      {slotsQuery.isLoading ? (
-        <div className="text-[12px] text-ink-mute py-6">Loading availability…</div>
-      ) : slots.length === 0 ? (
-        <div className="text-[12px] text-ink-mute py-6">
-          No availability today. Pick a different{' '}
-          {profession.resourcePlural.toLowerCase().replace(/s$/, '')} or check back tomorrow.
-        </div>
-      ) : (
-        <div className="grid grid-cols-4 gap-2">
-          {slots.map((s) => {
-            const sel = selected?.start === s.start;
-            return (
-              <button
-                key={s.start}
-                type="button"
-                onClick={() => selectSlot(s)}
-                className="py-2 text-[13px] font-medium border transition-colors"
-                style={{
-                  borderRadius: theme.radius,
-                  borderColor: sel ? theme.accent : 'var(--color-border)',
-                  color: sel ? '#fff' : 'var(--color-ink)',
-                  background: sel ? theme.accent : 'var(--color-surface)',
-                  fontVariantNumeric: 'tabular-nums',
-                }}
-              >
-                {s.displayTime}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
+    <DaySlots
+      args={{ ...slotArgs, date }}
+      enabled={slotsEnabled}
+      theme={theme}
+      selected={selected}
+      onSelect={(s) => selectSlot(s, date)}
+      columns={4}
+      emptyText={`No availability on this day. Pick another date or a different ${profession.resourcePlural.toLowerCase().replace(/s$/, '')}.`}
+    />
   );
 
   const CustomerForm = (
@@ -327,7 +461,12 @@ export function BookingInterface({
           />
         </div>
       </div>
-      {create.error && <div className="text-[12px] text-danger">{create.error.message}</div>}
+      {service && service.priceCents > 0 && (
+        <div className="text-[12px] text-ink-mute">
+          {service.name} · {priceFor(service.priceCents, service.currency)}
+        </div>
+      )}
+      {formError && <div className="text-[12px] text-danger">{formError}</div>}
       <button
         type="button"
         onClick={submit}
@@ -335,11 +474,13 @@ export function BookingInterface({
         className="mt-2 px-6 py-3 text-white text-sm font-medium disabled:opacity-50"
         style={{ background: theme.accent, borderRadius: theme.radius }}
       >
-        {create.isPending
-          ? 'Booking…'
-          : selected
-            ? `Confirm ${selected.displayTime}`
-            : 'Pick a slot'}
+        {redirecting
+          ? 'Redirecting to payment…'
+          : create.isPending
+            ? 'Booking…'
+            : selected
+              ? `Confirm ${selected.date === today ? '' : `${dayLabel(selected.date, { month: 'short', day: 'numeric' })} `}${selected.displayTime}`
+              : 'Pick a slot'}
       </button>
     </div>
   );
@@ -359,13 +500,16 @@ export function BookingInterface({
       <div className="grid grid-cols-[360px_1fr] min-h-[860px] bg-bg" style={styleVars}>
         <aside className="p-8 border-r border-border bg-surface">
           {Header}
-          <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mt-7 mb-3">
+          <div className="mt-7" />
+          {LocationPicker}
+          <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
             {profession.resourcePlural}
           </div>
           {ResourcesList}
           <div className="border-t border-border my-7" />
           <div className="text-[12px] text-ink-mute leading-relaxed">
-            {profession.slotLabel}s last <strong>{profession.slotDuration} minutes</strong>. Cancel
+            {profession.slotLabel}s last{' '}
+            <strong>{service?.durationMin ?? profession.slotDuration} minutes</strong>. Cancel
             anytime up to 24h before.
           </div>
         </aside>
@@ -377,8 +521,9 @@ export function BookingInterface({
             </p>
             <div className="mt-9" />
             {ServicePicker}
+            {DatePicker}
             <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
-              Today · {timezone}
+              {dateHeading}
             </div>
             {SlotGrid}
             {CustomerForm}
@@ -400,36 +545,43 @@ export function BookingInterface({
               {Header}
               <div className="mt-5">{HeroTitle}</div>
               <p className="text-[14px] mt-3" style={{ color: theme.accentInk }}>
-                {resource?.title ?? profession.name} · {profession.slotDuration} minutes
+                {resource?.title ?? profession.name} ·{' '}
+                {service?.durationMin ?? profession.slotDuration} minutes
               </p>
             </div>
             <div className="p-8">
+              {LocationPicker}
               <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
                 {profession.resourcePlural}
               </div>
-              <div className="grid grid-cols-3 gap-2 mb-7">
-                {resources.map((r, i) => (
-                  <button
-                    key={r.id}
-                    type="button"
-                    onClick={() => {
-                      setResourceIdx(i);
-                      setSelected(null);
-                    }}
-                    className="border rounded-lg px-3 py-2.5 text-left"
-                    style={{
-                      borderColor: i === resourceIdx ? theme.accent : 'var(--color-border)',
-                      background: i === resourceIdx ? `${theme.accent}08` : 'var(--color-surface)',
-                    }}
-                  >
-                    <div className="text-[13px] font-medium text-ink">{r.name}</div>
-                    <div className="text-[11px] text-ink-mute">{r.title ?? ''}</div>
-                  </button>
-                ))}
-              </div>
+              {visibleResources.length > 0 ? (
+                <div className="grid grid-cols-3 gap-2 mb-7">
+                  {visibleResources.map((r) => {
+                    const sel = r.id === resource?.id;
+                    return (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => pickResource(r.id)}
+                        className="border rounded-lg px-3 py-2.5 text-left"
+                        style={{
+                          borderColor: sel ? theme.accent : 'var(--color-border)',
+                          background: sel ? withAlpha(theme.accent, '08') : 'var(--color-surface)',
+                        }}
+                      >
+                        <div className="text-[13px] font-medium text-ink">{r.name}</div>
+                        <div className="text-[11px] text-ink-mute">{r.title ?? ''}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="mb-7">{ResourcesList}</div>
+              )}
               {ServicePicker}
+              {DatePicker}
               <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
-                Available slots · {timezone}
+                Available slots · {dateHeading}
               </div>
               {SlotGrid}
               {CustomerForm}
@@ -440,7 +592,8 @@ export function BookingInterface({
     );
   }
 
-  // Inline week layout — uses the same per-day slot grid for the active resource.
+  // Inline week layout — one column per day, starting at the picked date.
+  const weekDays = days.slice(days.indexOf(date), days.indexOf(date) + WEEK_COLUMNS);
   return (
     <div className="bg-bg p-10 min-h-[860px]" style={styleVars}>
       <div className="max-w-[1100px] mx-auto">
@@ -449,6 +602,7 @@ export function BookingInterface({
           <div className="text-[11px] text-ink-soft font-mono">{timezone}</div>
         </div>
         <div className="bg-surface border border-border rounded-2xl p-8">
+          {LocationPicker}
           <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
             {profession.resourcePlural}
           </div>
@@ -456,12 +610,100 @@ export function BookingInterface({
           <div className="mt-7" />
           {ServicePicker}
           <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
-            Today
+            Week of {dayLabel(date, { month: 'short', day: 'numeric' })} · {timezone}
           </div>
-          {SlotGrid}
+          {DatePicker}
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${weekDays.length}, minmax(0, 1fr))` }}
+          >
+            {weekDays.map((d) => (
+              <div key={d}>
+                <div className="text-[11px] font-medium text-ink mb-2">
+                  {d === today ? 'Today' : dayLabel(d, { weekday: 'short' })}{' '}
+                  <span className="text-ink-mute font-mono">
+                    {dayLabel(d, { day: 'numeric', month: 'short' })}
+                  </span>
+                </div>
+                <DaySlots
+                  args={{ ...slotArgs, date: d }}
+                  enabled={slotsEnabled}
+                  theme={theme}
+                  selected={selected}
+                  onSelect={(s) => selectSlot(s, d)}
+                  columns={1}
+                  emptyText="No slots"
+                />
+              </div>
+            ))}
+          </div>
           {CustomerForm}
         </div>
       </div>
+    </div>
+  );
+}
+
+function DaySlots({
+  args,
+  enabled,
+  theme,
+  selected,
+  onSelect,
+  columns,
+  emptyText,
+}: {
+  args: {
+    orgSlug: string;
+    locationId: string;
+    resourceId: string;
+    serviceId?: string;
+    date: string;
+  };
+  enabled: boolean;
+  theme: TenantTheme;
+  selected: SelectedSlot | null;
+  onSelect: (s: Slot) => void;
+  columns: number;
+  emptyText: string;
+}) {
+  const query = trpc.booking.listSlots.useQuery(args, { enabled, staleTime: 30_000 });
+  const slots: Slot[] = query.data?.slots ?? [];
+
+  if (enabled && query.isLoading) {
+    return <div className="text-[12px] text-ink-mute py-6">Loading availability…</div>;
+  }
+  if (query.error) {
+    return <div className="text-[12px] text-danger py-6">{query.error.message}</div>;
+  }
+  if (slots.length === 0) {
+    return <div className="text-[12px] text-ink-mute py-6">{emptyText}</div>;
+  }
+  return (
+    <div
+      className="grid gap-2"
+      style={{ gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))` }}
+    >
+      {slots.map((s) => {
+        const sel = selected?.start === s.start;
+        return (
+          <button
+            key={s.start}
+            type="button"
+            onClick={() => onSelect(s)}
+            className="py-2 text-[13px] font-medium border transition-colors"
+            style={{
+              borderRadius: theme.radius,
+              borderColor: sel ? theme.accent : 'var(--color-border)',
+              color: sel ? '#fff' : 'var(--color-ink)',
+              background: sel ? theme.accent : 'var(--color-surface)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            {s.displayTime}
+          </button>
+        );
+      })}
     </div>
   );
 }

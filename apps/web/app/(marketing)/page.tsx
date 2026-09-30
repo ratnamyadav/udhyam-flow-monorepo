@@ -124,7 +124,8 @@ export default function MarketingLandingPage() {
       <TemplatesGrid />
 
       <section
-        className="px-14 py-30 bg-surface border-y border-border"
+        id="features"
+        className="px-14 py-30 bg-surface border-y border-border scroll-mt-20"
         style={{ padding: '120px 56px' }}
       >
         <div className="max-w-[1280px] mx-auto">
@@ -173,7 +174,11 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      <section className="px-14 py-30 max-w-[1280px] mx-auto" style={{ padding: '120px 56px' }}>
+      <section
+        id="locations"
+        className="px-14 py-30 max-w-[1280px] mx-auto scroll-mt-20"
+        style={{ padding: '120px 56px' }}
+      >
         <div className="grid grid-cols-2 gap-20">
           <div>
             <div
