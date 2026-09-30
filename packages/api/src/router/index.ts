@@ -3,6 +3,7 @@ import { authRouter } from './auth';
 import { bookingRouter } from './booking';
 import { customerRouter } from './customer';
 import { locationRouter } from './location';
+import { membershipRouter } from './membership';
 import { notificationsRouter } from './notifications';
 import { onboardingRouter } from './onboarding';
 import { paymentRouter } from './payment';
@@ -25,6 +26,7 @@ export const appRouter = router({
   notifications: notificationsRouter,
   payment: paymentRouter,
   report: reportRouter,
+  membership: membershipRouter,
 });
 
 export type AppRouter = typeof appRouter;

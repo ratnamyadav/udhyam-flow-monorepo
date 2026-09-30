@@ -97,6 +97,20 @@ Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant tabl
 | `/api/auth/[...all]` | BetterAuth handler |
 | `/api/trpc/[trpc]` | tRPC fetch adapter |
 | `/api/health` | Health check (returns `{ ok, orgs }`) |
+| `/settings/memberships` | Recurring membership plans (Cashfree Subscriptions) + subscribers, with cancel |
+| `/book/[orgSlug]/memberships` | Public membership plans + sign-up (UPI Autopay / eNACH / card mandate) |
+| `/book/[orgSlug]/memberships/authorize?sub=…` | Opens Cashfree's mandate-approval checkout for a pending sign-up (shareable / resumable) |
+| `/book/[orgSlug]/memberships/return?sub=…` | Post-mandate landing — syncs status from Cashfree and auto-refreshes until settled |
+| `/api/payments/cashfree/subscriptions/webhook` | Cashfree Subscriptions webhook — verifies HMAC, syncs mandate status, records debits idempotently |
+
+### Memberships (Cashfree Subscriptions)
+
+Tenants sell recurring packages ("₹2,000 / month"); the customer approves a UPI Autopay, eNACH or card mandate once and Cashfree debits them every cycle. It reuses the platform `CASHFREE_CLIENT_ID` / `CASHFREE_CLIENT_SECRET` / `CASHFREE_ENV` — no new env vars. Only INR plans can be sold.
+
+- **Webhook:** in the Cashfree dashboard (Payment Gateway → Developers → Webhooks) add `https://<your-app>/api/payments/cashfree/subscriptions/webhook` for **Subscription** events (status changed, auth status, payment success / failed / cancelled). It's verified with `CASHFREE_CLIENT_SECRET`, same scheme as the PG webhook. Without it, statuses still sync when the customer lands on the return page, but recurring debits won't be recorded.
+- **Plans are immutable at Cashfree.** A plan is created there lazily on its first subscriber, and mandates are approved for its exact amount, so price and interval are fixed once saved — only name / description / active can change. To re-price, create a new plan and deactivate the old one.
+- **Sandbox testing:** leave `CASHFREE_ENV` unset (sandbox) and use sandbox keys. Create a plan in `/settings/memberships`, open `/book/<slug>/memberships`, subscribe with any email and a valid-format Indian mobile (e.g. `9999999999`), and approve the mandate on Cashfree's sandbox page (UPI test VPA `testsuccess@gocash`, or the sandbox net-banking / card simulators). Tunnel your dev server (e.g. `cloudflared` / `ngrok`) so the webhook can reach it.
+- Code: `packages/api/src/memberships/*` (fetch-based client pinned to `x-api-version: 2026-01-01`, DB orchestration, webhook parsing) and `packages/api/src/router/membership.ts`.
 
 ---
 
