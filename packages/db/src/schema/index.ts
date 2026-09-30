@@ -3,6 +3,7 @@ export * from './booking';
 export * from './customer';
 export * from './invoicing';
 export * from './location';
+export * from './membership';
 export * from './org';
 export * from './resource';
 export * from './resource-hours';

@@ -107,6 +107,20 @@ Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant tabl
 | `/pay/[bookingId]` | Pay link from reminders — starts Stripe / Cashfree checkout for an unpaid booking |
 | `/api/cron/reminders` | Hourly Vercel Cron (`apps/web/vercel.json`, `Authorization: Bearer $CRON_SECRET`) — WhatsApp/SMS reminders ~24h before confirmed bookings |
 | `/api/notifications/whatsapp/inbound` | MSG91 inbound WhatsApp webhook (`?secret=$MSG91_WEBHOOK_SECRET`) — Confirm / Cancel / Reschedule button replies |
+| `/settings/memberships` | Recurring membership plans (Cashfree Subscriptions) + subscribers, with cancel |
+| `/book/[orgSlug]/memberships` | Public membership plans + sign-up (UPI Autopay / eNACH / card mandate) |
+| `/book/[orgSlug]/memberships/authorize?sub=…` | Opens Cashfree's mandate-approval checkout for a pending sign-up (shareable / resumable) |
+| `/book/[orgSlug]/memberships/return?sub=…` | Post-mandate landing — syncs status from Cashfree and auto-refreshes until settled |
+| `/api/payments/cashfree/subscriptions/webhook` | Cashfree Subscriptions webhook — verifies HMAC, syncs mandate status, records debits idempotently |
+
+### Memberships (Cashfree Subscriptions)
+
+Tenants sell recurring packages ("₹2,000 / month"); the customer approves a UPI Autopay, eNACH or card mandate once and Cashfree debits them every cycle. It reuses the platform `CASHFREE_CLIENT_ID` / `CASHFREE_CLIENT_SECRET` / `CASHFREE_ENV` — no new env vars. Only INR plans can be sold.
+
+- **Webhook:** in the Cashfree dashboard (Payment Gateway → Developers → Webhooks) add `https://<your-app>/api/payments/cashfree/subscriptions/webhook` for **Subscription** events (status changed, auth status, payment success / failed / cancelled). It's verified with `CASHFREE_CLIENT_SECRET`, same scheme as the PG webhook. Without it, statuses still sync when the customer lands on the return page, but recurring debits won't be recorded.
+- **Plans are immutable at Cashfree.** A plan is created there lazily on its first subscriber, and mandates are approved for its exact amount, so price and interval are fixed once saved — only name / description / active can change. To re-price, create a new plan and deactivate the old one.
+- **Sandbox testing:** leave `CASHFREE_ENV` unset (sandbox) and use sandbox keys. Create a plan in `/settings/memberships`, open `/book/<slug>/memberships`, subscribe with any email and a valid-format Indian mobile (e.g. `9999999999`), and approve the mandate on Cashfree's sandbox page (UPI test VPA `testsuccess@gocash`, or the sandbox net-banking / card simulators). Tunnel your dev server (e.g. `cloudflared` / `ngrok`) so the webhook can reach it.
+- Code: `packages/api/src/memberships/*` (fetch-based client pinned to `x-api-version: 2026-01-01`, DB orchestration, webhook parsing) and `packages/api/src/router/membership.ts`.
 
 ---
 
@@ -155,7 +169,7 @@ Optional — invoicing:
 
 Built-in **UdyamFlow GST invoices** need no env: set the GST profile on `/settings/invoicing` and each service's SAC code + GST slab on `/settings/services` (prices are GST-inclusive; exempt services and unregistered businesses get a Bill of Supply). Numbers run per financial year (`INV/26-27/0001`).
 
-Optional — Indian payouts (Cashfree Easy Split): tenants add their bank account / UPI ID on `/settings/payments`; once Cashfree marks the vendor `ACTIVE`, INR orders carry `order_splits` and settle to the tenant. Easy Split must be enabled on your Cashfree account. `CASHFREE_PLATFORM_FEE_PERCENT` (default `0`) keeps a share for the platform; `CASHFREE_REQUIRE_VENDOR=true` refuses INR checkouts for tenants without an active vendor.
+Optional — Indian payouts (Cashfree Easy Split): tenants add their bank account / UPI ID on `/settings/payments`; once Cashfree marks the vendor `ACTIVE`, INR orders carry `order_splits` (and new memberships `subscription_payment_splits`) and settle to the tenant. Easy Split must be enabled on your Cashfree account. `CASHFREE_PLATFORM_FEE_PERCENT` (default `0`) keeps a share for the platform; `CASHFREE_REQUIRE_VENDOR=true` refuses INR checkouts for tenants without an active vendor.
 
 Built-in Stripe Invoicing needs no extra env — it uses the tenant's Stripe Connect account. For invoice status sync, also subscribe the Stripe webhook (Connect events) to `invoice.paid`, `invoice.voided`, `invoice.marked_uncollectible` and `invoice.finalized`.
 

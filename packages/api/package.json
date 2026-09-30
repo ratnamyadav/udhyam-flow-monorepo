@@ -12,7 +12,8 @@
     "./invoicing": "./src/invoicing/index.ts",
     "./export": "./src/export/accounting.ts",
     "./gst": "./src/gst/index.ts",
-    "./whatsapp": "./src/whatsapp/index.ts"
+    "./whatsapp": "./src/whatsapp/index.ts",
+    "./memberships": "./src/memberships/index.ts"
   },
   "scripts": {
     "lint": "biome check src",
