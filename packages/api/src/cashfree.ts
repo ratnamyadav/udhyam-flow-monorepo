@@ -105,6 +105,10 @@ export async function cashfreeCreateOrder(
     returnUrl: string;
     // Tenant's active Easy Split vendor; omitted → platform settlement.
     vendorId?: string;
+    // Stable per-customer id (defaults to the order id).
+    customerId?: string;
+    // After this the order can't be paid — matches the slot hold.
+    expiresAt?: Date;
   },
   fetchImpl: FetchLike = fetch,
 ): Promise<{ paymentSessionId: string }> {
@@ -116,12 +120,14 @@ export async function cashfreeCreateOrder(
       order_amount: paiseToRupees(args.amountPaise),
       order_currency: args.currency,
       customer_details: {
-        customer_id: args.orderId, // dedupe per-booking is fine
+        customer_id: args.customerId ?? args.orderId,
         customer_name: args.customerName,
         customer_email: args.customerEmail ?? 'noemail@example.com',
-        customer_phone: args.customerPhone ?? '0000000000',
+        // Cashfree wants a 10-digit Indian mobile; strip +91 / formatting.
+        customer_phone: args.customerPhone?.replace(/\D/g, '').slice(-10) || '0000000000',
       },
       order_meta: { return_url: args.returnUrl },
+      ...(args.expiresAt ? { order_expiry_time: args.expiresAt.toISOString() } : {}),
       ...(args.vendorId
         ? { order_splits: [{ vendor_id: args.vendorId, percentage: vendorSplitPercent() }] }
         : {}),

@@ -26,7 +26,7 @@ export default function NotFound() {
         <div className="mt-7 flex justify-center gap-3">
           <Link
             href="/"
-            className="px-5 py-2.5 text-white text-[13px] font-medium rounded-md"
+            className="px-5 py-2.5 text-bg text-[13px] font-medium rounded-md"
             style={{ background: 'var(--color-ink, #1a1815)' }}
           >
             Back to home

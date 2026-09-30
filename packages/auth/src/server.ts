@@ -11,6 +11,24 @@ import { organization } from 'better-auth/plugins/organization';
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000';
 
+// Origins allowed to call the auth endpoints (CSRF / origin check). Built
+// from env so production domains work: the web app, the admin app, any
+// extra comma-separated TRUSTED_ORIGINS, and the mobile deep-link scheme.
+const trustedOrigins = [
+  baseURL,
+  process.env.NEXT_PUBLIC_APP_URL,
+  process.env.ADMIN_APP_URL,
+  ...(process.env.TRUSTED_ORIGINS ?? '').split(','),
+  'udyamflow://',
+  ...(process.env.NODE_ENV === 'production'
+    ? []
+    : ['http://localhost:3000', 'http://localhost:3001']),
+]
+  .map((o) => o?.trim())
+  .filter((o): o is string => !!o);
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+
 // Email verification is enabled when SMTP/Resend is configured. In pure dev
 // (no RESEND_API_KEY) the link still prints to console, but we keep the
 // flag off so contributors don't need to fish links out of the terminal on
@@ -95,21 +113,43 @@ export const auth = betterAuth({
       role: { type: 'string', defaultValue: 'user', input: false },
     },
   },
-  trustedOrigins: ['http://localhost:3000', 'http://localhost:3001', 'udyamflow://'],
+  trustedOrigins,
+  databaseHooks: {
+    session: {
+      create: {
+        // New sessions start in the user's oldest workspace, so tenant
+        // calls work straight after sign-in on any device (the org plugin
+        // otherwise leaves activeOrganizationId empty).
+        before: async (session) => {
+          if (session.activeOrganizationId) return { data: session };
+          const membership = await db.query.member.findFirst({
+            columns: { organizationId: true },
+            where: (m, { eq }) => eq(m.userId, session.userId),
+            orderBy: (m, { asc }) => [asc(m.createdAt)],
+          });
+          return {
+            data: { ...session, activeOrganizationId: membership?.organizationId ?? null },
+          };
+        },
+      },
+    },
+  },
   plugins: [
     organization({
       sendInvitationEmail: async (data) => {
         const url = `${baseURL}/accept-invitation/${data.id}`;
+        const orgName = escapeHtml(data.organization.name);
+        const role = escapeHtml(data.role);
         await sendEmail({
           to: data.email,
           subject: `You've been invited to join ${data.organization.name} on UdyamFlow`,
           html: `
             <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:auto;padding:24px;">
               <h2 style="margin:0 0 12px 0;font-weight:500;color:#1a1815;">
-                Join ${data.organization.name} on UdyamFlow
+                Join ${orgName} on UdyamFlow
               </h2>
               <p style="color:#5e5b54;line-height:1.6;">
-                You've been invited as <strong>${data.role}</strong>. Click below to accept and access the dashboard.
+                You've been invited as <strong>${role}</strong>. Click below to accept and access the dashboard.
               </p>
               <p style="margin:24px 0;">
                 <a href="${url}" style="background:#1a1815;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:500;display:inline-block;">

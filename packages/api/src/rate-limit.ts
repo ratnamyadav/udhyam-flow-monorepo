@@ -1,4 +1,4 @@
-// Token-bucket rate limiter. Uses Upstash REST API when configured (works
+// Fixed-window rate limiter. Uses Upstash REST API when configured (works
 // from any edge runtime); falls back to an in-process Map for local dev.
 // Production deployments should set UPSTASH_REDIS_REST_URL — the in-memory
 // fallback can't share state across processes / regions.
@@ -7,6 +7,7 @@ import { TRPCError } from '@trpc/server';
 
 type Bucket = { count: number; resetAt: number };
 const memoryBuckets = new Map<string, Bucket>();
+const MAX_MEMORY_BUCKETS = 10_000;
 
 let warnedAboutMemory = false;
 
@@ -18,13 +19,19 @@ async function takeUpstash(key: string, limit: number, windowSec: number): Promi
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify([
-      ['INCR', key],
-      ['EXPIRE', key, windowSec, 'NX'],
+      ['INCR', `rl:${key}`],
+      ['EXPIRE', `rl:${key}`, windowSec, 'NX'],
     ]),
   });
-  if (!res.ok) return true; // fail open
+  if (!res.ok) throw new Error(`Upstash responded ${res.status}`);
   const [incrResult] = (await res.json()) as Array<{ result: number }>;
   return (incrResult?.result ?? 0) <= limit;
+}
+
+function sweepMemory(now: number) {
+  for (const [key, bucket] of memoryBuckets) {
+    if (bucket.resetAt < now) memoryBuckets.delete(key);
+  }
 }
 
 function takeMemory(key: string, limit: number, windowSec: number): boolean {
@@ -35,6 +42,7 @@ function takeMemory(key: string, limit: number, windowSec: number): boolean {
     warnedAboutMemory = true;
   }
   const now = Date.now();
+  if (memoryBuckets.size >= MAX_MEMORY_BUCKETS) sweepMemory(now);
   const bucket = memoryBuckets.get(key);
   if (!bucket || bucket.resetAt < now) {
     memoryBuckets.set(key, { count: 1, resetAt: now + windowSec * 1000 });
@@ -50,9 +58,18 @@ export async function enforceRateLimit(args: {
   windowSec: number;
   message?: string;
 }): Promise<void> {
-  const allowed = process.env.UPSTASH_REDIS_REST_URL
-    ? await takeUpstash(args.key, args.limit, args.windowSec)
-    : takeMemory(args.key, args.limit, args.windowSec);
+  let allowed: boolean;
+  if (process.env.UPSTASH_REDIS_REST_URL) {
+    try {
+      allowed = await takeUpstash(args.key, args.limit, args.windowSec);
+    } catch (err) {
+      // Degrade to per-instance limiting rather than no limiting at all.
+      console.error('[rate-limit] Upstash unavailable, using memory store', err);
+      allowed = takeMemory(args.key, args.limit, args.windowSec);
+    }
+  } else {
+    allowed = takeMemory(args.key, args.limit, args.windowSec);
+  }
   if (!allowed) {
     throw new TRPCError({
       code: 'TOO_MANY_REQUESTS',
@@ -61,13 +78,21 @@ export async function enforceRateLimit(args: {
   }
 }
 
-// Best-effort IP extraction — used as the bucket key for unauthenticated
-// public endpoints (booking.create, booking.listSlots).
+// Client IP used as the bucket key for unauthenticated public endpoints.
+//
+// Only trust headers your edge actually sets — a client can send any header
+// it likes. Set TRUSTED_IP_HEADER to the one your host overwrites (e.g.
+// `cf-connecting-ip` behind Cloudflare, `x-real-ip` on Vercel). Without it
+// we use `x-real-ip`, then the LAST `x-forwarded-for` hop (appended by the
+// nearest proxy); the first hop is whatever the client claimed.
 export function ipKeyFromHeaders(headers: Headers): string {
-  return (
-    headers.get('cf-connecting-ip') ??
-    headers.get('x-real-ip') ??
-    headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
-    'unknown'
-  );
+  const trusted = process.env.TRUSTED_IP_HEADER?.toLowerCase();
+  if (trusted) {
+    const value = headers.get(trusted)?.split(',').pop()?.trim();
+    return value || 'unknown';
+  }
+  const realIp = headers.get('x-real-ip')?.trim();
+  if (realIp) return realIp;
+  const forwarded = headers.get('x-forwarded-for')?.split(',').pop()?.trim();
+  return forwarded || 'unknown';
 }

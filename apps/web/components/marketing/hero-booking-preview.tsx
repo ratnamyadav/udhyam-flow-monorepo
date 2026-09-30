@@ -1,4 +1,9 @@
+import { readableTextOn, TENANT_THEMES } from '@udyamflow/tokens';
+
 // A faux booking page — mocked so the marketing hero doesn't need a tenant context.
+const ACCENT = TENANT_THEMES.patel.accent;
+const ACCENT_FG = readableTextOn(ACCENT);
+
 export function HeroBookingPreview() {
   const slots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:00', '14:30'];
 
@@ -6,7 +11,10 @@ export function HeroBookingPreview() {
     <div className="grid grid-cols-[320px_1fr] h-[540px] bg-surface">
       <div className="p-8 border-r border-border bg-bg">
         <div className="flex items-center gap-2.5 mb-6">
-          <div className="w-10 h-10 rounded-lg bg-[#0f766e] text-white grid place-items-center text-sm font-semibold">
+          <div
+            className="w-10 h-10 rounded-lg grid place-items-center text-sm font-semibold"
+            style={{ background: ACCENT, color: ACCENT_FG }}
+          >
             PC
           </div>
           <div>
@@ -58,8 +66,8 @@ export function HeroBookingPreview() {
                 key={i}
                 className="grid place-items-center h-9 text-xs rounded-md transition-colors"
                 style={{
-                  background: isSelected ? '#0f766e' : 'transparent',
-                  color: isSelected ? '#fff' : isUnavailable ? '#c8c4ba' : '#1a1815',
+                  background: isSelected ? ACCENT : 'transparent',
+                  color: isSelected ? ACCENT_FG : isUnavailable ? '#c8c4ba' : '#1a1815',
                   border: !isSelected && !isUnavailable ? '1px solid transparent' : 'none',
                 }}
               >

@@ -60,12 +60,23 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
     .from(schema.location)
     .where(eq(schema.location.id, booking.locationId));
 
-  if (booking.paymentStatus === 'paid') {
+  if (booking.paymentStatus === 'paid' || booking.paymentStatus === 'partially_refunded') {
     return (
       <Message
         styleVars={styleVars}
         title="Already paid"
         body="Thanks — we've already received payment for this booking. Nothing more to do."
+      />
+    );
+  }
+  if (booking.status === 'expired') {
+    return (
+      <Message
+        styleVars={styleVars}
+        title="This slot was released"
+        body="Payment wasn't completed in time, so the slot was released. Please book again."
+        href={bookHref}
+        cta="Book again"
       />
     );
   }
@@ -80,7 +91,10 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
       />
     );
   }
-  if (!svc || svc.priceCents === 0) {
+  // Price snapshot taken at booking time; older bookings use the service's.
+  const amountCents = booking.amountCents ?? svc?.priceCents ?? 0;
+  const currency = booking.currency ?? svc?.currency ?? 'INR';
+  if (amountCents === 0) {
     return (
       <Message
         styleVars={styleVars}
@@ -107,13 +121,13 @@ export default async function PayPage({ params }: { params: Promise<{ bookingId:
           {org?.name ?? 'Payment'}
         </div>
         <h1 className="text-[28px] m-0 font-medium tracking-tight text-ink">
-          Pay {priceFor(svc.priceCents, svc.currency)}
+          Pay {priceFor(amountCents, currency)}
         </h1>
         <p className="text-[14px] text-ink-mute mt-3 leading-relaxed">
-          {svc.name} on <strong className="text-ink">{when}</strong>. Reference{' '}
+          {svc?.name ?? 'Your booking'} on <strong className="text-ink">{when}</strong>. Reference{' '}
           <span className="font-mono">{booking.id.slice(-6).toUpperCase()}</span>.
         </p>
-        <PayRedirect bookingId={booking.id} orgSlug={org?.slug ?? ''} />
+        <PayRedirect bookingId={booking.id} />
       </div>
     </div>
   );
@@ -140,7 +154,7 @@ function Message({
         {href && cta && (
           <a
             href={href}
-            className="mt-6 inline-block px-5 py-2.5 text-white text-[13px] font-medium rounded-md"
+            className="mt-6 inline-block px-5 py-2.5 text-[var(--accent-fg,#fff)] text-[13px] font-medium rounded-md"
             style={{ background: 'var(--accent, #1a1815)' }}
           >
             {cta}

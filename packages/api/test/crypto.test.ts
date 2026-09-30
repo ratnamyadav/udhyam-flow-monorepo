@@ -24,6 +24,17 @@ describe('encrypt/decrypt', () => {
     expect(decrypt('legacy-plaintext')).toBe('legacy-plaintext');
   });
 
+  it('decrypts values written under a previous key after rotation', () => {
+    process.env.ENCRYPTION_KEY = 'old-key-old-key-old-key-old-key-00';
+    const cipher = encrypt('rotate-me');
+    process.env.ENCRYPTION_KEY = 'new-key-new-key-new-key-new-key-11';
+    process.env.ENCRYPTION_KEY_PREVIOUS = 'old-key-old-key-old-key-old-key-00';
+    expect(decrypt(cipher)).toBe('rotate-me');
+    delete process.env.ENCRYPTION_KEY_PREVIOUS;
+    expect(() => decrypt(cipher)).toThrow();
+    delete process.env.ENCRYPTION_KEY;
+  });
+
   it('exports a sentinel the API can use to omit secret round-trips', () => {
     expect(REDACTED_SECRET.length).toBeGreaterThan(0);
   });

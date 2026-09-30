@@ -1,6 +1,6 @@
 import { TRPCError } from '@trpc/server';
-import { schema } from '@udyamflow/db';
-import { and, eq } from 'drizzle-orm';
+import { type PaymentStatus, schema } from '@udyamflow/db';
+import { and, eq, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   CashfreeError,
@@ -9,36 +9,28 @@ import {
   cashfreeCreateOrder,
   cashfreeCreateVendor,
   cashfreeFetchVendor,
-  cashfreeRefund,
   vendorIdForOrg,
 } from '../cashfree';
 import { isValidGstin, isValidIfsc, isValidPan, normalizeIndianMobile } from '../gst/india';
-import { requireOrgAdmin } from '../invoicing/issue';
-import { getStripe } from '../stripe';
-import { publicProcedure, router, tenantProcedure } from '../trpc';
+import { expireStaleHolds, refundBooking } from '../payments/lifecycle';
+import {
+  APP_URL,
+  CHECKOUT_SESSION_MINUTES,
+  cashfreeOrderId,
+  cashfreeVendorFor,
+  getStripe,
+  HOLD_MINUTES,
+  pickProvider,
+  stripeConnectAccountFor,
+} from '../payments/providers';
+import { enforceRateLimit, ipKeyFromHeaders } from '../rate-limit';
+import { publicProcedure, router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 
 // Stripe Connect onboarding details. Express accounts are the right default
 // for SaaS — Stripe owns the dashboard, payouts, and KYC flow; we just
 // handle bookings + checkout.
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000';
-
-// Per-region default routing: services priced in INR go through Cashfree
-// (best UPI / Indian-banking coverage); everything else routes to Stripe.
-// Both settle to the tenant: Stripe via their Connect account, Cashfree via
-// their Easy Split vendor (see ../cashfree.ts). Until a tenant finishes
-// either onboarding, payments fall back to the platform account — set
-// CASHFREE_REQUIRE_VENDOR=true to refuse INR checkouts instead.
-
-const INR_CURRENCIES = new Set(['INR']);
-
-function pickProvider(currency: string): 'stripe' | 'cashfree' | 'none' {
-  const upper = currency.toUpperCase();
-  if (INR_CURRENCIES.has(upper)) {
-    return process.env.CASHFREE_CLIENT_ID ? 'cashfree' : 'none';
-  }
-  return process.env.STRIPE_SECRET_KEY ? 'stripe' : 'none';
-}
+const SETTLED: PaymentStatus[] = ['paid', 'partially_refunded', 'refunded'];
 
 export const paymentRouter = router({
   // Quick check — does this booking need a checkout step?
@@ -47,84 +39,135 @@ export const paymentRouter = router({
     .query(async ({ ctx, input }) => {
       const [booking] = await ctx.db
         .select({
-          id: schema.booking.id,
-          serviceId: schema.booking.serviceId,
-          paymentStatus: schema.booking.paymentStatus,
+          organizationId: schema.booking.organizationId,
+          amountCents: schema.booking.amountCents,
+          currency: schema.booking.currency,
         })
         .from(schema.booking)
         .where(eq(schema.booking.id, input.bookingId));
       if (!booking) throw new TRPCError({ code: 'NOT_FOUND' });
-      if (!booking.serviceId) return { provider: 'none' as const, amount: 0, currency: 'USD' };
-
-      const [svc] = await ctx.db
-        .select({
-          priceCents: schema.service.priceCents,
-          currency: schema.service.currency,
-        })
-        .from(schema.service)
-        .where(eq(schema.service.id, booking.serviceId));
-      if (!svc || svc.priceCents === 0) {
-        return { provider: 'none' as const, amount: 0, currency: 'USD' };
+      if (!booking.amountCents || !booking.currency) {
+        return { provider: 'none' as const, amount: 0, currency: booking.currency ?? 'USD' };
       }
-
       return {
-        provider: pickProvider(svc.currency),
-        amount: svc.priceCents,
-        currency: svc.currency,
+        provider: pickProvider(booking.currency),
+        amount: booking.amountCents,
+        currency: booking.currency,
       };
     }),
 
+  // Opens (or reopens) the gateway checkout for a booking that's holding its
+  // slot. Public — the customer has no account — so it only ever acts on a
+  // `pending_payment` booking and never on anything already paid. The
+  // return URL is built server-side; accepting one from the caller would be
+  // an open redirect.
   createCheckout: publicProcedure
-    .input(z.object({ bookingId: z.string(), returnUrl: z.string().url() }))
+    .input(z.object({ bookingId: z.string() }))
     .mutation(async ({ ctx, input }) => {
-      const [booking] = await ctx.db
-        .select()
+      await enforceRateLimit({
+        key: `checkout:${ipKeyFromHeaders(ctx.headers)}`,
+        limit: 10,
+        windowSec: 60,
+      });
+      await expireStaleHolds(ctx.db);
+
+      const [row] = await ctx.db
+        .select({
+          booking: schema.booking,
+          orgSlug: schema.organization.slug,
+          serviceName: schema.service.name,
+          servicePriceCents: schema.service.priceCents,
+          serviceCurrency: schema.service.currency,
+        })
         .from(schema.booking)
+        .innerJoin(schema.organization, eq(schema.organization.id, schema.booking.organizationId))
+        .leftJoin(schema.service, eq(schema.service.id, schema.booking.serviceId))
         .where(eq(schema.booking.id, input.bookingId));
-      if (!booking) throw new TRPCError({ code: 'NOT_FOUND' });
-      if (!booking.serviceId) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'No service on booking' });
+      if (!row) throw new TRPCError({ code: 'NOT_FOUND', message: 'Booking not found.' });
+      const booking = row.booking;
+
+      if (SETTLED.includes(booking.paymentStatus)) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'This booking is already paid.',
+        });
       }
+      if (booking.status === 'expired') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Your hold on this slot expired — please book again.',
+        });
+      }
+      // Two ways to owe money: a paid booking holding its slot while the
+      // customer checks out (`pending_payment`), or a confirmed booking paid
+      // later — the "Pay now" link in reminders, or pay-at-venue bookings
+      // made before a gateway was configured. Bookings from before price
+      // snapshots fall back to the service's price.
+      const holding = booking.status === 'pending_payment';
+      const amountCents = booking.amountCents ?? row.servicePriceCents;
+      const currency = booking.currency ?? row.serviceCurrency;
+      if ((!holding && booking.status !== 'confirmed') || !amountCents || !currency) {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'This booking is not awaiting payment.',
+        });
+      }
+      const payable = and(
+        eq(schema.booking.id, booking.id),
+        inArray(schema.booking.status, ['pending_payment', 'confirmed']),
+      );
 
-      const [svc] = await ctx.db
-        .select()
-        .from(schema.service)
-        .where(eq(schema.service.id, booking.serviceId));
-      if (!svc) throw new TRPCError({ code: 'NOT_FOUND', message: 'Service vanished' });
-
-      const provider = pickProvider(svc.currency);
+      const provider = pickProvider(currency);
       if (provider === 'none') {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: 'No payment provider configured for this currency',
+          message: 'No payment provider configured for this currency.',
         });
       }
+
+      const returnUrl = `${APP_URL}/book/${row.orgSlug}/confirmation?booking=${booking.id}`;
+      const sessionExpiresAt = new Date(Date.now() + CHECKOUT_SESSION_MINUTES * 60_000);
+      // Keep a held slot held for as long as the gateway session can be paid.
+      const holdExpiresAt = holding
+        ? new Date(
+            Math.max(
+              booking.holdExpiresAt?.getTime() ?? 0,
+              sessionExpiresAt.getTime() + (HOLD_MINUTES - CHECKOUT_SESSION_MINUTES) * 60_000,
+            ),
+          )
+        : null;
 
       if (provider === 'stripe') {
         const stripe = getStripe();
         if (!stripe) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
 
-        // Per-tenant Connect routing. If the tenant has finished Stripe
-        // onboarding (charges_enabled), funds settle directly to their
-        // account via the Stripe-Account header. Otherwise fall back to
-        // the platform account so existing setups keep working.
-        const [tenant] = await ctx.db
+        // Reuse a still-open session instead of stacking up new ones.
+        if (booking.paymentProvider === 'stripe' && booking.paymentId) {
+          const reqOpts = booking.paymentAccountId
+            ? { stripeAccount: booking.paymentAccountId }
+            : undefined;
+          const existing = await stripe.checkout.sessions
+            .retrieve(booking.paymentId, {}, reqOpts)
+            .catch(() => null);
+          if (existing?.status === 'open' && existing.url) return { redirectUrl: existing.url };
+        }
+
+        // Funds settle to the tenant's Connect account once onboarding is
+        // done; otherwise to the platform account.
+        const connectAccount = await stripeConnectAccountFor(ctx.db, booking.organizationId);
+        const metadata = { bookingId: booking.id, organizationId: booking.organizationId };
+        // Tenants on built-in Stripe invoicing with auto-invoice on get a
+        // paid invoice generated by Checkout itself; the webhook mirrors it
+        // into our invoice table.
+        const [invoicing] = await ctx.db
           .select({
-            accountId: schema.tenantSettings.stripeAccountId,
-            chargesEnabled: schema.tenantSettings.stripeChargesEnabled,
             invoiceProvider: schema.tenantSettings.invoiceProvider,
             autoInvoice: schema.tenantSettings.autoInvoice,
           })
           .from(schema.tenantSettings)
           .where(eq(schema.tenantSettings.organizationId, booking.organizationId));
-        const connectAccount =
-          tenant?.accountId && tenant.chargesEnabled ? tenant.accountId : undefined;
-        // Tenants on built-in Stripe invoicing with auto-invoice on get a
-        // paid invoice generated by Checkout itself; the webhook mirrors it
-        // into our invoice table.
         const stripeInvoice =
-          !!connectAccount && tenant?.invoiceProvider === 'stripe' && tenant.autoInvoice;
-
+          !!connectAccount && invoicing?.invoiceProvider === 'stripe' && invoicing.autoInvoice;
         const session = await stripe.checkout.sessions.create(
           {
             mode: 'payment',
@@ -132,33 +175,22 @@ export const paymentRouter = router({
               {
                 quantity: 1,
                 price_data: {
-                  currency: svc.currency.toLowerCase(),
-                  unit_amount: svc.priceCents,
-                  product_data: { name: svc.name },
+                  currency: currency.toLowerCase(),
+                  unit_amount: amountCents,
+                  product_data: { name: row.serviceName ?? 'Booking' },
                 },
               },
             ],
-            metadata: {
-              bookingId: booking.id,
-              organizationId: booking.organizationId,
-            },
+            customer_email: booking.customerEmail ?? undefined,
+            metadata,
+            payment_intent_data: { metadata },
             ...(stripeInvoice
-              ? {
-                  customer_email: booking.customerEmail ?? undefined,
-                  invoice_creation: {
-                    enabled: true,
-                    invoice_data: {
-                      metadata: { bookingId: booking.id, organizationId: booking.organizationId },
-                    },
-                  },
-                }
+              ? { invoice_creation: { enabled: true, invoice_data: { metadata } } }
               : {}),
-            success_url: `${input.returnUrl}?status=paid&booking=${booking.id}`,
-            cancel_url: `${input.returnUrl}?status=cancelled&booking=${booking.id}`,
+            expires_at: Math.floor(sessionExpiresAt.getTime() / 1000),
+            success_url: `${returnUrl}&status=paid`,
+            cancel_url: `${returnUrl}&status=cancelled`,
           },
-          // `stripeAccount` makes Stripe route the API call against the
-          // connected account — checkout session, payment intent, and
-          // payout all live on the tenant's side of the ledger.
           connectAccount ? { stripeAccount: connectAccount } : undefined,
         );
         await ctx.db
@@ -167,55 +199,62 @@ export const paymentRouter = router({
             paymentStatus: 'pending',
             paymentProvider: 'stripe',
             paymentId: session.id,
+            paymentAccountId: connectAccount ?? null,
+            ...(holdExpiresAt ? { holdExpiresAt } : {}),
           })
-          .where(eq(schema.booking.id, booking.id));
-        return { redirectUrl: session.url! };
+          .where(payable);
+        if (!session.url) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
+        return { redirectUrl: session.url };
       }
 
       // Cashfree. Split to the tenant's Easy Split vendor once it's ACTIVE
       // so the money settles to their bank, not the platform account.
-      const [tenant] = await ctx.db
-        .select({
-          vendorId: schema.tenantSettings.cashfreeVendorId,
-          vendorStatus: schema.tenantSettings.cashfreeVendorStatus,
-        })
-        .from(schema.tenantSettings)
-        .where(eq(schema.tenantSettings.organizationId, booking.organizationId));
-      const vendorId =
-        tenant?.vendorId && tenant.vendorStatus === 'ACTIVE' ? tenant.vendorId : undefined;
+      const vendorId = await cashfreeVendorFor(ctx.db, booking.organizationId);
       if (!vendorId && process.env.CASHFREE_REQUIRE_VENDOR === 'true') {
         throw new TRPCError({
           code: 'PRECONDITION_FAILED',
-          message: 'This business has not finished setting up online payments yet',
+          message: 'This business has not finished setting up online payments yet.',
         });
       }
-      const { paymentSessionId } = await cashfreeCreateOrder({
-        orderId: booking.id,
-        amountPaise: svc.priceCents,
-        currency: svc.currency,
-        vendorId,
-        customerName: booking.customerName,
-        customerEmail: booking.customerEmail ?? undefined,
-        customerPhone: booking.customerPhone ?? undefined,
-        returnUrl: `${input.returnUrl}?status=paid&booking=${booking.id}`,
-      });
+      const orderId = cashfreeOrderId(booking.id);
+      let paymentSessionId: string;
+      try {
+        ({ paymentSessionId } = await cashfreeCreateOrder({
+          orderId,
+          amountPaise: amountCents,
+          currency,
+          vendorId,
+          customerId: booking.customerId ?? booking.id,
+          customerName: booking.customerName,
+          customerEmail: booking.customerEmail ?? undefined,
+          customerPhone: booking.customerPhone ?? undefined,
+          returnUrl: `${returnUrl}&status=paid`,
+          expiresAt: sessionExpiresAt,
+        }));
+      } catch (err) {
+        console.error(err);
+        throw new TRPCError({
+          code: 'BAD_GATEWAY',
+          message: 'Could not start the payment — please try again.',
+        });
+      }
       await ctx.db
         .update(schema.booking)
         .set({
           paymentStatus: 'pending',
           paymentProvider: 'cashfree',
-          paymentId: paymentSessionId,
+          paymentId: orderId,
           paymentVendorId: vendorId ?? null,
+          ...(holdExpiresAt ? { holdExpiresAt } : {}),
         })
-        .where(eq(schema.booking.id, booking.id));
-
+        .where(payable);
       return { redirectUrl: cashfreeCheckoutUrl(paymentSessionId) };
     }),
 
   // Stripe Connect — Express onboarding. Reuses an existing account if one
   // was already created for this tenant; otherwise spins up a fresh one.
   // Returns a one-time onboarding URL the user should be redirected to.
-  connectStripe: tenantProcedure.mutation(async ({ ctx }) => {
+  connectStripe: tenantAdminProcedure.mutation(async ({ ctx }) => {
     const stripe = getStripe();
     if (!stripe) {
       throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripe is not configured' });
@@ -273,8 +312,10 @@ export const paymentRouter = router({
     };
   }),
 
-  refund: tenantProcedure
-    .input(z.object({ bookingId: z.string(), amount: z.number().int().min(1).optional() }))
+  // Refunds through the gateway + merchant account that took the payment.
+  // `amountCents` omitted = full remaining amount.
+  refund: tenantAdminProcedure
+    .input(z.object({ bookingId: z.string(), amountCents: z.number().int().min(1).optional() }))
     .mutation(async ({ ctx, input }) => {
       const [booking] = await ctx.db
         .select()
@@ -286,77 +327,13 @@ export const paymentRouter = router({
           ),
         );
       if (!booking) throw new TRPCError({ code: 'NOT_FOUND' });
-      if (booking.paymentStatus !== 'paid') {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Booking is not paid' });
-      }
-      if (!booking.paymentProvider || !booking.paymentId) {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No payment record' });
-      }
-
-      if (booking.paymentProvider === 'stripe') {
-        const stripe = getStripe();
-        if (!stripe) throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR' });
-
-        // Connect-routed bookings live on the tenant's account. Look up
-        // their Stripe account id so retrieve + refund hit the right side.
-        const [tenant] = await ctx.db
-          .select({ accountId: schema.tenantSettings.stripeAccountId })
-          .from(schema.tenantSettings)
-          .where(eq(schema.tenantSettings.organizationId, ctx.organizationId));
-        const reqOpts = tenant?.accountId ? { stripeAccount: tenant.accountId } : undefined;
-
-        // We stored the Checkout Session id; resolve to the underlying
-        // payment_intent before refunding.
-        // Stripe SDK: 3rd arg is RequestOptions (where stripeAccount goes);
-        // 2nd is per-call query params. Pass an empty params object so the
-        // RequestOptions arg lands in the right slot.
-        const session = await stripe.checkout.sessions.retrieve(booking.paymentId, {}, reqOpts);
-        const pi =
-          typeof session.payment_intent === 'string'
-            ? session.payment_intent
-            : session.payment_intent?.id;
-        if (!pi)
-          throw new TRPCError({ code: 'NOT_FOUND', message: 'Stripe payment intent missing' });
-        await stripe.refunds.create({ payment_intent: pi, amount: input.amount }, reqOpts);
-      } else if (booking.paymentProvider === 'cashfree') {
-        // Cashfree needs an explicit amount (rupees); default to the full
-        // service price. Split orders recover the refund from the vendor.
-        const [svc] = booking.serviceId
-          ? await ctx.db
-              .select({ priceCents: schema.service.priceCents })
-              .from(schema.service)
-              .where(eq(schema.service.id, booking.serviceId))
-          : [];
-        const amountPaise = input.amount ?? svc?.priceCents;
-        if (!amountPaise) {
-          throw new TRPCError({ code: 'BAD_REQUEST', message: 'Refund amount is required' });
-        }
-        try {
-          await cashfreeRefund({
-            orderId: booking.id,
-            amountPaise,
-            vendorId: booking.paymentVendorId,
-          });
-        } catch (err) {
-          throw new TRPCError({
-            code: 'BAD_GATEWAY',
-            message: (err as Error).message.slice(0, 240),
-            cause: err,
-          });
-        }
-      }
-
-      await ctx.db
-        .update(schema.booking)
-        .set({ paymentStatus: 'refunded' })
-        .where(eq(schema.booking.id, booking.id));
-      return { ok: true };
+      const { paymentStatus } = await refundBooking(ctx.db, booking, input.amountCents);
+      return { ok: true as const, paymentStatus };
     }),
-
   // Cashfree Easy Split onboarding: registers the tenant as a vendor with
   // their payout account + KYC. Bank details go straight to Cashfree; we
   // only keep the vendor id, its status and a masked label.
-  connectCashfree: tenantProcedure
+  connectCashfree: tenantAdminProcedure
     .input(
       z.object({
         name: z.string().min(2).max(100),
@@ -382,7 +359,6 @@ export const paymentRouter = router({
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      await requireOrgAdmin(ctx.db, ctx.organizationId, ctx.user.id);
       if (!cashfreeConfigured()) {
         throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Cashfree is not configured' });
       }

@@ -2,7 +2,11 @@
 
 import { Button, Input, Label } from '@udyamflow/ui';
 import { useEffect, useState } from 'react';
+import { MemberNote, useActiveRole } from '@/components/app-shell/use-role';
 import { trpc } from '@/lib/trpc/react';
+
+const SELECT_CLASS =
+  'w-full text-[13px] bg-surface border border-border rounded-md px-2.5 py-1.5 text-ink';
 
 const DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
@@ -21,6 +25,7 @@ function fromHHMM(s: string): number | null {
 
 export default function ResourcesSettingsPage() {
   const utils = trpc.useUtils();
+  const { isAdmin } = useActiveRole();
   const resources = trpc.resource.list.useQuery();
   const locations = trpc.location.list.useQuery();
 
@@ -44,7 +49,7 @@ export default function ResourcesSettingsPage() {
   }, [locations.data, locationId]);
 
   const [editingHours, setEditingHours] = useState<string | null>(null);
-  const [editingLink, setEditingLink] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   async function onCreate() {
     setError(null);
@@ -90,73 +95,86 @@ export default function ResourcesSettingsPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_360px] gap-6">
-        <div className="bg-surface border border-border rounded-xl">
-          <div className="grid grid-cols-[1fr_180px_120px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
+      {!isAdmin && <MemberNote what="add, edit or remove resources and their hours" />}
+
+      <div className={isAdmin ? 'grid grid-cols-[1fr_360px] gap-6' : 'grid gap-6'}>
+        <div className="bg-surface border border-border rounded-xl h-fit">
+          <div className="grid grid-cols-[1fr_180px_160px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
             <div>Resource</div>
             <div>Location</div>
             <div>Actions</div>
           </div>
           {resources.isLoading ? (
             <div className="p-8 text-center text-[13px] text-ink-mute">Loading…</div>
+          ) : resources.error ? (
+            <div className="p-8 text-center text-[13px] text-danger">{resources.error.message}</div>
           ) : resources.data && resources.data.length > 0 ? (
             resources.data.map((r) => (
               <div key={r.id} className="border-t border-border first:border-t-0">
-                <div className="grid grid-cols-[1fr_180px_120px] px-5 py-3.5 items-center hover:bg-surface-mute">
-                  <div className="flex items-center gap-2.5">
-                    <div
-                      className="w-7 h-7 grid place-items-center text-white text-[10px] font-semibold"
-                      style={{ background: 'var(--accent)', borderRadius: 6 }}
-                    >
-                      {r.avatar ?? r.name.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div>
-                      <div className="text-[14px] font-medium text-ink">{r.name}</div>
-                      <div className="text-[12px] text-ink-mute">
-                        {r.title ?? ''}
-                        {r.meetingUrl && (
-                          <span className="font-mono text-ink-soft">
-                            {r.title ? ' · ' : ''}video room set
-                          </span>
-                        )}
+                {editingId === r.id ? (
+                  <EditResourceRow
+                    resource={r}
+                    locations={locations.data ?? []}
+                    onDone={() => setEditingId(null)}
+                  />
+                ) : (
+                  <div className="grid grid-cols-[1fr_180px_160px] px-5 py-3.5 items-center hover:bg-surface-mute">
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-7 h-7 grid place-items-center text-[var(--accent-fg)] text-[10px] font-semibold"
+                        style={{ background: 'var(--accent)', borderRadius: 6 }}
+                      >
+                        {r.avatar ?? r.name.slice(0, 2).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="text-[14px] font-medium text-ink">{r.name}</div>
+                        <div className="text-[12px] text-ink-mute">
+                          {r.title ?? ''}
+                          {r.meetingUrl && (
+                            <span className="font-mono text-ink-soft">
+                              {r.title ? ' · ' : ''}video room set
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
+                    <div className="text-[13px] text-ink-mute">
+                      {locById.get(r.locationId)?.name ?? '—'}
+                    </div>
+                    <div className="flex gap-2">
+                      {isAdmin && (
+                        <>
+                          <button
+                            type="button"
+                            className="text-[12px] text-ink-mute hover:text-ink"
+                            onClick={() => setEditingHours((curr) => (curr === r.id ? null : r.id))}
+                          >
+                            Hours
+                          </button>
+                          <button
+                            type="button"
+                            className="text-[12px] text-ink-mute hover:text-ink"
+                            onClick={() => setEditingId(r.id)}
+                          >
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className="text-[12px] text-ink-mute hover:text-danger"
+                            onClick={() => {
+                              if (confirm(`Remove ${r.name}?`)) {
+                                remove.mutate({ id: r.id });
+                              }
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-[13px] text-ink-mute">
-                    {locById.get(r.locationId)?.name ?? '—'}
-                  </div>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      className="text-[12px] text-ink-mute hover:text-ink"
-                      onClick={() => setEditingHours((curr) => (curr === r.id ? null : r.id))}
-                    >
-                      Hours
-                    </button>
-                    <button
-                      type="button"
-                      className="text-[12px] text-ink-mute hover:text-ink"
-                      onClick={() => setEditingLink((curr) => (curr === r.id ? null : r.id))}
-                    >
-                      Link
-                    </button>
-                    <button
-                      type="button"
-                      className="text-[12px] text-ink-mute hover:text-danger"
-                      onClick={() => {
-                        if (confirm(`Remove ${r.name}?`)) {
-                          remove.mutate({ id: r.id });
-                        }
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                </div>
-                {editingHours === r.id && <HoursEditor resourceId={r.id} />}
-                {editingLink === r.id && (
-                  <MeetingLinkEditor resourceId={r.id} initial={r.meetingUrl ?? ''} />
                 )}
+                {isAdmin && editingHours === r.id && <HoursEditor resourceId={r.id} />}
               </div>
             ))
           ) : (
@@ -171,118 +189,188 @@ export default function ResourcesSettingsPage() {
           )}
         </div>
 
-        <div className="bg-surface border border-border rounded-xl p-5 space-y-3 h-fit">
-          <div className="text-[11px] uppercase tracking-wider text-ink-soft font-mono">
-            Add resource
+        {isAdmin && (
+          <div className="bg-surface border border-border rounded-xl p-5 space-y-3 h-fit">
+            <div className="text-[11px] uppercase tracking-wider text-ink-soft font-mono">
+              Add resource
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rname">Name</Label>
+              <Input
+                id="rname"
+                placeholder="e.g. Dr. Anika Patel"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rtitle">Title</Label>
+              <Input
+                id="rtitle"
+                placeholder="optional"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="ravatar">Avatar (2–4 letters)</Label>
+              <Input
+                id="ravatar"
+                maxLength={4}
+                placeholder="e.g. AP"
+                value={avatar}
+                onChange={(e) => setAvatar(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rmeet">Meeting link</Label>
+              <Input
+                id="rmeet"
+                type="url"
+                placeholder="optional · https://meet.google.com/…"
+                value={meetingUrl}
+                onChange={(e) => setMeetingUrl(e.target.value)}
+              />
+              <div className="text-[11px] text-ink-soft">
+                Used for online services. Leave empty to give each online booking its own Jitsi
+                room.
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="rloc">Location</Label>
+              <select
+                id="rloc"
+                className={SELECT_CLASS}
+                value={locationId}
+                onChange={(e) => setLocationId(e.target.value)}
+              >
+                {(locations.data ?? []).map((l) => (
+                  <option key={l.id} value={l.id}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {error && <div className="text-[12px] text-danger">{error}</div>}
+            <Button onClick={onCreate} disabled={create.isPending} className="w-full">
+              {create.isPending ? 'Adding…' : '+ Add resource'}
+            </Button>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rname">Name</Label>
-            <Input
-              id="rname"
-              placeholder="e.g. Dr. Anika Patel"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rtitle">Title</Label>
-            <Input
-              id="rtitle"
-              placeholder="optional"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="ravatar">Avatar (2–4 letters)</Label>
-            <Input
-              id="ravatar"
-              maxLength={4}
-              placeholder="e.g. AP"
-              value={avatar}
-              onChange={(e) => setAvatar(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rmeet">Meeting link</Label>
-            <Input
-              id="rmeet"
-              type="url"
-              placeholder="optional · https://meet.google.com/…"
-              value={meetingUrl}
-              onChange={(e) => setMeetingUrl(e.target.value)}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="rloc">Location</Label>
-            <select
-              id="rloc"
-              className="w-full text-[13px] bg-surface border border-border rounded-md px-2.5 py-1.5 text-ink"
-              value={locationId}
-              onChange={(e) => setLocationId(e.target.value)}
-            >
-              {(locations.data ?? []).map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {error && <div className="text-[12px] text-danger">{error}</div>}
-          <Button onClick={onCreate} disabled={create.isPending} className="w-full">
-            {create.isPending ? 'Adding…' : '+ Add resource'}
-          </Button>
-        </div>
+        )}
       </div>
     </div>
   );
 }
 
-// Personal Meet / Zoom room used for this resource's online services.
-// Empty = online bookings get a generated Jitsi room instead.
-function MeetingLinkEditor({ resourceId, initial }: { resourceId: string; initial: string }) {
+function EditResourceRow({
+  resource,
+  locations,
+  onDone,
+}: {
+  resource: {
+    id: string;
+    name: string;
+    title: string | null;
+    locationId: string;
+    meetingUrl: string | null;
+  };
+  locations: Array<{ id: string; name: string }>;
+  onDone: () => void;
+}) {
   const utils = trpc.useUtils();
-  const [value, setValue] = useState(initial);
-  const [error, setError] = useState<string | null>(null);
-  const save = trpc.resource.update.useMutation({
-    onSuccess: () => utils.resource.list.invalidate(),
+  const update = trpc.resource.update.useMutation({
+    onSuccess: async () => {
+      await utils.resource.list.invalidate();
+      onDone();
+    },
   });
+  const [name, setName] = useState(resource.name);
+  const [title, setTitle] = useState(resource.title ?? '');
+  const [locationId, setLocationId] = useState(resource.locationId);
+  const [meetingUrl, setMeetingUrl] = useState(resource.meetingUrl ?? '');
+  const [error, setError] = useState<string | null>(null);
 
-  function onSave() {
-    const v = value.trim();
-    if (v && !v.startsWith('https://')) {
+  function save() {
+    setError(null);
+    if (name.trim().length < 2) {
+      setError('Name must be at least 2 characters');
+      return;
+    }
+    const link = meetingUrl.trim();
+    if (link && !link.startsWith('https://')) {
       setError('Meeting link must start with https://');
       return;
     }
-    setError(null);
-    save.mutate({ id: resourceId, meetingUrl: v });
+    // '' clears the link (online bookings then get a generated Jitsi room).
+    update.mutate({
+      id: resource.id,
+      name: name.trim(),
+      title: title.trim(),
+      locationId,
+      meetingUrl: link,
+    });
   }
 
   return (
-    <div className="px-5 py-4 bg-surface-mute border-t border-border">
-      <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
-        Meeting link (online services)
+    <div className="px-5 py-4 bg-surface-mute space-y-3">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-1.5">
+          <Label htmlFor={`rname-${resource.id}`}>Name</Label>
+          <Input
+            id={`rname-${resource.id}`}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`rtitle-${resource.id}`}>Title</Label>
+          <Input
+            id={`rtitle-${resource.id}`}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <Label htmlFor={`rloc-${resource.id}`}>Location</Label>
+          <select
+            id={`rloc-${resource.id}`}
+            className={SELECT_CLASS}
+            value={locationId}
+            onChange={(e) => setLocationId(e.target.value)}
+          >
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>
+                {l.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
-      <div className="flex gap-3 items-center max-w-[620px]">
+      <div className="space-y-1.5 max-w-[620px]">
+        <Label htmlFor={`rmeet-${resource.id}`}>Meeting link (online services)</Label>
         <Input
+          id={`rmeet-${resource.id}`}
           type="url"
           placeholder="https://meet.google.com/abc-defg-hij or https://zoom.us/j/…"
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          className="text-[12px] font-mono"
+          value={meetingUrl}
+          onChange={(e) => setMeetingUrl(e.target.value)}
+          className="font-mono text-[12px]"
         />
-        <Button size="sm" disabled={save.isPending} onClick={onSave}>
-          {save.isPending ? 'Saving…' : 'Save'}
+        <div className="text-[11px] text-ink-soft">
+          Leave empty to give each online booking its own Jitsi room (no account needed).
+        </div>
+      </div>
+      {(error || update.error) && (
+        <div className="text-[12px] text-danger">{error ?? update.error?.message}</div>
+      )}
+      <div className="flex gap-2">
+        <Button size="sm" onClick={save} disabled={update.isPending}>
+          {update.isPending ? 'Saving…' : 'Save'}
+        </Button>
+        <Button size="sm" variant="outline" onClick={onDone} disabled={update.isPending}>
+          Cancel
         </Button>
       </div>
-      <div className="text-[12px] text-ink-mute mt-2">
-        Leave empty to give each online booking its own Jitsi room (no account needed).
-      </div>
-      {(error ?? save.error) && (
-        <div className="text-[12px] text-danger mt-2">
-          {error ?? 'Could not save — check the link is a full https:// URL.'}
-        </div>
-      )}
     </div>
   );
 }

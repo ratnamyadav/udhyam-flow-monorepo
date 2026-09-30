@@ -1,0 +1,39 @@
+name: Booking reminders
+
+# Hourly trigger for /api/cron/reminders (WhatsApp/SMS reminders ~24h before
+# each confirmed booking). Lives here rather than in a Vercel cron because
+# Vercel's Hobby plan only allows daily crons — and the reminder window is
+# ±1h around the 24h mark, so it needs an hourly run.
+#
+# Setup (repo → Settings → Secrets and variables → Actions):
+#   REMINDERS_APP_URL  the deployed web app, e.g. https://udyamflow.com
+#   CRON_SECRET        same value as the app's CRON_SECRET env var
+# Until both are set, runs are skipped. Scheduled workflows only run on the
+# default branch; use "Run workflow" to trigger one by hand.
+
+on:
+  schedule:
+    - cron: '0 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  trigger:
+    name: Send due reminders
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the reminder endpoint
+        env:
+          APP_URL: ${{ secrets.REMINDERS_APP_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::notice::REMINDERS_APP_URL / CRON_SECRET secrets not set — skipping."
+            exit 0
+          fi
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --retry 2 --retry-all-errors \
+            -H "Authorization: Bearer $CRON_SECRET" \
+            "${APP_URL%/}/api/cron/reminders"

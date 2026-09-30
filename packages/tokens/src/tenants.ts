@@ -19,6 +19,7 @@ export type TenantTheme = {
   accent: string;
   accentSoft: string;
   accentInk: string;
+  // Font ids from FONT_OPTIONS (legacy CSS stacks are still accepted).
   fontUI: string;
   fontDisplay: string;
   radius: number;
@@ -36,8 +37,8 @@ export const TENANT_THEMES: Record<TenantId, TenantTheme> = {
     accent: '#0f766e',
     accentSoft: '#ccfbf1',
     accentInk: '#134e4a',
-    fontUI: '"Inter", system-ui, sans-serif',
-    fontDisplay: '"Inter", system-ui, sans-serif',
+    fontUI: 'inter',
+    fontDisplay: 'inter',
     radius: 8,
     location: 'Bandra Clinic',
   },
@@ -50,8 +51,8 @@ export const TENANT_THEMES: Record<TenantId, TenantTheme> = {
     accent: '#7c3aed',
     accentSoft: '#ede9fe',
     accentInk: '#4c1d95',
-    fontUI: '"Inter", system-ui, sans-serif',
-    fontDisplay: '"Fraunces", Georgia, serif',
+    fontUI: 'inter',
+    fontDisplay: 'fraunces',
     radius: 12,
     location: 'Online',
   },
@@ -64,8 +65,8 @@ export const TENANT_THEMES: Record<TenantId, TenantTheme> = {
     accent: '#ea580c',
     accentSoft: '#ffedd5',
     accentInk: '#7c2d12',
-    fontUI: '"Inter", system-ui, sans-serif',
-    fontDisplay: '"Inter", system-ui, sans-serif',
+    fontUI: 'inter',
+    fontDisplay: 'inter',
     radius: 6,
     location: 'Indiranagar Courts',
   },

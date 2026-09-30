@@ -2,7 +2,11 @@ import { PROFESSIONS, TEMPLATES } from '@udyamflow/tokens';
 
 export function TemplatesGrid() {
   return (
-    <section className="px-14 py-30 max-w-[1280px] mx-auto" style={{ padding: '120px 56px' }}>
+    <section
+      id="templates"
+      className="px-14 py-30 max-w-[1280px] mx-auto scroll-mt-20"
+      style={{ padding: '120px 56px' }}
+    >
       <div className="grid grid-cols-[1fr_1.4fr] gap-20 items-start">
         <div className="sticky top-24">
           <div

@@ -37,7 +37,11 @@ export default function PricingPage() {
             Then{' '}
             <em
               className="not-italic"
-              style={{ fontFamily: '"Fraunces", serif', fontWeight: 400, fontStyle: 'italic' }}
+              style={{
+                fontFamily: 'var(--font-fraunces), Georgia, serif',
+                fontWeight: 400,
+                fontStyle: 'italic',
+              }}
             >
               fair
             </em>

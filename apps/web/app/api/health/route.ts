@@ -8,9 +8,9 @@ export async function GET() {
     ];
     return Response.json({ ok: true, orgs });
   } catch (err) {
-    return Response.json(
-      { ok: false, error: err instanceof Error ? err.message : String(err) },
-      { status: 500 },
-    );
+    // Log the detail server-side only — raw DB errors can leak hostnames,
+    // usernames or schema details to anyone hitting this public endpoint.
+    console.error('[health] database check failed', err);
+    return Response.json({ ok: false }, { status: 503 });
   }
 }

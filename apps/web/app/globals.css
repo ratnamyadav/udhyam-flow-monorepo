@@ -6,3 +6,19 @@
 
 /* Tailwind v4 — `@theme` colors map directly to utility classes:
    bg-bg, text-ink, border-border, etc. */
+
+/* Route the shared theme's font stacks through the next/font variables set in
+   app/layout.tsx, so they always follow what's actually loaded (including
+   next/font's size-adjusted fallback faces) instead of literal family names. */
+@theme {
+  --font-sans:
+    var(--font-inter), ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-mono-real), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Tenant defaults (TenantThemeProvider / booking pages override these). */
+:root {
+  --accent-fg: #ffffff;
+  --font-display: var(--font-inter), system-ui, sans-serif;
+  --font-ui: var(--font-inter), system-ui, sans-serif;
+}

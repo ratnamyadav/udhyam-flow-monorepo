@@ -29,7 +29,18 @@ export default function AcceptInvitationPage() {
     setStatus('pending');
     setError(null);
     try {
-      await authClient.organization.acceptInvitation({ invitationId });
+      const res = await authClient.organization.acceptInvitation({ invitationId });
+      if (res.error) {
+        setStatus('error');
+        setError(res.error.message ?? 'Could not accept invitation');
+        return;
+      }
+      // Make the joined workspace the active one (harmless if already set).
+      const orgId = res.data?.invitation?.organizationId;
+      if (orgId) {
+        const active = await authClient.organization.setActive({ organizationId: orgId });
+        if (active.error) console.warn('organization.setActive failed', active.error);
+      }
       setStatus('ok');
       router.replace('/dashboard');
     } catch (e) {

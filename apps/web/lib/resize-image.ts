@@ -1,8 +1,8 @@
 'use client';
 
 // Client-side resize using Canvas API. Square output ≤ targetSize px,
-// re-encoded as webp at q=0.88. SVG inputs pass through unchanged because
-// they're already vector + tiny.
+// re-encoded as webp at q=0.88. SVG isn't accepted: script-bearing SVGs
+// served from R2 would be an XSS vector.
 //
 // Replaces the server-side sharp pass we used to do — keeps the upload
 // path off the Next.js server now that R2 PUTs go direct from the browser.
@@ -10,7 +10,7 @@
 const TARGET_SIZE = 512;
 
 export async function resizeImageForUpload(file: File): Promise<File> {
-  if (file.type === 'image/svg+xml') return file;
+  if (file.type === 'image/svg+xml') throw new Error('SVG logos are not supported');
 
   const bitmap = await createImageBitmap(file);
   const ratio = Math.min(TARGET_SIZE / bitmap.width, TARGET_SIZE / bitmap.height, 1);

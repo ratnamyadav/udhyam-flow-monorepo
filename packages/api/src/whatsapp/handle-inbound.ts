@@ -1,7 +1,7 @@
 import { type Db, schema } from '@udyamflow/db';
 import { sendWhatsAppText } from '@udyamflow/notifications';
 import { and, eq, gt, gte } from 'drizzle-orm';
-import { notifyCancelled } from '../router/booking';
+import { notifyCancelled } from '../notify';
 import { bookingUrlFor } from '../source';
 import { type InboundReply, parseInboundWhatsApp, phonesMatch } from './inbound';
 import { formatWhen } from './reminders';
@@ -128,7 +128,7 @@ export async function handleInboundWhatsApp(
       return { outcome: 'not_cancellable', bookingId: booking.id };
     }
     // Same notice the tenant-side cancel sends.
-    await notifyCancelled(db, booking.organizationId, booking.id);
+    await notifyCancelled(db, booking.id);
     return { outcome: 'cancelled', bookingId: booking.id };
   }
 

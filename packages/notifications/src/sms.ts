@@ -11,6 +11,9 @@ type SendSmsArgs = {
   // Variables that fill the DLT-approved template. Keys must match what's
   // configured in MSG91.
   variables?: Record<string, string | number>;
+  // MSG91 Flow template to use. Defaults to MSG91_SMS_TEMPLATE_ID (the
+  // booking-confirmation template) — pass another for other message kinds.
+  templateId?: string;
 };
 
 function normalizePhone(raw: string): string {
@@ -21,9 +24,9 @@ function normalizePhone(raw: string): string {
   return digits;
 }
 
-export async function sendSMS({ to, body, variables }: SendSmsArgs): Promise<void> {
+export async function sendSMS({ to, body, variables, templateId }: SendSmsArgs): Promise<void> {
   const authKey = process.env.MSG91_AUTH_KEY;
-  const flowId = process.env.MSG91_SMS_TEMPLATE_ID;
+  const flowId = templateId ?? process.env.MSG91_SMS_TEMPLATE_ID;
   const sender = process.env.MSG91_SMS_SENDER;
 
   if (!authKey || !flowId) {

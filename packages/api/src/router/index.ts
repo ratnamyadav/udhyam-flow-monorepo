@@ -1,4 +1,5 @@
 import { router } from '../trpc';
+import { adminRouter } from './admin';
 import { authRouter } from './auth';
 import { bookingRouter } from './booking';
 import { channelsRouter } from './channels';
@@ -31,6 +32,7 @@ export const appRouter = router({
   report: reportRouter,
   channels: channelsRouter,
   membership: membershipRouter,
+  admin: adminRouter,
 });
 
 export type AppRouter = typeof appRouter;

@@ -1,6 +1,6 @@
 // BetterAuth `organization` plugin tables — orgs == tenants in UdyamFlow.
 
-import { pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
+import { index, pgTable, text, timestamp, unique } from 'drizzle-orm/pg-core';
 import { user } from './auth';
 
 export const organization = pgTable('organization', {
@@ -25,7 +25,10 @@ export const member = pgTable(
     role: text('role').notNull().default('member'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
-  (t) => [unique('member_user_org_unique').on(t.userId, t.organizationId)],
+  (t) => [
+    unique('member_user_org_unique').on(t.userId, t.organizationId),
+    index('member_org_idx').on(t.organizationId),
+  ],
 );
 
 export const invitation = pgTable('invitation', {

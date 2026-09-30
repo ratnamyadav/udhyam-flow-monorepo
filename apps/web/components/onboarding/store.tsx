@@ -1,6 +1,8 @@
 'use client';
 
+import { type FontId, fontIdFrom } from '@udyamflow/tokens';
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useState } from 'react';
+import { browserTimezone } from '@/lib/timezones';
 
 // Cross-step onboarding state. Persisted to sessionStorage so a refresh in the
 // middle of the wizard doesn't blow away the user's input.
@@ -14,8 +16,15 @@ export type OnboardingState = {
   accentSoft: string;
   accentInk: string;
   radius: number;
-  fontDisplay: string;
-  locations: Array<{ id: string; name: string; address?: string }>;
+  /** Heading font id from FONT_OPTIONS (not a CSS stack). */
+  fontDisplay: FontId;
+  locations: Array<{
+    id: string;
+    name: string;
+    address?: string;
+    timezone: string;
+    currency: 'USD' | 'INR';
+  }>;
   organizationId?: string;
 };
 
@@ -29,7 +38,7 @@ const DEFAULTS: OnboardingState = {
   accentSoft: '#ccfbf1',
   accentInk: '#134e4a',
   radius: 8,
-  fontDisplay: '"Inter", system-ui, sans-serif',
+  fontDisplay: 'inter',
   locations: [],
 };
 
@@ -37,6 +46,8 @@ const STORAGE_KEY = 'udyamflow-onboarding-v1';
 
 type Ctx = {
   state: OnboardingState;
+  /** False until sessionStorage has been read — avoid redirecting on defaults. */
+  hydrated: boolean;
   patch: (p: Partial<OnboardingState>) => void;
   reset: () => void;
 };
@@ -50,7 +61,18 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(STORAGE_KEY);
-      if (raw) setState({ ...DEFAULTS, ...(JSON.parse(raw) as Partial<OnboardingState>) });
+      if (raw) {
+        const saved = JSON.parse(raw) as Partial<OnboardingState>;
+        // Older drafts stored locations without timezone / currency.
+        const locations = (saved.locations ?? []).map((l) => ({
+          ...l,
+          timezone: l.timezone || browserTimezone(),
+          currency: l.currency === 'USD' ? ('USD' as const) : ('INR' as const),
+        }));
+        // Drafts from before font ids stored a CSS stack.
+        const fontDisplay = fontIdFrom(saved.fontDisplay);
+        setState({ ...DEFAULTS, ...saved, fontDisplay, locations });
+      }
     } catch {
       // ignore — sessionStorage unavailable or malformed
     }
@@ -69,12 +91,18 @@ export function OnboardingProvider({ children }: { children: ReactNode }) {
   const patch = useCallback((p: Partial<OnboardingState>) => setState((s) => ({ ...s, ...p })), []);
 
   const reset = useCallback(() => {
-    sessionStorage.removeItem(STORAGE_KEY);
+    try {
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
     setState(DEFAULTS);
   }, []);
 
   return (
-    <OnboardingCtx.Provider value={{ state, patch, reset }}>{children}</OnboardingCtx.Provider>
+    <OnboardingCtx.Provider value={{ state, hydrated, patch, reset }}>
+      {children}
+    </OnboardingCtx.Provider>
   );
 }
 

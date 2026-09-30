@@ -1,128 +1,142 @@
-import { schema } from '@udyamflow/db';
-import { and, eq, gte, inArray, lt, ne } from 'drizzle-orm';
+import { type Db, schema } from '@udyamflow/db';
+import { and, asc, eq, gte, inArray, isNull, lt, notInArray, or } from 'drizzle-orm';
+import {
+  addDaysToDate,
+  startOfMonthDate,
+  startOfWeekDate,
+  todayInTz,
+  wallTimeToUtc,
+} from '../lib/time';
 import { router, tenantProcedure } from '../trpc';
 
 // Dashboard report queries. These run on the request path so they need to
-// be cheap — we keep them to ~2-3 indexed scans each, and the dashboard
-// hits them in parallel.
+// be cheap — each is a couple of scans on the (organization_id, slot_start)
+// index, and the dashboard hits them in parallel.
+//
+// Week/month boundaries are calendar dates in the tenant's timezone (its
+// first location's), not the server's.
 
-function startOfWeek(d: Date): Date {
-  const r = new Date(d);
-  r.setHours(0, 0, 0, 0);
-  r.setDate(r.getDate() - r.getDay()); // Sunday-start
-  return r;
+async function tenantTimezone(db: Db, organizationId: string): Promise<string> {
+  const [loc] = await db
+    .select({ timezone: schema.location.timezone })
+    .from(schema.location)
+    .where(
+      and(eq(schema.location.organizationId, organizationId), isNull(schema.location.archivedAt)),
+    )
+    .orderBy(asc(schema.location.createdAt))
+    .limit(1);
+  return loc?.timezone ?? 'UTC';
 }
 
-function startOfMonth(d: Date): Date {
-  const r = new Date(d);
-  r.setHours(0, 0, 0, 0);
-  r.setDate(1);
-  return r;
-}
+const NOT_HAPPENING = ['cancelled', 'expired'] as const;
 
 export const reportRouter = router({
   // This week vs. last week — used for the trend pill on the dashboard.
   weekly: tenantProcedure.query(async ({ ctx }) => {
-    const now = new Date();
-    const weekStart = startOfWeek(now);
-    const lastWeekStart = new Date(weekStart);
-    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    const tz = await tenantTimezone(ctx.db, ctx.organizationId);
+    const weekStartDate = startOfWeekDate(todayInTz(tz));
+    const weekStart = wallTimeToUtc(weekStartDate, 0, tz);
+    const nextWeekStart = wallTimeToUtc(addDaysToDate(weekStartDate, 7), 0, tz);
+    const lastWeekStart = wallTimeToUtc(addDaysToDate(weekStartDate, -7), 0, tz);
 
-    const baseConditions = [
-      eq(schema.booking.organizationId, ctx.organizationId),
-      ne(schema.booking.status, 'cancelled'),
-    ];
-
-    const thisWeek = await ctx.db
-      .select({ id: schema.booking.id })
-      .from(schema.booking)
-      .where(and(...baseConditions, gte(schema.booking.slotStart, weekStart)));
-    const lastWeek = await ctx.db
-      .select({ id: schema.booking.id })
+    const rows = await ctx.db
+      .select({ slotStart: schema.booking.slotStart })
       .from(schema.booking)
       .where(
         and(
-          ...baseConditions,
+          eq(schema.booking.organizationId, ctx.organizationId),
+          notInArray(schema.booking.status, [...NOT_HAPPENING]),
           gte(schema.booking.slotStart, lastWeekStart),
-          lt(schema.booking.slotStart, weekStart),
+          lt(schema.booking.slotStart, nextWeekStart),
         ),
       );
-    return { thisWeek: thisWeek.length, lastWeek: lastWeek.length };
+    const thisWeek = rows.filter((r) => r.slotStart >= weekStart).length;
+    return { thisWeek, lastWeek: rows.length - thisWeek };
   }),
 
-  // Revenue MTD, grouped by currency. We sum from `service.priceCents` for
-  // every paid booking — the booking row itself doesn't store amount yet.
+  // Revenue month-to-date, grouped by currency: what customers actually
+  // paid (the price snapshot on the booking) minus refunds, bucketed by when
+  // the payment landed.
   revenueMtd: tenantProcedure.query(async ({ ctx }) => {
-    const monthStart = startOfMonth(new Date());
+    const tz = await tenantTimezone(ctx.db, ctx.organizationId);
+    const monthStart = wallTimeToUtc(startOfMonthDate(todayInTz(tz)), 0, tz);
 
-    // First find paid bookings this month with a service.
     const paid = await ctx.db
       .select({
+        amountCents: schema.booking.amountCents,
+        refundedCents: schema.booking.refundedCents,
+        currency: schema.booking.currency,
         serviceId: schema.booking.serviceId,
       })
       .from(schema.booking)
       .where(
         and(
           eq(schema.booking.organizationId, ctx.organizationId),
-          eq(schema.booking.paymentStatus, 'paid'),
-          gte(schema.booking.slotStart, monthStart),
+          inArray(schema.booking.paymentStatus, ['paid', 'partially_refunded', 'refunded']),
+          or(
+            gte(schema.booking.paidAt, monthStart),
+            // Bookings paid before paid_at existed.
+            and(isNull(schema.booking.paidAt), gte(schema.booking.slotStart, monthStart)),
+          ),
         ),
       );
 
-    const serviceIds = Array.from(
-      new Set(paid.map((p) => p.serviceId).filter((x): x is string => !!x)),
-    );
-    if (serviceIds.length === 0) return [] as Array<{ currency: string; cents: number }>;
-
-    const services = await ctx.db
-      .select({
-        id: schema.service.id,
-        priceCents: schema.service.priceCents,
-        currency: schema.service.currency,
-      })
-      .from(schema.service)
-      .where(inArray(schema.service.id, serviceIds));
+    // Legacy rows have no price snapshot — fall back to the service price.
+    const legacyServiceIds = [
+      ...new Set(paid.filter((p) => p.amountCents == null && p.serviceId).map((p) => p.serviceId!)),
+    ];
+    const services =
+      legacyServiceIds.length > 0
+        ? await ctx.db
+            .select({
+              id: schema.service.id,
+              priceCents: schema.service.priceCents,
+              currency: schema.service.currency,
+            })
+            .from(schema.service)
+            .where(inArray(schema.service.id, legacyServiceIds))
+        : [];
     const byId = new Map(services.map((s) => [s.id, s]));
 
     const totals = new Map<string, number>();
     for (const row of paid) {
-      if (!row.serviceId) continue;
-      const svc = byId.get(row.serviceId);
-      if (!svc) continue;
-      totals.set(svc.currency, (totals.get(svc.currency) ?? 0) + svc.priceCents);
+      const legacy = row.serviceId ? byId.get(row.serviceId) : undefined;
+      const amount = row.amountCents ?? legacy?.priceCents;
+      const currency = row.currency ?? legacy?.currency;
+      if (amount == null || !currency) continue;
+      totals.set(currency, (totals.get(currency) ?? 0) + amount - row.refundedCents);
     }
     return Array.from(totals.entries()).map(([currency, cents]) => ({ currency, cents }));
   }),
 
   // Utilization over the past 7 days: % of resource-hour slots that were
-  // booked (non-cancelled). Approximates working hours from resource_hours.
+  // booked. Approximates working hours from resource_hours.
   utilization7d: tenantProcedure.query(async ({ ctx }) => {
     const now = new Date();
-    const weekAgo = new Date(now);
-    weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
     const resources = await ctx.db
       .select({ id: schema.resource.id })
       .from(schema.resource)
-      .where(eq(schema.resource.organizationId, ctx.organizationId));
+      .where(
+        and(
+          eq(schema.resource.organizationId, ctx.organizationId),
+          isNull(schema.resource.archivedAt),
+        ),
+      );
     if (resources.length === 0) return { booked: 0, available: 0 };
 
-    const resIds = resources.map((r) => r.id);
     const hours = await ctx.db
       .select()
       .from(schema.resourceHours)
-      .where(inArray(schema.resourceHours.resourceId, resIds));
-
-    // Total available minutes/week for each resource × 1 week = sum of
-    // (close-open) across the week's days.
-    const minutesPerResource = new Map<string, number>();
-    for (const h of hours) {
-      minutesPerResource.set(
-        h.resourceId,
-        (minutesPerResource.get(h.resourceId) ?? 0) + (h.closeMin - h.openMin),
+      .where(
+        inArray(
+          schema.resourceHours.resourceId,
+          resources.map((r) => r.id),
+        ),
       );
-    }
-    const availableMin = Array.from(minutesPerResource.values()).reduce((a, b) => a + b, 0);
+    // Available minutes = sum of (close - open) across each resource's week.
+    const availableMin = hours.reduce((sum, h) => sum + (h.closeMin - h.openMin), 0);
 
     const booked = await ctx.db
       .select({ start: schema.booking.slotStart, end: schema.booking.slotEnd })
@@ -130,7 +144,7 @@ export const reportRouter = router({
       .where(
         and(
           eq(schema.booking.organizationId, ctx.organizationId),
-          ne(schema.booking.status, 'cancelled'),
+          notInArray(schema.booking.status, [...NOT_HAPPENING]),
           gte(schema.booking.slotStart, weekAgo),
           lt(schema.booking.slotStart, now),
         ),

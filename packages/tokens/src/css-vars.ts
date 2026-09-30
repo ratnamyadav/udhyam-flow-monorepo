@@ -5,6 +5,8 @@
 // the result into a `style` prop on the web (`style={tenantThemeStyle(theme)}`)
 // or hand it to whatever style system they use.
 
+import { readableTextOn } from './color';
+import { fontStack } from './fonts';
 import type { TenantTheme } from './tenants';
 
 export type CssVars = Record<string, string>;
@@ -14,9 +16,12 @@ export function tenantThemeToCssVars(theme: TenantTheme): CssVars {
     '--accent': theme.accent,
     '--accent-soft': theme.accentSoft,
     '--accent-ink': theme.accentInk,
+    // Text/icons on an accent background — white or ink by contrast, so a
+    // light accent (yellow, lime) still gets readable buttons.
+    '--accent-fg': readableTextOn(theme.accent),
     '--radius': `${theme.radius}px`,
-    '--font-display': theme.fontDisplay,
-    '--font-ui': theme.fontUI,
+    '--font-display': fontStack(theme.fontDisplay),
+    '--font-ui': fontStack(theme.fontUI),
   };
 }
 

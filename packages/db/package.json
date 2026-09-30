@@ -8,16 +8,19 @@
   "exports": {
     ".": "./src/index.ts",
     "./schema": "./src/schema/index.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./constraints": "./src/constraints.ts"
   },
   "scripts": {
-    "db:push": "dotenv -e ../../.env -- drizzle-kit push",
+    "db:push": "dotenv -e ../../.env -- drizzle-kit push && pnpm db:constraints",
     "db:generate": "dotenv -e ../../.env -- drizzle-kit generate",
     "db:studio": "dotenv -e ../../.env -- drizzle-kit studio",
     "db:seed": "dotenv -e ../../.env -- tsx src/seed.ts",
     "db:backfill-customers": "dotenv -e ../../.env -- tsx src/backfill-customers.ts",
     "lint": "biome check src",
-    "check-types": "tsgo --noEmit"
+    "check-types": "tsgo --noEmit",
+    "db:constraints": "dotenv -e ../../.env -- tsx src/apply-constraints.ts",
+    "db:migrate": "dotenv -e ../../.env -- drizzle-kit migrate"
   },
   "dependencies": {
     "@neondatabase/serverless": "catalog:",
