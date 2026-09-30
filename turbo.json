@@ -9,7 +9,41 @@
     "BETTER_AUTH_URL",
     "NEXT_PUBLIC_APP_URL",
     "NEXT_PUBLIC_AUTH_URL",
-    "EXPO_PUBLIC_AUTH_URL"
+    "EXPO_PUBLIC_AUTH_URL",
+    "ADMIN_APP_URL",
+    "TRUSTED_ORIGINS",
+    "ENCRYPTION_KEY",
+    "ENCRYPTION_KEY_PREVIOUS",
+    "RESEND_API_KEY",
+    "EMAIL_FROM",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "STRIPE_SECRET_KEY",
+    "STRIPE_WEBHOOK_SECRET",
+    "STRIPE_CONNECT_WEBHOOK_SECRET",
+    "CASHFREE_CLIENT_ID",
+    "CASHFREE_CLIENT_SECRET",
+    "CASHFREE_ENV",
+    "MSG91_AUTH_KEY",
+    "MSG91_SMS_SENDER",
+    "MSG91_SMS_TEMPLATE_ID",
+    "MSG91_SMS_CANCEL_TEMPLATE_ID",
+    "MSG91_WHATSAPP_INTEGRATED_NUMBER",
+    "R2_ACCOUNT_ID",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET",
+    "R2_PUBLIC_URL",
+    "UPSTASH_REDIS_REST_URL",
+    "UPSTASH_REDIS_REST_TOKEN",
+    "TRUSTED_IP_HEADER",
+    "SENTRY_DSN",
+    "NEXT_PUBLIC_SENTRY_DSN",
+    "SENTRY_AUTH_TOKEN",
+    "SENTRY_ORG",
+    "SENTRY_PROJECT",
+    "NEXT_PUBLIC_VERCEL_ENV",
+    "VERCEL_ENV"
   ],
   "tasks": {
     "build": {
@@ -28,7 +62,7 @@
     },
     "test": {
       "dependsOn": ["^build"],
-      "outputs": ["coverage/**"]
+      "outputs": []
     },
     "db:push": {
       "cache": false
@@ -40,6 +74,12 @@
       "cache": false
     },
     "clean": {
+      "cache": false
+    },
+    "db:migrate": {
+      "cache": false
+    },
+    "db:constraints": {
       "cache": false
     }
   }

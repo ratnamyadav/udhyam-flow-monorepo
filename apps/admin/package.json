@@ -13,6 +13,7 @@
   "dependencies": {
     "@next/env": "catalog:",
     "@sentry/nextjs": "catalog:",
+    "@udyamflow/api": "workspace:*",
     "@udyamflow/auth": "workspace:*",
     "@udyamflow/db": "workspace:*",
     "@udyamflow/env": "workspace:*",
