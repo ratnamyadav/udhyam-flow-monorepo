@@ -42,6 +42,11 @@ export const serverEnvSchema = z.object({
   CASHFREE_CLIENT_SECRET: z.string().optional(),
   // 'sandbox' | 'production' — defaults to sandbox.
   CASHFREE_ENV: z.enum(['sandbox', 'production']).optional(),
+  // Easy Split: % of each INR order the platform keeps (default 0 — the
+  // tenant's vendor gets everything). 'true' in CASHFREE_REQUIRE_VENDOR
+  // refuses INR checkouts for tenants without an ACTIVE payout vendor.
+  CASHFREE_PLATFORM_FEE_PERCENT: z.string().optional(),
+  CASHFREE_REQUIRE_VENDOR: z.enum(['true', 'false']).optional(),
   // FreshBooks OAuth app (invoicing integration). Optional — without both,
   // the invoicing settings page hides the "Connect FreshBooks" button.
   // Register the redirect URI `${NEXT_PUBLIC_APP_URL}/api/integrations/freshbooks/callback`

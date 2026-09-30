@@ -36,6 +36,23 @@ export const tenantSettings = pgTable('tenant_settings', {
   stripeChargesEnabled: boolean('stripe_charges_enabled').notNull().default(false),
   cashfreeMerchantId: text('cashfree_merchant_id'),
   cashfreeApiKey: text('cashfree_api_key'),
+  // Cashfree Easy Split vendor for this tenant — INR payments settle to
+  // their bank/UPI directly once the vendor is ACTIVE. We never store bank
+  // details; `cashfreePayoutLabel` is a masked hint for the UI ("HDFC ••1234").
+  cashfreeVendorId: text('cashfree_vendor_id'),
+  cashfreeVendorStatus: text('cashfree_vendor_status'),
+  cashfreePayoutLabel: text('cashfree_payout_label'),
+  // GST profile, used by the built-in invoice provider and Zoho Books.
+  // `gstStateCode` doubles as "this business is in India" — without it the
+  // built-in provider issues a plain (non-GST) invoice.
+  gstRegistered: boolean('gst_registered').notNull().default(false),
+  gstin: text('gstin'),
+  gstLegalName: text('gst_legal_name'),
+  gstStateCode: text('gst_state_code'),
+  billingAddress: text('billing_address'),
+  // Up to 4 chars; invoice numbers look like "INV/26-27/0001" (GST caps
+  // invoice numbers at 16 chars, alphanumerics plus - and /).
+  invoicePrefix: text('invoice_prefix').notNull().default('INV'),
   // Where invoices get issued: 'none' | 'stripe' (built-in Stripe Invoicing
   // on the tenant's Connect account) | 'freshbooks' (needs a row in
   // integration_connection). `autoInvoice` issues one automatically when a

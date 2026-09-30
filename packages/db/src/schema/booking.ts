@@ -33,6 +33,9 @@ export const booking = pgTable('booking', {
   paymentStatus: text('payment_status').notNull().default('unpaid'),
   paymentProvider: text('payment_provider'),
   paymentId: text('payment_id'),
+  // Cashfree Easy Split vendor the payment was split to (null = platform
+  // settlement). Refunds recover from the same vendor.
+  paymentVendorId: text('payment_vendor_id'),
   intake: jsonb('intake').$type<Record<string, unknown>>(),
   createdAt: timestamp('created_at').notNull().defaultNow(),
 });

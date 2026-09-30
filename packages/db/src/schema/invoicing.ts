@@ -10,7 +10,7 @@
 // enforced by a unique index so double-clicks and webhook retries can't
 // issue twice.
 
-import { integer, pgTable, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { integer, pgTable, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
 import { organization } from './org';
 
 export const integrationConnection = pgTable(
@@ -57,10 +57,40 @@ export const invoice = pgTable(
     status: text('status').notNull().default('pending'),
     amountCents: integer('amount_cents').notNull(),
     currency: text('currency').notNull(),
-    // Customer-facing link (Stripe hosted invoice page / FreshBooks share link).
+    // Customer-facing link (Stripe hosted invoice page / FreshBooks share
+    // link / our own /invoice/[id] page for the built-in provider).
     hostedUrl: text('hosted_url'),
+    // GST breakdown — filled for the built-in provider and Zoho Books.
+    // `documentType`: 'tax_invoice' | 'bill_of_supply' | 'invoice'.
+    documentType: text('document_type'),
+    taxableCents: integer('taxable_cents'),
+    cgstCents: integer('cgst_cents'),
+    sgstCents: integer('sgst_cents'),
+    igstCents: integer('igst_cents'),
+    gstRateBps: integer('gst_rate_bps'),
+    sacCode: text('sac_code'),
+    placeOfSupply: text('place_of_supply'),
+    supplierGstin: text('supplier_gstin'),
+    customerGstin: text('customer_gstin'),
+    issuedAt: timestamp('issued_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
     updatedAt: timestamp('updated_at').notNull().defaultNow(),
   },
   (t) => [uniqueIndex('invoice_booking_uniq').on(t.bookingId)],
+);
+
+// Gap-free per-tenant invoice numbering for the built-in provider, reset
+// each Indian financial year (April–March) as GST expects. Incremented with
+// a single INSERT … ON CONFLICT DO UPDATE … RETURNING, which is atomic
+// without a transaction.
+export const invoiceSequence = pgTable(
+  'invoice_sequence',
+  {
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+    financialYear: text('financial_year').notNull(), // e.g. "26-27"
+    lastNumber: integer('last_number').notNull().default(0),
+  },
+  (t) => [primaryKey({ columns: [t.organizationId, t.financialYear] })],
 );

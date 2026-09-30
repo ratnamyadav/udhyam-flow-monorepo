@@ -18,6 +18,11 @@ export const customer = pgTable(
     email: text('email'),
     phone: text('phone'),
     notes: text('notes'),
+    // For GST invoices: a business customer's GSTIN (B2B) and the state
+    // used as place of supply. Both optional — B2C defaults to the
+    // tenant's own state.
+    gstin: text('gstin'),
+    stateCode: text('state_code'),
     lastBookingAt: timestamp('last_booking_at'),
     createdAt: timestamp('created_at').notNull().defaultNow(),
   },
