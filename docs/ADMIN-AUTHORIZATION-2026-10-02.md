@@ -12,7 +12,7 @@ Platform access requires an authenticated **server session** with the exact case
 
 ## Verified routing fix
 
-Source commit `e8d31149fcc40283645f563f09f0ffe2eb53770e` changes only the denied `requireStaffCaller()` redirect from `/dashboard` to `/sign-in`. The dashboard page itself calls this guard, so the previous destination was a self-redirect. The tested denial now reaches a public sign-in route; the role condition and data-access checks are unchanged. This is a routing correction, not new staff access. It has not yet received a fresh Next production build because Mybooz owns the heavy slot. Admin typecheck and actual-function guard tests pass. Earlier admin compiled/form evidence remains at `85206ab`, before this one-line correction.
+Source commit `e8d31149fcc40283645f563f09f0ffe2eb53770e` changes only the denied `requireStaffCaller()` redirect from `/dashboard` to `/sign-in`. The dashboard page itself calls this guard, so the previous destination was a self-redirect. The tested denial now reaches a public sign-in route; the role condition and data-access checks are unchanged. This is a routing correction, not new staff access. The isolated Next admin production rebuild subsequently passed at final source `efb79195d8f49ba5cfed63ad9693296ffb13672c`: compilation, TypeScript checks and all admin route generation completed successfully, exit0, with one worker and synthetic configuration. Log `/tmp/udyamflow-final-admin-efb7919-build.log`. Admin typecheck and actual-function guard tests pass. Earlier admin compiled/form evidence remains at `85206ab`, before this one-line correction.
 
 ## Targeted test evidence
 
@@ -39,4 +39,4 @@ PGlite verifies actual SQL/schema/auth/session/procedure behavior; it does **not
 
 No usable disposable Neon HTTP runtime was identified; PostgreSQL executables are not on PATH, and a plain local Postgres server would not by itself implement the Neon HTTP transport. Actual deployed server/RSC/driver fault behavior and final protected-page navigation require configured authorized integration QA. The safe local tests establish fail-closed guard and procedure behavior, not production transport availability or a full deployed dashboard render.
 
-A fresh admin production build after `e8d3114` is PENDING shared-slot availability. Web app/shared form/auth-handler source is unchanged; unsigned native artifacts remain verified at mobile source `0508783`. No heavy build, service provisioning, credentials retrieval, fees or production writes occurred in this follow-up.
+The fresh admin production build after `e8d3114` now PASSES at final source `efb7919`; the heavy slot is free. Web app/shared form/auth-handler source is unchanged; unsigned native artifacts remain verified at mobile source `0508783`. No service provisioning, credentials retrieval, fees or production writes occurred. The only heavy work in the final follow-up was the authorized isolated admin rebuild.

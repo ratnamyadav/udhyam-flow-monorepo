@@ -39,7 +39,7 @@ TypeScript 6.0.3 remains the Next/tooling compiler API; npm TypeScript 7.0.2 exp
 | Expo compatibility | PASS — `expo install --check` |
 | Lint | PASS — final navigation/evidence Biome check: 342 files |
 | Web production build | PASS at final OTP/backend source `85206ab`; isolated serial synthetic build, exit 0 |
-| Admin production build | PASS at `85206ab`; later denied-dashboard routing fix `e8d3114` passes focused tests/types; fresh production rebuild PENDING Mybooz heavy-slot release |
+| Admin production build | PASS at final admin/authz source `efb7919`, including denied-dashboard routing correction; isolated synthetic single-worker production build, exit0 |
 | iOS production Hermes export | PASS at earlier `da505da` — 1944 modules; `/tmp/udyamflow-ios-release-export`, 4.7 MB bundle |
 | Android production Hermes export | PASS at earlier `da505da` — 2037 modules; 4.9 MB bundle |
 | Native simulator/device interaction | BLOCKED — official Expo Go downloaded, but simulator install/launch/query calls stalled; native UI pipe unavailable. Own stalled commands stopped. No simulator reset/security changes. |
@@ -134,3 +134,7 @@ The admin harness initially failed after intentionally aborting dashboard reques
 See `ADMIN-AUTHORIZATION-2026-10-02.md`: 31 targeted tests pass (20 API/authorization plus 11 actual Next guard/action tests). Exact server `user.role === admin` is enforced independently by server guards and all three platform procedures; tenant roles/header/form claims do not grant it. Real OTP/profile role tampering, cross-tenant denial, same-cookie demotion and authentication/data failures are tested through migrated PGlite and the production tRPC fetch adapter. Next framework/auth/adapter boundaries are mocked only for direct server guard/action tests. Production Neon HTTP transport is not certified.
 
 `e8d3114` fixes a tested denial self-redirect by routing denied `requireStaffCaller()` users to `/sign-in`; the role/data guard is unchanged. API/admin typechecks pass. A fresh admin production build is pending the shared heavy slot; prior Next/browser evidence remains `85206ab`. Mobile/native source remains `0508783`. No heavy build or production change occurred.
+
+## Final post-authorization admin production build
+
+Final source `efb79195d8f49ba5cfed63ad9693296ffb13672c` was archived into the isolated existing dependency/cache checkout without private environment/signing files. The admin production build passed: compilation, TypeScript, page data and route generation, exit0, one worker, synthetic credentials and dummy localhost database configuration. Log `/tmp/udyamflow-final-admin-efb7919-build.log`. It includes the verified denied-dashboard redirect fix. This supersedes the earlier pending-build status; actual production Next/Neon transport remains deployment-stage QA. No provider, database, signing, infrastructure or store action occurred. Native mobile provenance remains `0508783`. Heavy slot is free; no owned preview/build remains running.
