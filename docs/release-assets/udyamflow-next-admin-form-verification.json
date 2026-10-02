@@ -1,0 +1,66 @@
+{
+  "app": "admin",
+  "compiledSource": "85206ab7d906ef746de013e2ffd73d9b4f776e87",
+  "authHandlerSource": "0508783038cb73dc5405d612a90253195a80c854",
+  "runtime": "Actual prebuilt Next app/shared form and installed BetterAuth client; same-origin browser API bridge to real factory with migrated PGlite and synthetic-only in-memory mail. No production service.",
+  "checks": [
+    "signin: actual shared form; normalization; code step; cooldown; autofill",
+    "generic wrong-code recovery",
+    "real cookie session and ordinary role confirmed",
+    "real cookie session and ordinary role confirmed",
+    "admin cookie session survives actual sign-in-page reload",
+    "admin onSuccess invokes /dashboard navigation; dashboard network intentionally aborted before production DB dependency",
+    "consumed code rejected through browser client transport"
+  ],
+  "responses": [
+    {
+      "path": "/api/auth/email-otp/send-verification-otp",
+      "status": 200,
+      "userPresent": false
+    },
+    {
+      "path": "/api/auth/sign-in/email-otp",
+      "status": 400,
+      "userPresent": false,
+      "errorCode": "INVALID_OTP"
+    },
+    {
+      "path": "/api/auth/sign-in/email-otp",
+      "status": 200,
+      "userPresent": true,
+      "role": "user"
+    },
+    {
+      "path": "/api/auth/get-session",
+      "status": 200,
+      "userPresent": true,
+      "role": "user"
+    },
+    {
+      "path": "/api/auth/get-session",
+      "status": 200,
+      "userPresent": true,
+      "role": "user"
+    },
+    {
+      "path": "/api/auth/get-session",
+      "status": 200,
+      "userPresent": true,
+      "role": "user"
+    },
+    {
+      "path": "/api/auth/sign-in/email-otp",
+      "status": 400,
+      "userPresent": false,
+      "errorCode": "INVALID_OTP"
+    }
+  ],
+  "pageErrors": [],
+  "dashboardRequests": 3,
+  "result": "PASS",
+  "exclusions": [
+    "Real inbox delivery",
+    "Timed browser expiry/resend rotation (covered separately by Expo browser and real-handler tests)",
+    "Actual admin dashboard server role gate: requires configured PostgreSQL/Neon DATABASE_URL; no production connection used"
+  ]
+}
