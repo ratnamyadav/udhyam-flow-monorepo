@@ -19,6 +19,7 @@ export async function getStaff() {
 
 export async function requireStaffCaller() {
   const { caller } = await getStaff();
-  if (!caller) redirect('/dashboard');
+  // /dashboard itself calls this guard: redirecting there would loop.
+  if (!caller) redirect('/sign-in');
   return caller;
 }
