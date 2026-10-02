@@ -86,12 +86,12 @@ export default function ConfirmationScreen() {
   if (!bookingId || (!data && !status.isLoading)) {
     // No id (or status unavailable) — show what we know from the URL.
     view = {
-      badge: '✓',
-      title: "You're booked.",
+      badge: '!',
+      title: 'Booking status unavailable',
       body: status.error
         ? `We couldn't load the latest status (${errorMessage(status.error)}). Keep your reference handy.`
-        : 'Show this reference if you need to check in.',
-      tone: 'ok',
+        : 'No booking was supplied. Return to booking to choose a time.',
+      tone: 'bad',
     };
   } else if (!data) {
     view = { badge: '…', title: 'Checking your booking…', body: '', tone: 'wait' };
@@ -157,9 +157,11 @@ export default function ConfirmationScreen() {
       badge: '×',
       title: 'Booking cancelled',
       body:
-        data.paymentStatus === 'refunded' || data.paymentStatus === 'partially_refunded'
+        data.paymentStatus === 'refunded'
           ? 'This booking was cancelled and your payment refunded.'
-          : 'This booking was cancelled.',
+          : data.paymentStatus === 'partially_refunded'
+            ? 'This booking was cancelled and partially refunded. Contact the business about the balance.'
+            : 'This booking was cancelled.',
       tone: 'bad',
     };
     actions = <PrimaryButton colors={colors} label="Book again" onPress={bookAgain} />;

@@ -29,6 +29,13 @@
       "when": 1790761036059,
       "tag": "0003_invoicing_memberships_gst",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790965784171,
+      "tag": "0004_auth-invitation-created-at",
+      "breakpoints": true
     }
   ]
 }

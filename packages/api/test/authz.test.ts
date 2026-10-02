@@ -1,6 +1,6 @@
 import { schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   addMember,
   addService,
@@ -11,6 +11,11 @@ import {
   uid,
   userCaller,
 } from './helpers/harness';
+
+vi.mock('@udyamflow/storage', async (original) => ({
+  ...(await original<typeof import('@udyamflow/storage')>()),
+  deleteObject: vi.fn(async () => {}),
+}));
 
 type Db = Awaited<ReturnType<typeof createTestDb>>;
 let db: Db;

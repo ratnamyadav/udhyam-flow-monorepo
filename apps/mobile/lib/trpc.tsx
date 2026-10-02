@@ -4,8 +4,9 @@ import { createTRPCReact } from '@trpc/react-query';
 import type { AppRouter } from '@udyamflow/api';
 import { router } from 'expo-router';
 import { type ReactNode, useState } from 'react';
+import { Platform } from 'react-native';
 import superjson from 'superjson';
-import { expoAuthClient } from '@/lib/auth';
+import { expoAuthClient, useSession } from '@/lib/auth';
 import { AUTH_URL } from './env';
 
 export const trpc = createTRPCReact<AppRouter>();
@@ -67,15 +68,19 @@ function createQueryClient() {
 }
 
 export function TRPCProvider({ children }: { children: ReactNode }) {
+  const { data: session } = useSession();
+  const identity = `${session?.user.id ?? 'anonymous'}:${session?.session.activeOrganizationId ?? 'none'}`;
+  return <ScopedTRPCProvider key={identity}>{children}</ScopedTRPCProvider>;
+}
+
+function ScopedTRPCProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
 
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
         loggerLink({
-          enabled: (op) =>
-            process.env.NODE_ENV === 'development' ||
-            (op.direction === 'down' && op.result instanceof Error),
+          enabled: () => process.env.NODE_ENV === 'development',
         }),
         httpBatchLink({
           url: `${AUTH_URL}/api/trpc`,
@@ -83,11 +88,13 @@ export function TRPCProvider({ children }: { children: ReactNode }) {
           // BetterAuth's Expo plugin keeps the session cookies in SecureStore
           // and exposes them as a ready-made `Cookie` header value. Native has
           // no cookie jar we want involved, so never send ambient credentials.
-          headers() {
-            const cookie = expoAuthClient.getCookie();
+          async headers() {
+            if (Platform.OS === 'web') return {};
+            const cookie = await expoAuthClient.getCookie();
             return cookie ? { Cookie: cookie } : {};
           },
-          fetch: (url, options) => fetch(url, { ...options, credentials: 'omit' }),
+          fetch: (url, options) =>
+            fetch(url, { ...options, credentials: Platform.OS === 'web' ? 'include' : 'omit' }),
         }),
       ],
     }),

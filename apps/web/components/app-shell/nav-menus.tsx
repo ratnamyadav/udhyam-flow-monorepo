@@ -15,6 +15,7 @@ export const PRIMARY_NAV: NavItem[] = [
 
 // Everything under /settings, grouped behind the Settings menu.
 export const SETTINGS_NAV: NavItem[] = [
+  { href: '/account', label: 'Account' },
   { href: '/settings/resources', label: 'Resources' },
   { href: '/settings/services', label: 'Services' },
   { href: '/settings/locations', label: 'Locations' },

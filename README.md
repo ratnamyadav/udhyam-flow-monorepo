@@ -37,18 +37,18 @@ udhyam-flow/
 | Layer | Choice | Version |
 |---|---|---|
 | Package manager | **pnpm** workspaces + catalog | 9.15+ |
-| Build orchestrator | **Turborepo** | 2.9 |
+| Build orchestrator | **Turborepo** | 2.11 |
 | Language | **TypeScript** (Go-port `tsgo` for typecheck, `typescript` for tooling) | 7.0 beta + 6.0 |
-| Linter / formatter | **Biome** | 2.4 |
+| Linter / formatter | **Biome** | 2.5 |
 | Web framework | **Next.js** App Router (Turbopack) | 16.3 |
 | Mobile framework | **Expo** + expo-router (React Native 0.86) | SDK 57 |
-| UI styling (web) | **Tailwind CSS** v4 + shadcn-style primitives | 4.2 |
+| UI styling (web) | **Tailwind CSS** v4 + shadcn-style primitives | 4.3 |
 | UI styling (mobile) | **NativeWind** v5 preview + Tailwind v4 | 5.0-preview |
 | Database | **Postgres** on **Neon** (`@neondatabase/serverless`) | latest |
 | ORM | **Drizzle ORM** + drizzle-kit | 0.45 / 0.31 |
-| Auth | **BetterAuth** (organization plugin + Expo plugin) | 1.6 |
-| API layer | **tRPC** v11 + TanStack Query | 11.16 / 5.10 |
-| Data fetching | **@tanstack/react-query** | 5.10 |
+| Auth | **BetterAuth** (organization plugin + Expo plugin) | 1.7 |
+| API layer | **tRPC** v11 + TanStack Query | 11.19 / 5.104 |
+| Data fetching | **@tanstack/react-query** | 5.104 |
 | Schema validation | **Zod** | 4.3 |
 | RPC serialization | **superjson** | 2.2 |
 | Theming | **next-themes** + per-tenant CSS vars | 0.4 |
@@ -137,7 +137,7 @@ Tenants sell recurring packages ("₹2,000 / month"); the customer approves a UP
 
 ## Requirements
 
-- **Node.js** ≥ 20.10 (24.x tested)
+- **Node.js** ≥ 22.13 (24 LTS recommended)
 - **pnpm** ≥ 9.15
 - **A Neon Postgres database** (free tier works) — or any Postgres if you swap the driver
 - For mobile dev: **Expo Go** on your phone, or **Xcode** / **Android Studio** for simulators
@@ -399,7 +399,9 @@ The flow on first sign-up:
 ## Not yet built
 
 - **Subscription billing** for UdyamFlow itself (the free-6-months / per-location pricing on `/pricing`) — no plan, trial or invoicing code exists yet.
-- Customer self-service rescheduling/cancellation links and appointment reminders.
+- Platform trial enforcement and billing-provider/product setup remain release decisions.
+
+Customer self-service cancellation and rescheduling now use signed confirmation-email links at `/manage-booking`. They retain the same provider/service and original price/duration; refunds remain a business action. WhatsApp reminders already exist and require MSG91 templates plus the cron configuration. Account deletion is available in mobile Settings and `/account`, with verified email and workspace ownership protection. See `docs/RELEASE-READINESS-2026-10-02.md` for release gates and validation.
 
 ---
 

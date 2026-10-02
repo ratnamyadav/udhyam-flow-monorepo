@@ -1,6 +1,6 @@
 import { FONT_IDS } from '@udyamflow/tokens';
 import { z } from 'zod';
-import { isValidTimeZone } from './time';
+import { isValidDateStr, isValidTimeZone } from './time';
 
 export const hexColor = z
   .string()
@@ -24,7 +24,9 @@ export const serviceCurrency = z
   .transform((v) => v.toUpperCase())
   .pipe(z.string().regex(/^[A-Z]{3}$/, 'Use a 3-letter currency code, e.g. INR, USD, EUR'));
 
-export const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+export const dateStr = z
+  .string()
+  .refine(isValidDateStr, 'Expected a valid calendar date (YYYY-MM-DD)');
 
 export function escapeHtml(s: string): string {
   return s

@@ -1,8 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, Text, View } from 'react-native';
 import { ResponsiveContent } from '@/components/responsive';
 import { expoAuthClient, signOut, useSession } from '@/lib/auth';
+import { AUTH_URL } from '../../lib/env';
 import { errorMessage, trpc } from '../../lib/trpc';
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' };
@@ -33,9 +34,9 @@ export default function SettingsScreen() {
       if (res.error) throw new Error(res.error.message ?? 'Could not switch workspace.');
     },
     onSuccess: async () => {
-      refetchSession();
-      // Every tenant query is scoped to the active organization.
-      await queryClient.invalidateQueries();
+      await queryClient.cancelQueries();
+      queryClient.clear();
+      await refetchSession();
     },
   });
 
@@ -100,6 +101,43 @@ export default function SettingsScreen() {
           <Text className="text-sm text-danger mt-2">{errorMessage(switchOrg.error)}</Text>
         ) : null}
 
+        <Pressable
+          onPress={() => Linking.openURL(`${AUTH_URL}/legal/privacy`)}
+          className="bg-surface border border-border rounded-md py-3.5 mt-8"
+        >
+          <Text className="text-ink text-center">Privacy policy</Text>
+        </Pressable>
+        <Pressable
+          onPress={() =>
+            Alert.alert(
+              'Delete account?',
+              'A verification email will be sent. Transfer workspace ownership first. Business records remain with the workspace.',
+              [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Send verification email',
+                  style: 'destructive',
+                  onPress: async () => {
+                    try {
+                      const result = await expoAuthClient.deleteUser({
+                        callbackURL: `${AUTH_URL}/account-deletion`,
+                      });
+                      Alert.alert(
+                        result.error ? 'Could not delete account' : 'Check your email',
+                        result.error?.message ?? 'Confirm deletion using the link in your email.',
+                      );
+                    } catch (error) {
+                      Alert.alert('Could not delete account', errorMessage(error));
+                    }
+                  },
+                },
+              ],
+            )
+          }
+          className="bg-surface border border-border rounded-md py-3.5 mt-3"
+        >
+          <Text className="text-danger text-center">Delete account</Text>
+        </Pressable>
         <Pressable
           onPress={async () => {
             await signOut();

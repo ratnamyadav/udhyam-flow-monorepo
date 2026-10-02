@@ -7,9 +7,13 @@ import * as schema from '@udyamflow/db/schema';
 import { sendEmail } from '@udyamflow/notifications';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { APIError } from 'better-auth/api';
 import { organization } from 'better-auth/plugins/organization';
+import { assertAccountCanBeDeleted } from './account-deletion';
+import { validateProductionAuth } from './security';
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000';
+validateProductionAuth(process.env);
 
 // Origins allowed to call the auth endpoints (CSRF / origin check). Built
 // from env so production domains work: the web app, the admin app, any
@@ -33,7 +37,8 @@ const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt
 // (no RESEND_API_KEY) the link still prints to console, but we keep the
 // flag off so contributors don't need to fish links out of the terminal on
 // every sign-up.
-const requireEmailVerification = !!process.env.RESEND_API_KEY;
+const requireEmailVerification =
+  process.env.NODE_ENV === 'production' || !!process.env.RESEND_API_KEY;
 
 export const auth = betterAuth({
   baseURL,
@@ -100,15 +105,34 @@ export const auth = betterAuth({
     },
   },
   // Google sign-in renders only when both client id + secret are set.
-  socialProviders: process.env.GOOGLE_CLIENT_ID
-    ? {
-        google: {
-          clientId: process.env.GOOGLE_CLIENT_ID,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
-        },
-      }
-    : undefined,
+  socialProviders:
+    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+          },
+        }
+      : undefined,
   user: {
+    deleteUser: {
+      enabled: true,
+      beforeDelete: async (user) => {
+        await assertAccountCanBeDeleted(db, user.id);
+      },
+      sendDeleteAccountVerification: async ({ user, url }) => {
+        if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
+          throw new APIError('SERVICE_UNAVAILABLE', {
+            message: 'Account verification email is temporarily unavailable.',
+          });
+        }
+        await sendEmail({
+          to: user.email,
+          subject: 'Confirm deletion of your UdyamFlow account',
+          html: `<p>Confirm deletion of your personal account. Workspace business records are retained.</p><p><a href="${escapeHtml(url)}">Delete my account</a></p>`,
+        });
+      },
+    },
     additionalFields: {
       role: { type: 'string', defaultValue: 'user', input: false },
     },
@@ -174,5 +198,5 @@ export type Session = Auth['$Infer']['Session'];
 // Helper for the sign-in / sign-up pages to know whether to render the
 // "Continue with Google" button.
 export const socialProvidersConfigured = {
-  google: !!process.env.GOOGLE_CLIENT_ID,
+  google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
 };

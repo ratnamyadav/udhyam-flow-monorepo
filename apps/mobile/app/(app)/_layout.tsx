@@ -31,6 +31,11 @@ export default function AppLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
+        tabBarIcon: () => null,
+        tabBarIconStyle: { display: 'none' },
+        tabBarLabelPosition: sideRail ? 'beside-icon' : 'below-icon',
+        tabBarLabelStyle: { fontSize: 12, fontWeight: '500' },
+        tabBarItemStyle: { paddingVertical: 8 },
         tabBarActiveTintColor: '#1a1815',
         tabBarInactiveTintColor: '#9a978f',
         tabBarPosition: sideRail ? 'left' : 'bottom',

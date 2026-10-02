@@ -81,9 +81,10 @@ export default function BookTenantScreen() {
   const createCheckout = trpc.payment.createCheckout.useMutation();
   const create = trpc.booking.create.useMutation({
     onSuccess: async (res) => {
-      const confirmation = `/book/${orgSlug}/confirmation?booking=${encodeURIComponent(
-        res.id,
-      )}&ref=${encodeURIComponent(res.referenceCode)}`;
+      const confirmation = {
+        pathname: '/book/[orgSlug]/confirmation' as const,
+        params: { orgSlug, booking: res.id, ref: res.referenceCode },
+      };
       if (res.requiresPayment) {
         setRedirecting(true);
         try {

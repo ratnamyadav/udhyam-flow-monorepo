@@ -1,9 +1,20 @@
 {
   "extends": "@udyamflow/tsconfig/expo.json",
   "compilerOptions": {
-    "paths": { "@/*": ["./*"] },
+    "paths": {
+      "@/*": ["./*"]
+    },
     "jsx": "react-jsx",
     "types": ["expo/types"]
   },
-  "include": ["app/**/*", "components/**/*", "lib/**/*", "*.ts", "*.tsx", "nativewind-env.d.ts"]
+  "include": [
+    "app/**/*",
+    "components/**/*",
+    "lib/**/*",
+    "*.ts",
+    "*.tsx",
+    "nativewind-env.d.ts",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts"
+  ]
 }

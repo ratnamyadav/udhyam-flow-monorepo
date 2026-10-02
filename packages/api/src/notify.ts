@@ -1,6 +1,7 @@
 import { type Db, schema } from '@udyamflow/db';
 import { isMsg91Configured, sendEmail, sendSMS, sendWhatsApp } from '@udyamflow/notifications';
 import { eq } from 'drizzle-orm';
+import { bookingManagementUrl } from './booking-management';
 import { formatInTz } from './lib/time';
 import { escapeHtml } from './lib/validate';
 
@@ -60,6 +61,7 @@ export async function notifyConfirmed(db: Db, bookingId: string): Promise<void> 
     // Online sessions: the join link is the one thing the customer needs on
     // the day, so it goes into every channel.
     const link = b.meetingUrl;
+    const manageUrl = bookingManagementUrl(b.id, b.slotStart);
 
     if (b.customerEmail) {
       await sendEmail({
@@ -79,6 +81,7 @@ export async function notifyConfirmed(db: Db, bookingId: string): Promise<void> 
               ? `<p style="color:#5e5b54;line-height:1.6;">Join here: <a href="${escapeHtml(link)}">${escapeHtml(link)}</a></p>`
               : ''
           }
+          ${manageUrl ? `<p><a href="${escapeHtml(manageUrl)}">Manage this booking</a></p><p>You can change the time or cancel before it starts. Refunds are handled by the business.</p>` : ''}
           <p style="color:#9a978f;font-size:12px;">Reference: ${ref}</p>`,
         ),
       }).catch((err) => console.error('confirmation email failed', err));

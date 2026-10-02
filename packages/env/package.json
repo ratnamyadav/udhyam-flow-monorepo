@@ -8,7 +8,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./server": "./src/server.ts",
-    "./client": "./src/client.ts"
+    "./client": "./src/client.ts",
+    "./privacy": "./src/privacy.ts"
   },
   "scripts": {
     "lint": "biome check src",

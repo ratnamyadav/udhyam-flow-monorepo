@@ -43,4 +43,5 @@ export const invitation = pgTable('invitation', {
   role: text('role').notNull().default('member'),
   status: text('status').notNull().default('pending'),
   expiresAt: timestamp('expires_at').notNull(),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
 });

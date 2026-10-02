@@ -29,6 +29,7 @@ export function Topbar({
   activeTheme: TenantTheme;
   user: { name: string | null; email: string };
 }) {
+  const session = authClient.useSession();
   const pathname = usePathname();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -54,6 +55,7 @@ export function Topbar({
           setSwitchError(res.error.message ?? 'Could not switch workspace');
           return;
         }
+        await session.refetch();
         setOpenOrg(false);
         router.refresh();
       } catch (e) {

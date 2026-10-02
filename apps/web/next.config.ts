@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { loadEnvConfig } from '@next/env';
-import { withSentryConfig } from '@sentry/nextjs';
+import { withSentryConfig } from '@sentry/nextjs/config';
 import { getServerEnv } from '@udyamflow/env/server';
 import type { NextConfig } from 'next';
 
@@ -45,7 +45,7 @@ const config: NextConfig = {
 // the secret required by Sentry's CLI to upload artifacts during build.
 export default withSentryConfig(config, {
   silent: true,
-  disableLogger: true,
+  webpack: { treeshake: { removeDebugLogging: true } },
   widenClientFileUpload: true,
   authToken: process.env.SENTRY_AUTH_TOKEN,
   org: process.env.SENTRY_ORG,

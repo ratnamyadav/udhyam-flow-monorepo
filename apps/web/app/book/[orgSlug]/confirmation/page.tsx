@@ -1,3 +1,4 @@
+import { expireStaleHolds } from '@udyamflow/api';
 import { db, schema } from '@udyamflow/db';
 import { type TenantTheme, tenantThemeStyle } from '@udyamflow/tokens';
 import { eq } from 'drizzle-orm';
@@ -67,6 +68,9 @@ export default async function BookingConfirmationPage({
     );
   }
 
+  // Resolve expired holds before rendering; a read-only status page must not
+  // keep promising a slot that the payment lifecycle has already released.
+  await expireStaleHolds(db);
   const [booking] = await db.select().from(schema.booking).where(eq(schema.booking.id, bookingId));
   if (!booking || booking.organizationId !== org.id) {
     return (
@@ -123,7 +127,7 @@ export default async function BookingConfirmationPage({
       <Shell brand={brand}>
         <FallbackCard
           title="Your hold expired"
-          body={`We held ${displayTime} while you paid, but payment didn't complete in time, so the slot was released. You haven't been charged — pick a new time to book again. Reference ${referenceCode}.`}
+          body={`We held ${displayTime} while you paid, but payment didn't complete in time, so the slot was released. If a payment reached the business late, contact them before paying again. Reference ${referenceCode}.`}
           href={backHref}
           cta="Pick a new time"
         />
@@ -139,7 +143,11 @@ export default async function BookingConfirmationPage({
         <FallbackCard
           title="This booking was cancelled"
           body={`The booking for ${displayTime} (reference ${referenceCode}) is cancelled.${
-            refunded ? ' Your refund is on its way to the original payment method.' : ''
+            refunded
+              ? booking.paymentStatus === 'partially_refunded'
+                ? ' A partial refund has been recorded. Contact the business about the balance.'
+                : ' Your refund is on its way to the original payment method.'
+              : ''
           }`}
           href={backHref}
           cta="Book another time"

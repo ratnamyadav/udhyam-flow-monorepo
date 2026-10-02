@@ -10,17 +10,21 @@
     "./server": "./src/server.ts",
     "./client": "./src/client.ts",
     "./expo-client": "./src/expo-client.ts",
-    "./middleware": "./src/middleware.ts"
+    "./middleware": "./src/middleware.ts",
+    "./account-deletion": "./src/account-deletion.ts",
+    "./security": "./src/security.ts"
   },
   "scripts": {
     "lint": "biome check src",
     "check-types": "tsgo --noEmit"
   },
   "dependencies": {
-    "@better-auth/expo": "1.6.9",
+    "@better-auth/expo": "1.7.7",
     "@udyamflow/db": "workspace:*",
     "@udyamflow/notifications": "workspace:*",
-    "better-auth": "catalog:"
+    "better-auth": "catalog:",
+    "@better-auth/core": "1.7.7",
+    "@better-auth/utils": "0.4.2"
   },
   "devDependencies": {
     "@types/node": "catalog:",

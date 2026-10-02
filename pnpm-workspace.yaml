@@ -5,14 +5,14 @@ packages:
 
 catalog:
   # React
-  react: 19.2.8
-  react-dom: 19.2.8
-  "@types/react": 19.2.18
-  "@types/react-dom": 19.2.7
+  react: 19.3.0
+  react-dom: 19.3.0
+  "@types/react": 19.3.0
+  "@types/react-dom": 19.3.0
 
   # Next.js
-  next: 16.3.7
-  "@next/env": 16.3.7
+  next: 16.3.8
+  "@next/env": 16.3.8
   next-themes: 0.4.6
 
   # Expo — versions must match `expo/bundledNativeModules.json` for SDK 57
@@ -36,54 +36,54 @@ catalog:
   react-native-worklets: 0.10.1
 
   # Styling
-  tailwindcss: 4.2.4
-  "@tailwindcss/postcss": 4.2.4
-  postcss: 8.5.5
-  autoprefixer: 10.4.21
+  tailwindcss: 4.3.3
+  "@tailwindcss/postcss": 4.3.3
+  postcss: 8.5.28
+  autoprefixer: 10.6.1
   nativewind: 5.0.0-preview.3
-  react-native-css: 3.0.1
+  react-native-css: 3.0.7
   class-variance-authority: 0.7.1
   clsx: 2.1.1
-  tailwind-merge: 3.5.0
+  tailwind-merge: 3.7.0
 
   # Auth
-  better-auth: 1.6.9
+  better-auth: 1.7.7
 
   # DB
-  drizzle-orm: 0.45.2
-  drizzle-kit: 0.31.10
-  "@neondatabase/serverless": 1.1.0
+  drizzle-orm: 0.45.3
+  drizzle-kit: 0.31.11
+  "@neondatabase/serverless": 1.2.0
 
   # API
-  "@trpc/server": 11.16.0
-  "@trpc/client": 11.16.0
-  "@trpc/react-query": 11.16.0
-  "@tanstack/react-query": 5.100.5
+  "@trpc/server": 11.19.0
+  "@trpc/client": 11.19.0
+  "@trpc/react-query": 11.19.0
+  "@tanstack/react-query": 5.104.1
   superjson: 2.2.6
-  zod: 4.3.6
+  zod: 4.6.5
 
   # Tooling
   typescript: 6.0.3
-  "@typescript/native-preview": 7.0.0-dev.20260421.2
-  "@biomejs/biome": 2.4.13
-  turbo: 2.9.6
+  "@typescript/native-preview": 7.0.0-dev.20260707.2
+  "@biomejs/biome": 2.5.15
+  turbo: 2.11.7
   "@t3-oss/env-nextjs": 0.13.11
 
   # Misc
-  lucide-react: 0.479.0
-  dotenv: 17.2.3
-  tsx: 4.20.6
-  "@types/node": 22.10.10
-  date-fns: 4.1.0
+  lucide-react: 1.50.0
+  dotenv: 18.0.5
+  tsx: 4.23.15
+  "@types/node": 24.19.1
+  date-fns: 4.4.0
   date-fns-tz: 3.2.0
-  "@sentry/nextjs": 10.21.0
-  "@aws-sdk/client-s3": 3.940.0
-  "@aws-sdk/s3-request-presigner": 3.940.0
-  stripe: 22.2.2
-  sharp: 0.34.4
-  vitest: 3.2.4
-  "@electric-sql/pglite": 0.3.15
-  "@vitest/coverage-v8": 3.2.4
+  "@sentry/nextjs": 11.4.0
+  "@aws-sdk/client-s3": 3.1145.0
+  "@aws-sdk/s3-request-presigner": 3.1145.0
+  stripe: 23.0.0
+  sharp: 0.35.5
+  vitest: 4.1.11
+  "@electric-sql/pglite": 0.5.8
+  "@vitest/coverage-v8": 4.1.11
 
 # React Native's renderer requires the *exact* React version it was built
 # against (RN 0.86 / Expo SDK 57 → React 19.2.3), which differs from the web
@@ -93,3 +93,5 @@ catalogs:
   mobile:
     react: 19.2.3
     react-dom: 19.2.3
+    "@types/react": 19.2.18
+    "@types/react-dom": 19.2.7

@@ -11,6 +11,7 @@ import {
 import { PROFESSIONS, type ProfessionId } from '@udyamflow/tokens';
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { verifyBookingManagementToken } from '../booking-management';
 import { generateSlots, type Interval, overlaps, type Slot } from '../lib/slots';
 import {
   addDaysToDate,
@@ -199,7 +200,152 @@ async function candidateSlots(
 
 const bookingStatus = z.enum(BOOKING_STATUSES);
 
+const managementInput = z.object({
+  bookingId: z.string().min(1).max(100),
+  token: z.string().max(100),
+});
+
+async function loadManagedBooking(
+  ctx: { db: Db; headers: Headers },
+  input: z.infer<typeof managementInput>,
+) {
+  await enforceRateLimit({
+    key: `manage:${ipKeyFromHeaders(ctx.headers)}`,
+    limit: 20,
+    windowSec: 60,
+  });
+  if (!verifyBookingManagementToken(input.bookingId, input.token)) {
+    throw new TRPCError({
+      code: 'FORBIDDEN',
+      message: 'This management link is invalid or expired. Contact the business.',
+    });
+  }
+  const [booking] = await ctx.db
+    .select()
+    .from(schema.booking)
+    .where(eq(schema.booking.id, input.bookingId));
+  if (!booking) throw new TRPCError({ code: 'NOT_FOUND', message: 'Booking not found.' });
+  if (
+    !['confirmed', 'pending_payment'].includes(booking.status) ||
+    booking.slotStart.getTime() <= Date.now()
+  ) {
+    throw new TRPCError({
+      code: 'PRECONDITION_FAILED',
+      message: 'This appointment can no longer be changed online. Contact the business.',
+    });
+  }
+  return booking;
+}
+
 export const bookingRouter = router({
+  managementSlots: publicProcedure
+    .input(managementInput.extend({ date: dateStr }))
+    .query(async ({ ctx, input }) => {
+      const booking = await loadManagedBooking(ctx, input);
+      const [org] = await ctx.db
+        .select()
+        .from(schema.organization)
+        .where(eq(schema.organization.id, booking.organizationId));
+      const resolved = await resolveBookable(ctx.db, {
+        orgSlug: org!.slug,
+        resourceId: booking.resourceId,
+        locationId: booking.locationId,
+        serviceId: booking.serviceId ?? undefined,
+      });
+      if (!resolved.ok) throw new TRPCError({ code: resolved.code, message: resolved.message });
+      const b = {
+        ...resolved.value,
+        slotMin: (booking.slotEnd.getTime() - booking.slotStart.getTime()) / 60_000,
+      };
+      const now = new Date();
+      if (!isWithinHorizon(input.date, b.timezone, now)) return { slots: [], timezone: b.timezone };
+      const taken = await takenIntervals(
+        ctx.db,
+        b.resourceId,
+        dayWindowUtc(input.date, b.timezone),
+      );
+      return {
+        slots: await candidateSlots(ctx.db, b, input.date, now, taken),
+        timezone: b.timezone,
+      };
+    }),
+
+  cancelPublic: publicProcedure
+    .input(managementInput.extend({ reason: z.string().trim().max(500).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const booking = await loadManagedBooking(ctx, input);
+      await transition(ctx.db, booking, 'cancelled', {
+        cancelReason: input.reason ?? 'Cancelled by customer',
+      });
+      await notifyCancelled(ctx.db, booking.id);
+      return { ok: true as const, status: 'cancelled' as const };
+    }),
+
+  reschedulePublic: publicProcedure
+    .input(managementInput.extend({ slotStart: z.iso.datetime() }))
+    .mutation(async ({ ctx, input }) => {
+      const booking = await loadManagedBooking(ctx, input);
+      if (booking.status !== 'confirmed')
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Complete payment or cancel the hold before choosing another time.',
+        });
+      const [org] = await ctx.db
+        .select()
+        .from(schema.organization)
+        .where(eq(schema.organization.id, booking.organizationId));
+      const resolved = await resolveBookable(ctx.db, {
+        orgSlug: org!.slug,
+        resourceId: booking.resourceId,
+        locationId: booking.locationId,
+        serviceId: booking.serviceId ?? undefined,
+      });
+      if (!resolved.ok) throw new TRPCError({ code: resolved.code, message: resolved.message });
+      const b = {
+        ...resolved.value,
+        slotMin: (booking.slotEnd.getTime() - booking.slotStart.getTime()) / 60_000,
+      };
+      const now = new Date();
+      const start = new Date(input.slotStart);
+      const date = formatInTz(start, b.timezone, 'yyyy-MM-dd');
+      const taken = await takenIntervals(ctx.db, b.resourceId, dayWindowUtc(date, b.timezone));
+      const slots = isWithinHorizon(date, b.timezone, now)
+        ? await candidateSlots(ctx.db, b, date, now, taken)
+        : [];
+      const slot = slots.find((s) => s.start === start.toISOString());
+      if (!slot)
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: 'That time is unavailable. Choose another slot.',
+        });
+      try {
+        const updated = await ctx.db
+          .update(schema.booking)
+          .set({ slotStart: start, slotEnd: new Date(slot.end) })
+          .where(
+            and(
+              eq(schema.booking.id, booking.id),
+              eq(schema.booking.status, booking.status),
+              eq(schema.booking.slotStart, booking.slotStart),
+            ),
+          )
+          .returning({ id: schema.booking.id });
+        if (!updated.length)
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'This booking changed. Refresh and try again.',
+          });
+      } catch (error) {
+        if (isConflictError(error))
+          throw new TRPCError({
+            code: 'CONFLICT',
+            message: 'That time was just taken. Choose another slot.',
+          });
+        throw error;
+      }
+      await notifyConfirmed(ctx.db, booking.id);
+      return { ok: true as const };
+    }),
   listSlots: publicProcedure
     .input(
       z.object({

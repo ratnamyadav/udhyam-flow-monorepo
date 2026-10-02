@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { httpBatchLink, loggerLink } from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
 import type { AppRouter } from '@udyamflow/api';
+import { useSession } from '@udyamflow/auth/client';
 import { useState } from 'react';
 import superjson from 'superjson';
 
@@ -16,14 +17,18 @@ function getBaseUrl() {
 }
 
 export function TRPCReactProvider({ children }: { children: React.ReactNode }) {
+  const { data: session } = useSession();
+  const identity = `${session?.user.id ?? 'anonymous'}:${session?.session.activeOrganizationId ?? 'none'}`;
+  return <ScopedTRPCProvider key={identity}>{children}</ScopedTRPCProvider>;
+}
+
+function ScopedTRPCProvider({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(() => new QueryClient());
   const [trpcClient] = useState(() =>
     trpc.createClient({
       links: [
         loggerLink({
-          enabled: (op) =>
-            process.env.NODE_ENV === 'development' ||
-            (op.direction === 'down' && op.result instanceof Error),
+          enabled: () => process.env.NODE_ENV === 'development',
         }),
         httpBatchLink({
           url: `${getBaseUrl()}/api/trpc`,

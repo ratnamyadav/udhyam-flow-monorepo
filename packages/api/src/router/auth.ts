@@ -9,9 +9,10 @@ export const authRouter = router({
   // whether a new account must verify its email before it can sign in. Cheap
   // boolean lookups — no provider secrets returned.
   providers: publicProcedure.query(() => ({
-    google: !!process.env.GOOGLE_CLIENT_ID,
+    google: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     // Mirrors `requireEmailVerification` in packages/auth/src/server.ts.
-    emailVerificationRequired: !!process.env.RESEND_API_KEY,
+    emailVerificationRequired:
+      process.env.NODE_ENV === 'production' || !!process.env.RESEND_API_KEY,
   })),
 
   // The caller's role in the org their tenant calls resolve to — lets the

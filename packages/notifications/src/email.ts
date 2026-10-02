@@ -13,6 +13,7 @@ export async function sendEmail({ to, subject, html }: SendArgs): Promise<void> 
   const from = process.env.EMAIL_FROM ?? 'UdyamFlow <noreply@udyamflow.com>';
 
   if (!apiKey) {
+    if (process.env.NODE_ENV === 'production') throw new Error('Email delivery is not configured.');
     console.log('────── email (no RESEND_API_KEY) ──────');
     console.log(`To:      ${to}`);
     console.log(`From:    ${from}`);
