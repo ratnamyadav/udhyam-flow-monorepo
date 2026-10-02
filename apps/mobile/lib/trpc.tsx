@@ -3,7 +3,7 @@ import { httpBatchLink, loggerLink, TRPCClientError } from '@trpc/client';
 import { createTRPCReact } from '@trpc/react-query';
 import type { AppRouter } from '@udyamflow/api';
 import { router } from 'expo-router';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useState } from 'react';
 import { Platform } from 'react-native';
 import superjson from 'superjson';
 import { expoAuthClient, useSession } from '@/lib/auth';
@@ -70,11 +70,16 @@ function createQueryClient() {
 export function TRPCProvider({ children }: { children: ReactNode }) {
   const { data: session } = useSession();
   const identity = `${session?.user.id ?? 'anonymous'}:${session?.session.activeOrganizationId ?? 'none'}`;
-  return <ScopedTRPCProvider key={identity}>{children}</ScopedTRPCProvider>;
-}
-
-function ScopedTRPCProvider({ children }: { children: ReactNode }) {
-  const [queryClient] = useState(createQueryClient);
+  // Replace tenant caches without remounting the Expo navigator during sign-in.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: identity owns the cache lifetime.
+  const queryClient = useMemo(createQueryClient, [identity]);
+  useEffect(
+    () => () => {
+      void queryClient.cancelQueries();
+      queryClient.clear();
+    },
+    [queryClient],
+  );
 
   const [trpcClient] = useState(() =>
     trpc.createClient({

@@ -268,6 +268,15 @@ describe('passwordless email OTP through the real auth handler', () => {
     const arbitrary = await request('/delete-user', { token: code(address) }, cookie);
     expect(arbitrary.status).not.toBe(200);
     expect(await db.query.user.findFirst({ where: eq(schema.user.email, address) })).toBeDefined();
+    const proof = new URL(deletionMail.at(-1)!);
+    const confirmed = await request(`/delete-user/callback${proof.search}`, undefined, cookie);
+    expect(confirmed.status).toBe(302);
+    expect(
+      await db.query.user.findFirst({ where: eq(schema.user.email, address) }),
+    ).toBeUndefined();
+    expect(
+      (await request(`/delete-user/callback${proof.search}`, undefined, cookie)).status,
+    ).not.toBe(302);
   });
   it('blocks password and alternate OTP oracles and client-supplied admin privileges', async () => {
     for (const path of [

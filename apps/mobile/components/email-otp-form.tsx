@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
-import { expoAuthClient } from '@/lib/auth';
+import { expoAuthClient, useSession } from '@/lib/auth';
 
 export function EmailOTPForm({
   signup = false,
@@ -9,6 +9,15 @@ export function EmailOTPForm({
   signup?: boolean;
   onSuccess: () => void | Promise<void>;
 }) {
+  const { data: session } = useSession();
+  const [verified, setVerified] = useState(false);
+  useEffect(() => {
+    if (!verified || !session?.user) return;
+    setVerified(false);
+    void Promise.resolve(onSuccess()).catch(() => {
+      setMessage('Unable to continue. Please try again.');
+    });
+  }, [verified, session?.user, onSuccess]);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -68,7 +77,8 @@ export function EmailOTPForm({
       }
       setCode('');
       await expoAuthClient.getSession();
-      await onSuccess();
+      // The protected route reads the reactive session, not the fetch result.
+      setVerified(true);
     } catch {
       setMessage('Unable to verify this code. Check it or request a new one.');
     } finally {
