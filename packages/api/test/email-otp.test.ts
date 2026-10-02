@@ -216,7 +216,9 @@ describe('passwordless email OTP through the real auth handler', () => {
     await resetRateLimits();
     const ip = uid('shared-ip');
     for (let i = 0; i < 20; i++) expect((await send(email(), ip)).status).toBe(200);
+    const before = await db.select().from(schema.verification);
     expect((await send(email(), ip)).status).not.toBe(200);
+    expect(await db.select().from(schema.verification)).toHaveLength(before.length);
   });
   it('revokes unproven credentials/sessions when an unverified mailbox is first proven', async () => {
     await resetRateLimits();

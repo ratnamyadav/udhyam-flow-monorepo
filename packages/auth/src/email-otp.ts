@@ -57,15 +57,17 @@ export function emailOTPGuard(database: Db) {
     if (verifying && (typeof body.otp !== 'string' || !/^\d{6}$/.test(body.otp)))
       throw unavailable();
     const action = sending ? 'send' : 'verify';
-    // Email budgets are durable and shared across devices/IPs/challenges.
-    if (!(await takeAuthRateLimit(database, `otp:${action}:email:${email}`, sending ? 3 : 15, 900)))
-      throw unavailable();
+    // Check the IP budget first so rejected floods cannot create a new
+    // persistent recipient marker for every arbitrary email address.
     // Trust only the explicitly configured, edge-controlled header. When
     // absent, a shared fallback budget fails closed instead of trusting XFF.
     const header = process.env.TRUSTED_IP_HEADER;
     const ip = header ? ctx.headers?.get(header)?.trim() : undefined;
     const bucket = ip && ip.length <= 128 ? ip : 'unattributed';
     if (!(await takeAuthRateLimit(database, `otp:${action}:ip:${bucket}`, sending ? 20 : 60, 900)))
+      throw unavailable();
+    // Email budgets are durable and shared across devices/IPs/challenges.
+    if (!(await takeAuthRateLimit(database, `otp:${action}:email:${email}`, sending ? 3 : 15, 900)))
       throw unavailable();
     if (sending) {
       if (!(await takeAuthRateLimit(database, `otp:cooldown:${email}`, 1, 60))) throw unavailable();
