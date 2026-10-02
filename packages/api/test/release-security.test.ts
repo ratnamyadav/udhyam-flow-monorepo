@@ -23,6 +23,19 @@ const env = {
   NEXT_PUBLIC_AUTH_URL: 'https://app.example.com',
 };
 describe('production auth', () => {
+  it('scrubs automatic URL breadcrumbs and span data even without a request', () => {
+    const event = {
+      breadcrumbs: [{ data: { url: '/api/trpc?input=signed-private-token' } }],
+      extra: { customer: 'private@example.test' },
+      contexts: { trace: { data: { 'http.url': '/manage-booking?token=private' } } },
+      spans: [{ description: 'GET /api/trpc?input=private', data: { intake: 'private' } }],
+    };
+    const clean = scrubDiagnosticEvent(event);
+    expect(clean.breadcrumbs).toBeUndefined();
+    expect(clean.extra).toBeUndefined();
+    expect(clean.contexts.trace.data).toBeUndefined();
+    expect(clean.spans[0]).toEqual({ description: 'GET /api/trpc', data: undefined });
+  });
   it('migrates invitations with the timestamp required by upgraded BetterAuth', async () => {
     const f = await seedOrg(db);
     const [invite] = await db

@@ -3,15 +3,14 @@
 // NEXT_PUBLIC_SENTRY_DSN is unset so dev runs stay quiet.
 
 import * as Sentry from '@sentry/nextjs';
-import { scrubDiagnosticEvent } from '@udyamflow/env/privacy';
+import { diagnosticPrivacyOptions } from '@udyamflow/env/privacy';
 
 const dsn = process.env.NEXT_PUBLIC_SENTRY_DSN;
 
 if (dsn) {
   Sentry.init({
     dsn,
-    beforeSend: scrubDiagnosticEvent,
-    beforeSendTransaction: scrubDiagnosticEvent,
+    ...diagnosticPrivacyOptions,
     tracesSampleRate: 0.1,
     replaysSessionSampleRate: 0,
     replaysOnErrorSampleRate: 0,
