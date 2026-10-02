@@ -14,3 +14,9 @@ CI=1 NODE_ENV=production EXPO_PUBLIC_AUTH_URL=http://localhost:3191 pnpm --filte
 ```
 
 The supplied preview server binds only 127.0.0.1, permits GET/OPTIONS only, and serves only the seven read procedures used in the captures plus synthetic auth session/list. Its database is in memory; no production driver, payment provider or mutation endpoint is exposed. Use a separate test shell without production provider values. Stop the processes after review.
+
+## Email-code UI captures
+
+Three phone images (`expo-web-phone-email-sign-in`, `email-sign-up`, `email-code`) are 1080×1920 at 360×640, 3×, from actual production Expo-web source `0508783`. All three were visually inspected. Signup content can scroll on short phones. Synthetic Asha Mehra/new-owner@example.test only; code input is empty and no token is visible. The UI flow passes the checks in `OTP-UI-verification.json`. These remain web reference images, not physical native screenshots.
+
+`otp-preview-server.mts` is a separate localhost-only synthetic auth fixture; never deploy it. It exposes OTP retrieval only for its three allowlisted example.test recipients, runs migrated in-memory PGlite and strips provider values. `verify-otp-browser.mjs` uses separately installed Playwright-core and an isolated headless Chrome profile; it waits through a real 60-second resend cooldown. Start the auth fixture, then production Expo-web at localhost8091 with EXPO_PUBLIC_AUTH_URL=http://localhost:3191. Stop owned processes after review. No real email, deletion or booking mutation is performed by the browser fixture. Valid deletion link execution is tested only in the API handler suite.

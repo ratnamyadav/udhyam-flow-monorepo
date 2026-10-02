@@ -1,0 +1,22 @@
+{
+  "source": "0508783038cb73dc5405d612a90253195a80c854",
+  "result": "PASS",
+  "checks": [
+    "no password input",
+    "signup email/name",
+    "code step and resend cooldown",
+    "change-email/back",
+    "six-digit paste",
+    "generic wrong-code recovery",
+    "real handler code verification",
+    "normal cookie session survives browser reload",
+    "resend enables after real 60-second cooldown",
+    "rotated code rejected",
+    "consumed code rejected",
+    "sign out",
+    "public guest booking entry"
+  ],
+  "runtime": "production Expo-web; actual app UI; synthetic PGlite auth fixture; no real email; not physical native QA",
+  "pageErrors": [],
+  "note": "Verified disposable source changes exactly match this commit; prior unchanged-source recovery intermittently returned to sign-in. Fix preserves navigator across cache identity changes and waits for reactive session."
+}
