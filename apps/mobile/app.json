@@ -16,7 +16,9 @@
       "supportsTablet": true,
       "requireFullScreen": false,
       "bundleIdentifier": "com.udyamflow.app",
-      "associatedDomains": ["applinks:udyamflow.com"]
+      "associatedDomains": [
+        "applinks:udyamflow.com"
+      ]
     },
     "android": {
       "package": "com.udyamflow.app",
@@ -35,7 +37,10 @@
               "pathPrefix": "/book/"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -64,6 +69,12 @@
     "experiments": {
       "typedRoutes": true,
       "tsconfigPaths": true
+    },
+    "owner": "nextfly_technologies",
+    "extra": {
+      "eas": {
+        "projectId": "d0d78bd0-2017-4e31-b6fc-1d66fb8c53a5"
+      }
     }
   }
 }

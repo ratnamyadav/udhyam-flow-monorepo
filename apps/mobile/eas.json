@@ -1,0 +1,16 @@
+{
+  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "build": {
+    "preview": {
+      "pnpm": "9.15.0",
+      "distribution": "internal",
+      "android": { "buildType": "apk" },
+      "env": { "EXPO_PUBLIC_AUTH_URL": "https://udyamflow.com" }
+    },
+    "production": {
+      "pnpm": "9.15.0",
+      "autoIncrement": true,
+      "env": { "EXPO_PUBLIC_AUTH_URL": "https://udyamflow.com" }
+    }
+  }
+}
