@@ -39,7 +39,7 @@ TypeScript 6.0.3 remains the Next/tooling compiler API; npm TypeScript 7.0.2 exp
 | Expo compatibility | PASS — `expo install --check` |
 | Lint | PASS — final navigation/evidence Biome check: 342 files |
 | Web production build | PASS at final OTP/backend source `85206ab`; isolated serial synthetic build, exit 0 |
-| Admin production build | PASS at final OTP/backend source `85206ab`; isolated serial synthetic build, exit 0 |
+| Admin production build | PASS at `85206ab`; later denied-dashboard routing fix `e8d3114` passes focused tests/types; fresh production rebuild PENDING Mybooz heavy-slot release |
 | iOS production Hermes export | PASS at earlier `da505da` — 1944 modules; `/tmp/udyamflow-ios-release-export`, 4.7 MB bundle |
 | Android production Hermes export | PASS at earlier `da505da` — 2037 modules; 4.9 MB bundle |
 | Native simulator/device interaction | BLOCKED — official Expo Go downloaded, but simulator install/launch/query calls stalled; native UI pipe unavailable. Own stalled commands stopped. No simulator reset/security changes. |
@@ -128,3 +128,9 @@ Latest verified tests: 11 focused OTP handler tests; actual Expo auth plugin coo
 The actual prebuilt web signup/sign-in and admin sign-in forms pass with captured synthetic mail and real auth handlers. Web callback navigation and cookie reload persistence pass; admin ordinary session, reload persistence, code reuse rejection and dashboard navigation invocation pass. No page errors. Compiled Next source `85206ab` is unchanged in web/admin/shared form/browser client/auth handler through `004b04d`. Mobile native source remains `0508783`; no app source changed in this follow-up. Reports and reproducible Playwright helper are in `release-assets/udyamflow-next-{web,admin}-form-verification.json` and `verify-next-otp-forms.mjs`.
 
 The admin harness initially failed after intentionally aborting dashboard requests and attempting a relative fetch from the resulting network error page. Returning to the real sign-in page corrected that harness boundary; auth verification had already returned 200 with a normal ordinary-user session. The real server dashboard gate remains outside this test: it requires a configured PostgreSQL/Neon `DATABASE_URL`, while the isolated preview points to localhost port 1 and injected PGlite serves only the fixture auth handler. No production DB was accessed. Shared-form timed expiry/resend and real mail remain unrun, with separate handler/Expo coverage recorded above. Owned previews stopped; no new build ran; Mybooz retains the heavy slot.
+
+## Admin role enforcement and failure follow-up
+
+See `ADMIN-AUTHORIZATION-2026-10-02.md`: 31 targeted tests pass (20 API/authorization plus 11 actual Next guard/action tests). Exact server `user.role === admin` is enforced independently by server guards and all three platform procedures; tenant roles/header/form claims do not grant it. Real OTP/profile role tampering, cross-tenant denial, same-cookie demotion and authentication/data failures are tested through migrated PGlite and the production tRPC fetch adapter. Next framework/auth/adapter boundaries are mocked only for direct server guard/action tests. Production Neon HTTP transport is not certified.
+
+`e8d3114` fixes a tested denial self-redirect by routing denied `requireStaffCaller()` users to `/sign-in`; the role/data guard is unchanged. API/admin typechecks pass. A fresh admin production build is pending the shared heavy slot; prior Next/browser evidence remains `85206ab`. Mobile/native source remains `0508783`. No heavy build or production change occurred.
