@@ -39,7 +39,8 @@
     "react-native-worklets": "catalog:",
     "superjson": "catalog:",
     "tailwindcss": "catalog:",
-    "react-native-web": "~0.21.2"
+    "react-native-web": "~0.21.2",
+    "expo-system-ui": "~57.0.4"
   },
   "devDependencies": {
     "@babel/core": "7.29.7",

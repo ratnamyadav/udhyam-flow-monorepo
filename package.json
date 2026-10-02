@@ -30,7 +30,34 @@
     "overrides": {
       "@expo/metro-config>lightningcss": "1.30.1",
       "@better-auth/core>@better-auth/utils": "0.4.2",
-      "@better-auth/utils": "0.4.2"
+      "@better-auth/utils": "0.4.2",
+      "@xmldom/xmldom@^0.8.0": "0.8.15",
+      "@xmldom/xmldom@^0.9.0": "0.9.12",
+      "baseline-browser-mapping@^2.0.0": "2.11.27",
+      "brace-expansion@^5.0.0": "5.0.12",
+      "browserslist@^4.0.0": "4.29.3",
+      "fast-uri@^3.0.0": "3.1.8",
+      "js-yaml@^4.0.0": "4.3.2",
+      "shell-quote@^1.0.0": "1.12.0",
+      "ws@^7.0.0": "7.5.13",
+      "ws@^8.0.0": "8.22.0",
+      "metro-file-map@0.84.3": "0.84.5",
+      "metro-babel-transformer@0.84.3": "0.84.5",
+      "metro-resolver@0.84.3": "0.84.5",
+      "metro-source-map@0.84.3": "0.84.5",
+      "metro-cache-key@0.84.3": "0.84.5",
+      "metro-symbolicate@0.84.3": "0.84.5",
+      "metro-runtime@0.84.3": "0.84.5",
+      "metro-cache@0.84.3": "0.84.5",
+      "metro-transform-worker@0.84.3": "0.84.5",
+      "metro-config@0.84.3": "0.84.5",
+      "metro@0.84.3": "0.84.5",
+      "metro-core@0.84.3": "0.84.5",
+      "metro-minify-terser@0.84.3": "0.84.5",
+      "metro-transform-plugins@0.84.3": "0.84.5"
+    },
+    "patchedDependencies": {
+      "decode-uri-component@0.2.2": "patches/decode-uri-component@0.2.2.patch"
     }
   }
 }

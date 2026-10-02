@@ -34,10 +34,10 @@ TypeScript 6.0.3 remains the Next/tooling compiler API; npm TypeScript 7.0.2 exp
 |---|---|
 | Initial typechecks | PASS — 11 workspace tasks |
 | Initial tests | PASS — 179 API + 8 storage tests |
-| Updated full tests | PASS — final 186 API + 8 storage = 194 tests; 16 API suites plus storage; disposable PGlite includes new auth migration |
+| Updated full tests | PASS — final 188 API + 8 storage = 196 tests; 17 API suites plus storage; disposable PGlite includes new auth migration |
 | Updated serial typechecks | PASS — final serial run: all 11 tasks; mobile rechecked after final tab presentation fix |
 | Expo compatibility | PASS — `expo install --check` |
-| Lint | PASS — final Biome check: 330 files |
+| Lint | PASS — final Biome check: 331 files |
 | Web production build | PASS — final Next emitted all expected static/dynamic routes using synthetic build env; see auth schema note below |
 | Admin production build | PASS — final Next compiled, typechecked and emitted routes; see auth schema note below |
 | iOS production Hermes export | PASS — final 1944 modules; `/tmp/udyamflow-ios-release-export`, 4.7 MB bundle |
@@ -89,4 +89,8 @@ Play developer account: the user confirmed on 2026-10-02 that the prior organiza
 
 ## Prepared migration
 
-Final web/admin builds exited successfully but the upgraded BetterAuth adapter reported that `invitation.createdAt` was missing. Added `createdAt` to Drizzle and generated `packages/db/migrations/0004_auth-invitation-created-at.sql` plus journal/snapshot **offline**: `ALTER TABLE "invitation" ADD COLUMN "created_at" timestamp DEFAULT now() NOT NULL;`. The existing rows receive the migration-time default; original historical invitation creation times are not recoverable from this change. This migration has NOT been applied to any live database. A release deployment must review its schema/backfill/locking implications and apply it through an authorized deployment before upgrading the server. Final full tests passed 194/194 using fresh migrated PGlite databases. Final serial typechecks passed all 11 tasks and Biome checked 330 files. Fresh production-mode BetterAuth `$context` initialization with synthetic configuration passed without schema-mismatch diagnostics and without database queries. The Next builds above preceded the additive schema fix; deployment must build against the complete committed change and migrate its database before serving the upgraded adapter. Native exports include final cookie/navigation changes.
+Final web/admin builds exited successfully but the upgraded BetterAuth adapter reported that `invitation.createdAt` was missing. Added `createdAt` to Drizzle and generated `packages/db/migrations/0004_auth-invitation-created-at.sql` plus journal/snapshot **offline**: `ALTER TABLE "invitation" ADD COLUMN "created_at" timestamp DEFAULT now() NOT NULL;`. The existing rows receive the migration-time default; original historical invitation creation times are not recoverable from this change. This migration has NOT been applied to any live database. A release deployment must review its schema/backfill/locking implications and apply it through an authorized deployment before upgrading the server. Final full tests passed 196/196 using fresh migrated PGlite databases. Final serial typechecks passed all 11 tasks and Biome checked 331 files. Fresh production-mode BetterAuth `$context` initialization with synthetic configuration passed without schema-mismatch diagnostics and without database queries. Web/admin builds were subsequently rerun serially at exact da505da after the schema fix: both exited 0 with no schema mismatch diagnostics. Security dependency fixes followed and require final build/export validation recorded below. The live database still requires authorized migration before serving the upgraded adapter. Native exports include final cookie/navigation changes.
+
+## Security follow-up
+
+See `DEPENDENCY-ADVISORY-TRIAGE-2026-10-02.md` and adjacent JSON for exact public advisory results, fixed versions, module-compatible decoder patch and unresolved applicability conditions. Added SDK-recommended `expo-system-ui` ~57.0.4 after disposable native prebuild warned it was absent. Simulator access remains separate from native compilation. Native prebuild succeeded in an isolated tracked-source/dependency clone without private .env/signing files. Xcode27, CocoaPods, JDK21 and AndroidSDK36 are available; unsigned physical-SDK compilation is now being attempted serially.
