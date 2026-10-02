@@ -6,7 +6,7 @@
 // that resolution lives in the app (apps/mobile/lib/env.ts).
 
 import { expoClient } from '@better-auth/expo/client';
-import { organizationClient } from 'better-auth/client/plugins';
+import { emailOTPClient, organizationClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 import * as SecureStore from 'expo-secure-store';
 
@@ -19,6 +19,7 @@ export function createExpoAuthClient(baseURL: string) {
         storagePrefix: 'udyamflow',
         storage: SecureStore,
       }),
+      emailOTPClient(),
       organizationClient(),
     ],
   });

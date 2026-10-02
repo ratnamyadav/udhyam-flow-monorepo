@@ -10,6 +10,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
 import { organization } from 'better-auth/plugins/organization';
 import { assertAccountCanBeDeleted } from './account-deletion';
+import { createEmailOTP, emailOTPGuard } from './email-otp';
 import { validateProductionAuth } from './security';
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000';
@@ -33,141 +34,112 @@ const trustedOrigins = [
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-// Email verification is enabled when SMTP/Resend is configured. In pure dev
-// (no RESEND_API_KEY) the link still prints to console, but we keep the
-// flag off so contributors don't need to fish links out of the terminal on
-// every sign-up.
-const requireEmailVerification =
-  process.env.NODE_ENV === 'production' || !!process.env.RESEND_API_KEY;
-
-export const auth = betterAuth({
-  baseURL,
-  secret: process.env.BETTER_AUTH_SECRET,
-  database: drizzleAdapter(db, {
-    provider: 'pg',
-    schema: {
-      user: schema.user,
-      session: schema.session,
-      account: schema.account,
-      verification: schema.verification,
-      organization: schema.organization,
-      member: schema.member,
-      invitation: schema.invitation,
+export function createAppAuth(
+  database: typeof db,
+  deliverOTP?: (email: string, otp: string) => Promise<void>,
+  deliverDeletion?: (data: { user: { id: string; email: string }; url: string }) => Promise<void>,
+) {
+  return betterAuth({
+    baseURL,
+    secret: process.env.BETTER_AUTH_SECRET,
+    database: drizzleAdapter(database, {
+      provider: 'pg',
+      schema: {
+        user: schema.user,
+        session: schema.session,
+        account: schema.account,
+        verification: schema.verification,
+        organization: schema.organization,
+        member: schema.member,
+        invitation: schema.invitation,
+      },
+    }),
+    emailAndPassword: { enabled: false },
+    hooks: { before: emailOTPGuard(database) },
+    // Google sign-in renders only when both client id + secret are set.
+    socialProviders:
+      process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+        ? {
+            google: {
+              clientId: process.env.GOOGLE_CLIENT_ID,
+              clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+            },
+          }
+        : undefined,
+    user: {
+      deleteUser: {
+        enabled: true,
+        beforeDelete: async (user) => {
+          await assertAccountCanBeDeleted(database, user.id);
+        },
+        sendDeleteAccountVerification: async ({ user, url }) => {
+          if (deliverDeletion) {
+            await deliverDeletion({ user, url });
+            return;
+          }
+          if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
+            throw new APIError('SERVICE_UNAVAILABLE', {
+              message: 'Account verification email is temporarily unavailable.',
+            });
+          }
+          await sendEmail({
+            to: user.email,
+            subject: 'Confirm deletion of your UdyamFlow account',
+            html: `<p>Confirm deletion of your personal account. Workspace business records are retained.</p><p><a href="${escapeHtml(url)}">Delete my account</a></p>`,
+          });
+        },
+      },
+      additionalFields: {
+        role: { type: 'string', defaultValue: 'user', input: false },
+      },
     },
-  }),
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification,
-    sendResetPassword: async ({ user, url }) => {
-      await sendEmail({
-        to: user.email,
-        subject: 'Reset your UdyamFlow password',
-        html: `
-          <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:auto;padding:24px;">
-            <h2 style="margin:0 0 12px 0;font-weight:500;color:#1a1815;">Reset your password</h2>
-            <p style="color:#5e5b54;line-height:1.6;">
-              We received a request to reset your password. The link below expires in one hour.
-            </p>
-            <p style="margin:24px 0;">
-              <a href="${url}" style="background:#1a1815;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:500;display:inline-block;">
-                Reset password
-              </a>
-            </p>
-            <p style="color:#9a978f;font-size:12px;">
-              If you didn't request this, you can safely ignore this email.
-            </p>
-          </div>
-        `.trim(),
-      });
-    },
-  },
-  emailVerification: {
-    sendOnSignUp: true,
-    autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendEmail({
-        to: user.email,
-        subject: 'Verify your email — UdyamFlow',
-        html: `
-          <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:auto;padding:24px;">
-            <h2 style="margin:0 0 12px 0;font-weight:500;color:#1a1815;">Welcome to UdyamFlow</h2>
-            <p style="color:#5e5b54;line-height:1.6;">
-              Confirm your email so we can finish setting up your workspace.
-            </p>
-            <p style="margin:24px 0;">
-              <a href="${url}" style="background:#1a1815;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:500;display:inline-block;">
-                Verify email
-              </a>
-            </p>
-          </div>
-        `.trim(),
-      });
-    },
-  },
-  // Google sign-in renders only when both client id + secret are set.
-  socialProviders:
-    process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
-      ? {
-          google: {
-            clientId: process.env.GOOGLE_CLIENT_ID,
-            clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? '',
+    trustedOrigins,
+    databaseHooks: {
+      session: {
+        create: {
+          // New sessions start in the user's oldest workspace, so tenant
+          // calls work straight after sign-in on any device (the org plugin
+          // otherwise leaves activeOrganizationId empty).
+          before: async (session) => {
+            if (session.activeOrganizationId) return { data: session };
+            const membership = await database.query.member.findFirst({
+              columns: { organizationId: true },
+              where: (m, { eq }) => eq(m.userId, session.userId),
+              orderBy: (m, { asc }) => [asc(m.createdAt)],
+            });
+            return {
+              data: { ...session, activeOrganizationId: membership?.organizationId ?? null },
+            };
           },
-        }
-      : undefined,
-  user: {
-    deleteUser: {
-      enabled: true,
-      beforeDelete: async (user) => {
-        await assertAccountCanBeDeleted(db, user.id);
-      },
-      sendDeleteAccountVerification: async ({ user, url }) => {
-        if (process.env.NODE_ENV === 'production' && !process.env.RESEND_API_KEY) {
-          throw new APIError('SERVICE_UNAVAILABLE', {
-            message: 'Account verification email is temporarily unavailable.',
-          });
-        }
-        await sendEmail({
-          to: user.email,
-          subject: 'Confirm deletion of your UdyamFlow account',
-          html: `<p>Confirm deletion of your personal account. Workspace business records are retained.</p><p><a href="${escapeHtml(url)}">Delete my account</a></p>`,
-        });
-      },
-    },
-    additionalFields: {
-      role: { type: 'string', defaultValue: 'user', input: false },
-    },
-  },
-  trustedOrigins,
-  databaseHooks: {
-    session: {
-      create: {
-        // New sessions start in the user's oldest workspace, so tenant
-        // calls work straight after sign-in on any device (the org plugin
-        // otherwise leaves activeOrganizationId empty).
-        before: async (session) => {
-          if (session.activeOrganizationId) return { data: session };
-          const membership = await db.query.member.findFirst({
-            columns: { organizationId: true },
-            where: (m, { eq }) => eq(m.userId, session.userId),
-            orderBy: (m, { asc }) => [asc(m.createdAt)],
-          });
-          return {
-            data: { ...session, activeOrganizationId: membership?.organizationId ?? null },
-          };
         },
       },
     },
-  },
-  plugins: [
-    organization({
-      sendInvitationEmail: async (data) => {
-        const url = `${baseURL}/accept-invitation/${data.id}`;
-        const orgName = escapeHtml(data.organization.name);
-        const role = escapeHtml(data.role);
-        await sendEmail({
-          to: data.email,
-          subject: `You've been invited to join ${data.organization.name} on UdyamFlow`,
-          html: `
+    plugins: [
+      createEmailOTP(
+        deliverOTP ??
+          (async (email, otp) => {
+            // Never let the development email logger print authentication codes.
+            if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM) {
+              throw new APIError('SERVICE_UNAVAILABLE', {
+                message: 'Email sign-in is temporarily unavailable.',
+              });
+            }
+            await sendEmail({
+              to: email,
+              subject: 'Your UdyamFlow sign-in code',
+              html: `<p>Your sign-in code is <strong>${otp}</strong>.</p><p>It expires in 5 minutes and can only be used once. A new code replaces the old one. If you did not request this, ignore this email.</p>`,
+            });
+          }),
+      ),
+      organization({
+        sendInvitationEmail: async (data) => {
+          const url = `${baseURL}/accept-invitation/${data.id}`;
+          const orgName = escapeHtml(data.organization.name);
+          const role = escapeHtml(data.role);
+          await sendEmail({
+            to: data.email,
+            subject: `You've been invited to join ${data.organization.name} on UdyamFlow`,
+            html: `
             <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:auto;padding:24px;">
               <h2 style="margin:0 0 12px 0;font-weight:500;color:#1a1815;">
                 Join ${orgName} on UdyamFlow
@@ -185,13 +157,15 @@ export const auth = betterAuth({
               </p>
             </div>
           `.trim(),
-        });
-      },
-    }),
-    expo(),
-  ],
-});
+          });
+        },
+      }),
+      expo(),
+    ],
+  });
+}
 
+export const auth = createAppAuth(db);
 export type Auth = typeof auth;
 export type Session = Auth['$Infer']['Session'];
 

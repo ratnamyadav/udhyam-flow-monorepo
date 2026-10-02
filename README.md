@@ -108,7 +108,7 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | `/api/export/invoices?format=csv\|tally&from&to` | Authed invoice export for the tenant's accountant — GST CSV or TallyPrime XML |
 | `/invoice/[id]` | Public, printable built-in GST invoice / Bill of Supply |
 | `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC + timestamp, confirms held bookings, records refunds |
-| `/forgot-password`, `/reset-password`, `/verify-email` | Password reset + email verification flows |
+| `/forgot-password`, `/reset-password`, `/verify-email` | Legacy links redirect to passwordless email-code sign-in |
 | `/book/[orgSlug]/confirmation` | Post-payment confirmation (auto-refreshes until webhook lands) |
 | `/book/[orgSlug]?layout=sidebar\|stacked\|inline` | Public tenant booking page (server-rendered with the tenant's theme) |
 | `/api/auth/[...all]` | BetterAuth handler |

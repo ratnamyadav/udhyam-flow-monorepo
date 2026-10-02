@@ -1,4 +1,5 @@
 export { atomic, isConflictError, pgErrorCode } from './atomic';
+export { takeAuthRateLimit } from './auth-rate-limit';
 export type { Db } from './client';
 export { db } from './client';
 export * as schema from './schema';

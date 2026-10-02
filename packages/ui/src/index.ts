@@ -1,6 +1,7 @@
 export { cn } from './cn';
 export * from './components/button';
 export * from './components/card';
+export * from './components/email-otp-form';
 export * from './components/input';
 export * from './components/label';
 export * from './components/logo';
