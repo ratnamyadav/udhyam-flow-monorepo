@@ -38,6 +38,12 @@ export function dayOfWeek(date: string): number {
   return new Date(`${date}T12:00:00Z`).getUTCDay();
 }
 
+// "HH:mm" → minutes past midnight. Callers validate the format first.
+export function hhmmToMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h! * 60 + m!;
+}
+
 export function minutesToHHmm(min: number): string {
   return `${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}`;
 }

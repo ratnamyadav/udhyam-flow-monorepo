@@ -86,6 +86,7 @@ export const tenantRouter = router({
         currency: z.enum(['USD', 'INR']).optional(),
         enableSms: z.boolean().optional(),
         enableWhatsapp: z.boolean().optional(),
+        assistantBooking: z.boolean().optional(),
         // Payout accounts are deliberately absent: stripeAccountId is only
         // set by payment.connectStripe and the Cashfree vendor by
         // payment.connectCashfree — never by the client, or a tenant could

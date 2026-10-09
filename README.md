@@ -60,11 +60,12 @@ Postgres schema is split by domain in `packages/db/src/schema/`:
 - **Auth** — `user`, `session`, `account`, `verification` (BetterAuth core)
 - **Org** — `organization`, `member`, `invitation` (BetterAuth org plugin; orgs == tenants)
 - **Tenant** — `tenant_settings` 1:1 with `organization` (theme, profession, template, density, currency)
-- **Booking** — `location`, `resource`, `resource_hours`, `service`, `service_resource`, `booking`
+- **Booking** — `location`, `resource`, `resource_hours`, `time_off` (holidays / leave / breaks per resource or location), `service`, `service_resource`, `booking`
 - **CRM** — `customer` (deduped per org by email, then phone; optional GSTIN / state for B2B invoices)
 - **Invoicing** — `invoice` (one per booking, mirrors the provider's invoice), `invoice_sequence`, `integration_connection` (encrypted OAuth tokens for accounting tools)
 - **Memberships** — `membership_plan`, `membership_subscription`, `membership_payment` (Cashfree Subscriptions)
 - **Platform** — `platform_settings` (e.g. the default GST threshold)
+- **AI assistants** — `oauth_client`, `oauth_consent`, `oauth_access_token`, `oauth_refresh_token`, `oauth_resource`, `oauth_client_resource`, `oauth_client_assertion`, `jwks` (BetterAuth OAuth provider + JWT plugins; generated with `npx auth@1.7.7 generate`)
 
 Multi-tenancy is **shared DB, scoped by `organization_id`** on every tenant table. The tRPC `tenantProcedure` middleware reads the active org from the session (BetterAuth's `activeOrganizationId`), **verifies the caller is still a member**, and scopes all queries to it. `tenantAdminProcedure` additionally requires the `owner` or `admin` role.
 
@@ -98,7 +99,13 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | `/settings/payments` | Stripe Connect onboarding, Cashfree Easy Split payout account, webhook setup |
 | `/settings/invoicing` | Pick the invoice provider (built-in GST invoices, Zoho Books, FreshBooks or Stripe Invoicing), GST profile, auto-invoicing, CSV / Tally export |
 | `/settings/notifications` | SMS / WhatsApp confirmation toggles and the WhatsApp templates reminders need |
-| `/bookings` | Booking history — filter by status/resource/date, cancel/no-show/complete, refunds, invoices |
+| `/settings/time-off` | Block holidays, leave and breaks for one resource or everyone at a location; lists bookings already in the window |
+| `/settings/assistants` | Connect Claude / ChatGPT / Cursor / Claude Code to the workspace, see and disconnect connected assistants, opt out of customer AI booking |
+| `/api/mcp` | MCP endpoint for owners' AI assistants (OAuth 2.1 bearer token, one workspace per connection) |
+| `/api/mcp/book` | Public MCP endpoint — customers' assistants find a business and book it (no sign-in) |
+| `/oauth/workspace`, `/oauth/consent` | Workspace picker and consent screen shown while connecting an assistant |
+| `/.well-known/oauth-protected-resource`, `/.well-known/oauth-authorization-server` | OAuth discovery for MCP clients |
+| `/bookings` | Booking history — filter by status/resource/date, add walk-in / phone bookings (any free time, off the slot grid), move, cancel/no-show/complete, refunds, invoices |
 | `/customers` | CRM — customer list, search, detail with booking history + notes |
 | `/accept-invitation/[id]` | Accept-invitation flow for invited teammates |
 | `/api/upload/logo/presign` | Owner/admin POST — returns a presigned PUT URL for S3-compatible storage (type- and size-bound, PNG/JPEG/WebP only). The browser resizes the logo before uploading |
@@ -134,6 +141,16 @@ Tenants sell recurring packages ("₹2,000 / month"); the customer approves a UP
 - Code: `packages/api/src/memberships/*` (fetch-based client pinned to `x-api-version: 2026-01-01`, DB orchestration, webhook parsing) and `packages/api/src/router/membership.ts`.
 
 ---
+
+### AI assistants (MCP)
+
+Owners run the business by chatting with their own assistant ("what's my day tomorrow?", "book Priya with Dr. Rao Friday at 4", "block next Monday"). They paste `https://<your-app>/api/mcp` into Claude (Settings → Connectors → Add custom connector) or ChatGPT (developer mode → Create), sign in with the usual email code, pick a workspace and approve — no API keys. Under the hood:
+
+- **Auth** — `@better-auth/oauth-provider` + the `jwt` plugin (`packages/auth/src/server.ts`): dynamic client registration, PKCE, JWT access tokens for the `…/api/mcp` resource carrying the workspace id in `org`. Scopes: `workspace:read`, `workspace:write` (the consent screen lets the owner grant read-only). `packages/auth/src/mcp.ts` verifies tokens and requires the consent on every call, so **Disconnect** (`/settings/assistants`) is immediate; refresh tokens are revoked too.
+- **Tools** — `packages/api/src/mcp/owner.ts`: schedule, bookings, free slots, customers, reports and time off (read); create / move / cancel bookings, mark completed / no-show, block time and add customer notes (write). They call the existing tRPC procedures, so membership and role checks, rate limits and the overlap constraint all apply — removing someone from the team cuts their assistant off. No refunds, payment settings or team management. Assistant bookings are tagged `source = assistant`.
+- **Customer booking** — `packages/api/src/mcp/public.ts` at `/api/mcp/book`: `find_business`, `get_booking_options`, `find_open_times`, `book_appointment` (paid services return a `/pay/<id>` link), `check_booking`. Same public procedures and IP rate limits as the booking page; tagged `source = ai-assistant`. Businesses opt out with `tenant_settings.assistant_booking`.
+
+Dates and times in tools are local to the location (`YYYY-MM-DD`, `HH:mm`). No new env vars: the resource URL derives from `NEXT_PUBLIC_APP_URL`, the issuer from `BETTER_AUTH_URL` (`…/api/auth`). Clients reach the server over the public internet, so test against an HTTPS deployment (or a tunnel), with migrations `0005`–`0006` applied.
 
 ## Requirements
 

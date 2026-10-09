@@ -2,12 +2,14 @@
 // `app/api/auth/[...all]/route.ts`; the Expo app talks to it over HTTP.
 
 import { expo } from '@better-auth/expo';
+import { oauthProvider } from '@better-auth/oauth-provider';
 import { db } from '@udyamflow/db';
 import * as schema from '@udyamflow/db/schema';
 import { sendEmail } from '@udyamflow/notifications';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { APIError } from 'better-auth/api';
+import { jwt } from 'better-auth/plugins/jwt';
 import { organization } from 'better-auth/plugins/organization';
 import { assertAccountCanBeDeleted } from './account-deletion';
 import { createEmailOTP, emailOTPGuard } from './email-otp';
@@ -15,6 +17,43 @@ import { validateProductionAuth } from './security';
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000';
 validateProductionAuth(process.env);
+
+// AI assistants (Claude, ChatGPT, …) connect to the MCP endpoint with OAuth:
+// they register themselves (dynamic client registration), the owner signs in
+// and picks a workspace, and the access token is a JWT for this resource
+// carrying the workspace id in `org`.
+export const MCP_RESOURCE = `${(process.env.NEXT_PUBLIC_APP_URL ?? baseURL).replace(/\/+$/, '')}/api/mcp`;
+export const MCP_SCOPES = ['workspace:read', 'workspace:write'] as const;
+// BetterAuth's handler lives at /api/auth, which is also the OAuth issuer.
+export const AUTH_ISSUER = `${baseURL.replace(/\/+$/, '')}/api/auth`;
+
+// The OAuth provider seeds its resource row while auth initializes. With the
+// database unreachable (CI builds, a cold-start blip) that rejects the whole
+// auth context, though the plugin re-seeds lazily, with retries, on the first
+// OAuth request anyway. So a failed startup seed is logged, not fatal.
+// ponytail: the swallowed init also drops the plugin's back-channel logout
+// hook for that instance; nothing registers back-channel URIs today.
+function tolerantInit<P extends { init?: (ctx: never) => unknown }>(plugin: P): P {
+  const init = plugin.init;
+  if (!init) return plugin;
+  return {
+    ...plugin,
+    init: async (ctx: never) => {
+      try {
+        return await init(ctx);
+      } catch (err) {
+        // `next build` loads auth with a placeholder database; stay quiet there.
+        if (process.env.NEXT_PHASE !== 'phase-production-build') {
+          console.error(
+            '[auth] oauth-provider init failed; will retry on first use:',
+            err instanceof Error ? err.message : err,
+          );
+        }
+        return undefined;
+      }
+    },
+  };
+}
 
 // Origins allowed to call the auth endpoints (CSRF / origin check). Built
 // from env so production domains work: the web app, the admin app, any
@@ -52,9 +91,20 @@ export function createAppAuth(
         organization: schema.organization,
         member: schema.member,
         invitation: schema.invitation,
+        jwks: schema.jwks,
+        oauthClient: schema.oauthClient,
+        oauthResource: schema.oauthResource,
+        oauthClientResource: schema.oauthClientResource,
+        oauthRefreshToken: schema.oauthRefreshToken,
+        oauthAccessToken: schema.oauthAccessToken,
+        oauthConsent: schema.oauthConsent,
+        oauthClientAssertion: schema.oauthClientAssertion,
       },
     }),
     emailAndPassword: { enabled: false },
+    // The jwt plugin's own /token would mint JWTs for any session; only the
+    // OAuth provider should issue tokens.
+    disabledPaths: ['/token'],
     hooks: { before: emailOTPGuard(database) },
     // Google sign-in renders only when both client id + secret are set.
     socialProviders:
@@ -161,6 +211,49 @@ export function createAppAuth(
         },
       }),
       expo(),
+      jwt({ jwt: { issuer: AUTH_ISSUER } }),
+      tolerantInit(
+        oauthProvider({
+          loginPage: '/sign-in',
+          consentPage: '/oauth/consent',
+          scopes: ['openid', 'profile', 'email', 'offline_access', ...MCP_SCOPES],
+          allowDynamicClientRegistration: true,
+          allowUnauthenticatedClientRegistration: true,
+          clientRegistrationDefaultScopes: ['offline_access', ...MCP_SCOPES],
+          resources: [MCP_RESOURCE],
+          clientRegistrationDefaultResources: [MCP_RESOURCE],
+          postLogin: {
+            // People in several workspaces choose which one the assistant gets.
+            page: '/oauth/workspace',
+            shouldRedirect: async ({ user }) => {
+              const memberships = await database.query.member.findMany({
+                columns: { id: true },
+                where: (m, { eq }) => eq(m.userId, user.id),
+                limit: 2,
+              });
+              return memberships.length > 1;
+            },
+            consentReferenceId: async ({ user, session }) => {
+              const orgId = (session as { activeOrganizationId?: string | null })
+                .activeOrganizationId;
+              const membership =
+                orgId &&
+                (await database.query.member.findFirst({
+                  columns: { id: true },
+                  where: (m, { and, eq }) =>
+                    and(eq(m.userId, user.id), eq(m.organizationId, orgId)),
+                }));
+              if (!orgId || !membership) {
+                throw new APIError('BAD_REQUEST', {
+                  message: 'Set up your workspace in UdyamFlow before connecting an assistant.',
+                });
+              }
+              return orgId;
+            },
+          },
+          customAccessTokenClaims: ({ referenceId }) => (referenceId ? { org: referenceId } : {}),
+        }),
+      ),
     ],
   });
 }

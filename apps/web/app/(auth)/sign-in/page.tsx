@@ -30,6 +30,9 @@ function SignInInner() {
       <EmailOTPForm
         client={authClient}
         onSuccess={async () => {
+          // Connecting an AI assistant: the auth client is already following
+          // the OAuth redirect.
+          if (params.has('sig')) return;
           await authClient.getSession();
           router.push(callback);
           router.refresh();

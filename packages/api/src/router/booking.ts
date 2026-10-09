@@ -9,7 +9,7 @@ import {
   schema,
 } from '@udyamflow/db';
 import { PROFESSIONS, type ProfessionId } from '@udyamflow/tokens';
-import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, notInArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, ne, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { verifyBookingManagementToken } from '../booking-management';
 import { generateSlots, type Interval, overlaps, type Slot } from '../lib/slots';
@@ -18,10 +18,12 @@ import {
   dayOfWeek,
   dayWindowUtc,
   formatInTz,
+  hhmmToMinutes,
   isValidDateStr,
   todayInTz,
+  wallTimeToUtc,
 } from '../lib/time';
-import { dateStr } from '../lib/validate';
+import { dateStr, hhmm } from '../lib/validate';
 import { notifyCancelled, notifyConfirmed, referenceCodeFor } from '../notify';
 import { resolveMeetingUrl } from '../online';
 import { expireStaleHolds, refundBooking } from '../payments/lifecycle';
@@ -30,9 +32,14 @@ import { enforceRateLimit, ipKeyFromHeaders } from '../rate-limit';
 import { sanitizeSource } from '../source';
 import { publicProcedure, router, tenantProcedure } from '../trpc';
 import { upsertCustomer } from './customer';
+import { timeOffIntervals } from './time-off';
 
 // How far ahead customers can book, in days.
 const BOOKING_HORIZON_DAYS = 90;
+// Staff (and their assistants) can book off-grid and outside hours, but only
+// within this window — a guard against year-off typos and timezone slips.
+const STAFF_PAST_MS = 24 * 60 * 60 * 1000;
+const STAFF_FUTURE_MS = 365 * 24 * 60 * 60 * 1000;
 
 type Bookable = {
   orgId: string;
@@ -53,12 +60,20 @@ type Resolved =
   | { ok: true; value: Bookable }
   | { ok: false; code: 'NOT_FOUND' | 'BAD_REQUEST'; message: string };
 
-// Resolves and cross-checks every id a public caller hands us: the location,
-// resource and service must all belong to the org named by the slug, the
-// resource must sit at that location, and it must offer that service.
+// Resolves and cross-checks every id a caller hands us: the location,
+// resource and service must all belong to the org (named by slug for public
+// callers, by id for staff), the resource must sit at that location, and it
+// must offer that service. Staff may omit the location — the resource's own
+// is used.
 async function resolveBookable(
   db: Db,
-  input: { orgSlug: string; locationId: string; resourceId: string; serviceId?: string },
+  input: {
+    orgSlug?: string;
+    orgId?: string;
+    locationId?: string;
+    resourceId: string;
+    serviceId?: string;
+  },
 ): Promise<Resolved> {
   const [org] = await db
     .select({
@@ -71,7 +86,11 @@ async function resolveBookable(
       schema.tenantSettings,
       eq(schema.tenantSettings.organizationId, schema.organization.id),
     )
-    .where(eq(schema.organization.slug, input.orgSlug));
+    .where(
+      input.orgId
+        ? eq(schema.organization.id, input.orgId)
+        : eq(schema.organization.slug, input.orgSlug ?? ''),
+    );
   if (!org) return { ok: false, code: 'NOT_FOUND', message: 'Business not found.' };
 
   const [resource] = await db
@@ -89,7 +108,7 @@ async function resolveBookable(
         eq(schema.resource.id, input.resourceId),
         eq(schema.resource.organizationId, org.id),
         isNull(schema.resource.archivedAt),
-        eq(schema.location.id, input.locationId),
+        input.locationId ? eq(schema.location.id, input.locationId) : undefined,
         isNull(schema.location.archivedAt),
       ),
     );
@@ -152,21 +171,134 @@ function isWithinHorizon(date: string, timezone: string, now: Date): boolean {
   );
 }
 
-// Existing slot-occupying bookings for a resource overlapping [start, end).
-async function takenIntervals(db: Db, resourceId: string, window: Interval): Promise<Interval[]> {
-  await expireStaleHolds(db, resourceId);
+// Everything that makes a resource unavailable in [start, end): slot-
+// occupying bookings (minus `excludeBookingId`, the one being moved) and
+// blocked time.
+async function takenIntervals(
+  db: Db,
+  b: { locationId: string; resourceId: string },
+  window: Interval,
+  excludeBookingId?: string,
+): Promise<Interval[]> {
+  await expireStaleHolds(db, b.resourceId);
   const rows = await db
     .select({ start: schema.booking.slotStart, end: schema.booking.slotEnd })
     .from(schema.booking)
     .where(
       and(
-        eq(schema.booking.resourceId, resourceId),
+        eq(schema.booking.resourceId, b.resourceId),
         inArray(schema.booking.status, [...SLOT_BLOCKING_STATUSES]),
         lt(schema.booking.slotStart, window.end),
         gt(schema.booking.slotEnd, window.start),
+        excludeBookingId ? ne(schema.booking.id, excludeBookingId) : undefined,
       ),
     );
-  return rows;
+  return [...rows, ...(await timeOffIntervals(db, b, window))];
+}
+
+function assertStaffWindow(start: Date, now = new Date()) {
+  const t = start.getTime() - now.getTime();
+  if (t < -STAFF_PAST_MS || t > STAFF_FUTURE_MS) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Pick a time between yesterday and a year from now.',
+    });
+  }
+}
+
+const slotTakenError = () =>
+  new TRPCError({ code: 'CONFLICT', message: 'That slot was just taken — please pick another.' });
+
+// Inserts a booking for a resolved resource. The DB exclusion constraint is
+// the real race guard; a conflict there becomes a CONFLICT error.
+async function insertBooking(
+  db: Db,
+  b: Bookable,
+  args: {
+    slotStart: Date;
+    slotEnd: Date;
+    customerName: string;
+    customerEmail?: string;
+    customerPhone?: string;
+    intake?: Record<string, unknown>;
+    status: BookingStatus;
+    holdExpiresAt: Date | null;
+    source: string | null;
+  },
+) {
+  const customerId = await upsertCustomer(db, b.orgId, {
+    name: args.customerName,
+    email: args.customerEmail,
+    phone: args.customerPhone,
+  });
+  // Online services get a join link: the practitioner's own room if set,
+  // else a generated Jitsi room.
+  const meetingUrl = resolveMeetingUrl({
+    serviceIsOnline: !!b.service?.isOnline,
+    resourceMeetingUrl: b.resourceMeetingUrl,
+  });
+  const id = `bkg_${randomUUID()}`;
+  try {
+    await db.insert(schema.booking).values({
+      id,
+      organizationId: b.orgId,
+      resourceId: b.resourceId,
+      locationId: b.locationId,
+      serviceId: b.service?.id,
+      customerId,
+      customerName: args.customerName,
+      customerEmail: args.customerEmail,
+      customerPhone: args.customerPhone,
+      slotStart: args.slotStart,
+      slotEnd: args.slotEnd,
+      intake: args.intake,
+      status: args.status,
+      holdExpiresAt: args.holdExpiresAt,
+      amountCents: b.service?.priceCents ?? 0,
+      currency: b.service?.currency ?? null,
+      meetingUrl,
+      source: args.source,
+    });
+  } catch (err) {
+    if (isConflictError(err)) throw slotTakenError();
+    throw err;
+  }
+  return { id, meetingUrl };
+}
+
+// Moves a confirmed booking (compare-and-set on status + old start). The
+// reminder flags reset so the customer is reminded about the new time.
+async function moveBooking(
+  db: Db,
+  booking: { id: string; status: BookingStatus; slotStart: Date },
+  start: Date,
+  end: Date,
+) {
+  try {
+    const updated = await db
+      .update(schema.booking)
+      .set({ slotStart: start, slotEnd: end, reminderSentAt: null, customerConfirmedAt: null })
+      .where(
+        and(
+          eq(schema.booking.id, booking.id),
+          eq(schema.booking.status, booking.status),
+          eq(schema.booking.slotStart, booking.slotStart),
+        ),
+      )
+      .returning({ id: schema.booking.id });
+    if (!updated.length)
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'This booking changed. Refresh and try again.',
+      });
+  } catch (error) {
+    if (isConflictError(error))
+      throw new TRPCError({
+        code: 'CONFLICT',
+        message: 'That time was just taken. Choose another slot.',
+      });
+    throw error;
+  }
 }
 
 // Candidate slots for a date from working hours alone (no availability).
@@ -261,8 +393,9 @@ export const bookingRouter = router({
       if (!isWithinHorizon(input.date, b.timezone, now)) return { slots: [], timezone: b.timezone };
       const taken = await takenIntervals(
         ctx.db,
-        b.resourceId,
+        b,
         dayWindowUtc(input.date, b.timezone),
+        booking.id,
       );
       return {
         slots: await candidateSlots(ctx.db, b, input.date, now, taken),
@@ -308,7 +441,7 @@ export const bookingRouter = router({
       const now = new Date();
       const start = new Date(input.slotStart);
       const date = formatInTz(start, b.timezone, 'yyyy-MM-dd');
-      const taken = await takenIntervals(ctx.db, b.resourceId, dayWindowUtc(date, b.timezone));
+      const taken = await takenIntervals(ctx.db, b, dayWindowUtc(date, b.timezone), booking.id);
       const slots = isWithinHorizon(date, b.timezone, now)
         ? await candidateSlots(ctx.db, b, date, now, taken)
         : [];
@@ -318,31 +451,7 @@ export const bookingRouter = router({
           code: 'CONFLICT',
           message: 'That time is unavailable. Choose another slot.',
         });
-      try {
-        const updated = await ctx.db
-          .update(schema.booking)
-          .set({ slotStart: start, slotEnd: new Date(slot.end) })
-          .where(
-            and(
-              eq(schema.booking.id, booking.id),
-              eq(schema.booking.status, booking.status),
-              eq(schema.booking.slotStart, booking.slotStart),
-            ),
-          )
-          .returning({ id: schema.booking.id });
-        if (!updated.length)
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'This booking changed. Refresh and try again.',
-          });
-      } catch (error) {
-        if (isConflictError(error))
-          throw new TRPCError({
-            code: 'CONFLICT',
-            message: 'That time was just taken. Choose another slot.',
-          });
-        throw error;
-      }
+      await moveBooking(ctx.db, booking, start, new Date(slot.end));
       await notifyConfirmed(ctx.db, booking.id);
       return { ok: true as const };
     }),
@@ -372,7 +481,7 @@ export const bookingRouter = router({
       if (!isWithinHorizon(date, b.timezone, now)) {
         return { slots: [], timezone: b.timezone, date };
       }
-      const taken = await takenIntervals(ctx.db, b.resourceId, dayWindowUtc(date, b.timezone));
+      const taken = await takenIntervals(ctx.db, b, dayWindowUtc(date, b.timezone));
       return {
         slots: await candidateSlots(ctx.db, b, date, now, taken),
         timezone: b.timezone,
@@ -430,12 +539,10 @@ export const bookingRouter = router({
         });
       }
       const slotEnd = new Date(slot.end);
-      const slotTakenError = new TRPCError({
-        code: 'CONFLICT',
-        message: 'That slot was just taken — please pick another.',
-      });
-      const taken = await takenIntervals(ctx.db, b.resourceId, { start: slotStart, end: slotEnd });
-      if (taken.some((t) => overlaps(t, { start: slotStart, end: slotEnd }))) throw slotTakenError;
+      const taken = await takenIntervals(ctx.db, b, { start: slotStart, end: slotEnd });
+      if (taken.some((t) => overlaps(t, { start: slotStart, end: slotEnd }))) {
+        throw slotTakenError();
+      }
 
       const amountCents = b.service?.priceCents ?? 0;
       const currency = b.service?.currency ?? null;
@@ -446,48 +553,18 @@ export const bookingRouter = router({
         ? new Date(now.getTime() + HOLD_MINUTES * 60_000)
         : null;
 
-      const customerId = await upsertCustomer(ctx.db, b.orgId, {
-        name: input.customerName,
-        email: input.customerEmail,
-        phone: input.customerPhone,
-      });
-
-      // Online services get a join link: the practitioner's own room if set,
-      // else a generated Jitsi room.
-      const meetingUrl = resolveMeetingUrl({
-        serviceIsOnline: !!b.service?.isOnline,
-        resourceMeetingUrl: b.resourceMeetingUrl,
-      });
-
-      const id = `bkg_${randomUUID()}`;
       const status: BookingStatus = requiresPayment ? 'pending_payment' : 'confirmed';
-      try {
-        await ctx.db.insert(schema.booking).values({
-          id,
-          organizationId: b.orgId,
-          resourceId: b.resourceId,
-          locationId: b.locationId,
-          serviceId: b.service?.id,
-          customerId,
-          customerName: input.customerName,
-          customerEmail: input.customerEmail,
-          customerPhone: input.customerPhone,
-          slotStart,
-          slotEnd,
-          intake: input.intake,
-          status,
-          holdExpiresAt,
-          amountCents,
-          currency,
-          meetingUrl,
-          source: sanitizeSource(input.source),
-        });
-      } catch (err) {
-        // The DB constraints are the real race guard — a concurrent booking
-        // that slipped past the check above lands here.
-        if (isConflictError(err)) throw slotTakenError;
-        throw err;
-      }
+      const { id, meetingUrl } = await insertBooking(ctx.db, b, {
+        slotStart,
+        slotEnd,
+        customerName: input.customerName,
+        customerEmail: input.customerEmail,
+        customerPhone: input.customerPhone,
+        intake: input.intake,
+        status,
+        holdExpiresAt,
+        source: sanitizeSource(input.source),
+      });
 
       if (status === 'confirmed') await notifyConfirmed(ctx.db, id);
       return {
@@ -702,6 +779,148 @@ export const bookingRouter = router({
       assertTransition(booking.status, 'completed');
       await transition(ctx.db, booking, 'completed');
       return { ok: true as const, status: 'completed' as const };
+    }),
+
+  // Free slots on a date for every resource (or one), as the booking page
+  // would offer them. Staff can still book any other time with createByStaff.
+  openSlots: tenantProcedure
+    .input(
+      z.object({
+        date: dateStr,
+        resourceId: z.string().optional(),
+        serviceId: z.string().optional(),
+      }),
+    )
+    .query(async ({ ctx, input }) => {
+      const resources = await ctx.db
+        .select({ id: schema.resource.id })
+        .from(schema.resource)
+        .where(
+          and(
+            eq(schema.resource.organizationId, ctx.organizationId),
+            isNull(schema.resource.archivedAt),
+            input.resourceId ? eq(schema.resource.id, input.resourceId) : undefined,
+          ),
+        )
+        .orderBy(asc(schema.resource.createdAt));
+      const now = new Date();
+      const results = [];
+      for (const r of resources) {
+        const resolved = await resolveBookable(ctx.db, {
+          orgId: ctx.organizationId,
+          resourceId: r.id,
+          serviceId: input.serviceId,
+        });
+        // Archived location, or the resource doesn't offer this service.
+        if (!resolved.ok) continue;
+        const b = resolved.value;
+        const taken = await takenIntervals(ctx.db, b, dayWindowUtc(input.date, b.timezone));
+        results.push({
+          resourceId: b.resourceId,
+          resourceName: b.resourceName,
+          locationId: b.locationId,
+          timezone: b.timezone,
+          durationMin: b.slotMin,
+          slots: await candidateSlots(ctx.db, b, input.date, now, taken),
+        });
+      }
+      return { date: input.date, resources: results };
+    }),
+
+  // Walk-ins and phone bookings. Unlike the public flow, staff may pick any
+  // time (off the slot grid, outside hours) as long as nothing overlaps.
+  // Payment, if any, is collected at the venue.
+  createByStaff: tenantProcedure
+    .input(
+      z.object({
+        resourceId: z.string(),
+        serviceId: z.string().optional(),
+        date: dateStr,
+        time: hhmm,
+        durationMin: z.number().int().min(5).max(720).optional(),
+        customerName: z.string().trim().min(2).max(120),
+        customerEmail: z.email().optional(),
+        customerPhone: z.string().trim().max(32).optional(),
+        notifyCustomer: z.boolean().default(true),
+        source: z.string().max(32).optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const resolved = await resolveBookable(ctx.db, {
+        orgId: ctx.organizationId,
+        resourceId: input.resourceId,
+        serviceId: input.serviceId,
+      });
+      if (!resolved.ok) throw new TRPCError({ code: resolved.code, message: resolved.message });
+      const b = resolved.value;
+      const slotStart = wallTimeToUtc(input.date, hhmmToMinutes(input.time), b.timezone);
+      const slotEnd = new Date(slotStart.getTime() + (input.durationMin ?? b.slotMin) * 60_000);
+      assertStaffWindow(slotStart);
+      const taken = await takenIntervals(ctx.db, b, { start: slotStart, end: slotEnd });
+      if (taken.some((t) => overlaps(t, { start: slotStart, end: slotEnd }))) {
+        throw new TRPCError({
+          code: 'CONFLICT',
+          message: `${b.resourceName} is busy or off at that time.`,
+        });
+      }
+      const { id, meetingUrl } = await insertBooking(ctx.db, b, {
+        slotStart,
+        slotEnd,
+        customerName: input.customerName,
+        customerEmail: input.customerEmail || undefined,
+        customerPhone: input.customerPhone || undefined,
+        status: 'confirmed',
+        holdExpiresAt: null,
+        source: sanitizeSource(input.source ?? 'staff'),
+      });
+      if (input.notifyCustomer) await notifyConfirmed(ctx.db, id);
+      return {
+        id,
+        referenceCode: referenceCodeFor(id),
+        slotStart,
+        slotEnd,
+        timezone: b.timezone,
+        resourceName: b.resourceName,
+        meetingUrl,
+      };
+    }),
+
+  // Staff reschedule: any free time (same rules as createByStaff), keeping
+  // the booking's length and price.
+  reschedule: tenantProcedure
+    .input(
+      z.object({
+        id: z.string(),
+        date: dateStr,
+        time: hhmm,
+        notifyCustomer: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const booking = await loadOwned(ctx, input.id);
+      if (booking.status !== 'confirmed') {
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'Only confirmed bookings can be moved.',
+        });
+      }
+      const [loc] = await ctx.db
+        .select({ timezone: schema.location.timezone })
+        .from(schema.location)
+        .where(eq(schema.location.id, booking.locationId));
+      const timezone = loc?.timezone ?? 'UTC';
+      const start = wallTimeToUtc(input.date, hhmmToMinutes(input.time), timezone);
+      const end = new Date(
+        start.getTime() + (booking.slotEnd.getTime() - booking.slotStart.getTime()),
+      );
+      assertStaffWindow(start);
+      const taken = await takenIntervals(ctx.db, booking, { start, end }, booking.id);
+      if (taken.some((t) => overlaps(t, { start, end }))) {
+        throw new TRPCError({ code: 'CONFLICT', message: 'That time is busy or blocked.' });
+      }
+      await moveBooking(ctx.db, booking, start, end);
+      if (input.notifyCustomer) await notifyConfirmed(ctx.db, booking.id);
+      return { ok: true as const, slotStart: start, slotEnd: end, timezone };
     }),
 });
 

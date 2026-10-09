@@ -17,6 +17,7 @@ export const PRIMARY_NAV: NavItem[] = [
 export const SETTINGS_NAV: NavItem[] = [
   { href: '/account', label: 'Account' },
   { href: '/settings/resources', label: 'Resources' },
+  { href: '/settings/time-off', label: 'Time off' },
   { href: '/settings/services', label: 'Services' },
   { href: '/settings/locations', label: 'Locations' },
   { href: '/settings/team', label: 'Team' },
@@ -27,6 +28,7 @@ export const SETTINGS_NAV: NavItem[] = [
   { href: '/settings/templates', label: 'Template' },
   { href: '/settings/channels', label: 'Channels' },
   { href: '/settings/notifications', label: 'Notifications' },
+  { href: '/settings/assistants', label: 'AI assistants' },
 ];
 
 export function isActivePath(pathname: string | null, href: string) {

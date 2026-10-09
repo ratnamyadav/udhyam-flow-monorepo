@@ -44,6 +44,9 @@ export const tenantSettings = pgTable(
     // unless MSG91_AUTH_KEY is configured on the server.
     enableSms: boolean('enable_sms').notNull().default(false),
     enableWhatsapp: boolean('enable_whatsapp').notNull().default(false),
+    // Customers' AI assistants (ChatGPT, Claude, …) can find this business
+    // and book through the public MCP endpoint. Owners can switch it off.
+    assistantBooking: boolean('assistant_booking').notNull().default(true),
     // Payment provider configuration. Stored encrypted-at-rest at the column
     // level for the API key; the merchant id + account id are plaintext.
     stripeAccountId: text('stripe_account_id'),

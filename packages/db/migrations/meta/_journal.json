@@ -36,6 +36,20 @@
       "when": 1790965784171,
       "tag": "0004_auth-invitation-created-at",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1791422321792,
+      "tag": "0005_time-off",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1791423349889,
+      "tag": "0006_ai-assistants",
+      "breakpoints": true
     }
   ]
 }

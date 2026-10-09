@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useActiveRole } from '@/components/app-shell/use-role';
+import { RescheduleForm, StaffBookingForm } from '@/components/booking/staff-booking-form';
 import { SkeletonRow } from '@/components/ui/skeleton';
 import { trpc } from '@/lib/trpc/react';
 
@@ -66,6 +67,8 @@ export default function BookingsPage() {
   const [pageCount, setPageCount] = useState(1);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionInfo, setActionInfo] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
   const filters = {
     status: status || undefined,
@@ -180,6 +183,14 @@ export default function BookingsPage() {
           <h1 className="text-[32px] font-medium tracking-tight text-ink">All bookings</h1>
         </div>
         <div className="flex gap-2 items-center flex-wrap">
+          <button
+            type="button"
+            className="px-3 py-1.5 rounded-md text-[13px] font-medium bg-ink text-bg"
+            onClick={() => setCreating((v) => !v)}
+            aria-expanded={creating}
+          >
+            {creating ? 'Close' : '+ New booking'}
+          </button>
           <label className="flex items-center gap-1.5 text-[12px] text-ink-mute">
             From
             <input
@@ -240,6 +251,21 @@ export default function BookingsPage() {
         </div>
       </div>
 
+      {creating && (
+        <div className="mb-6 bg-surface border border-border rounded-xl p-5">
+          <div className="text-[11px] uppercase tracking-wider text-ink-soft font-mono mb-3">
+            New booking · walk-in or phone
+          </div>
+          <StaffBookingForm
+            onDone={(msg) => {
+              setCreating(false);
+              setActionError(null);
+              setActionInfo(msg);
+            }}
+          />
+        </div>
+      )}
+
       {actionError && (
         <div className="mb-4 text-[12px] text-danger bg-danger/10 border border-danger/20 rounded-md px-3 py-2 flex justify-between gap-3">
           <span>{actionError}</span>
@@ -285,158 +311,178 @@ export default function BookingsPage() {
             const inv = invoiceByBooking.get(b.id);
             const payLabel = PAYMENT_LABELS[b.paymentStatus];
             return (
-              <div
-                key={b.id}
-                className="grid grid-cols-[160px_1fr_180px_150px_280px] px-5 py-3.5 border-t border-border first:border-t-0 items-center hover:bg-surface-mute"
-              >
-                <div className="text-[12px] font-mono tabular-nums text-ink">
-                  {b.slotStart.toLocaleString([], {
-                    timeZone: b.timezone,
-                    month: 'short',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit',
-                    hour12: false,
-                  })}
-                </div>
-                <div>
-                  <div className="text-[14px] font-medium text-ink">{b.customerName}</div>
-                  <div className="text-[12px] text-ink-mute">
-                    {b.customerEmail ?? b.customerPhone ?? '—'}
+              <div key={b.id} className="border-t border-border first:border-t-0">
+                <div className="grid grid-cols-[160px_1fr_180px_150px_280px] px-5 py-3.5 items-center hover:bg-surface-mute">
+                  <div className="text-[12px] font-mono tabular-nums text-ink">
+                    {b.slotStart.toLocaleString([], {
+                      timeZone: b.timezone,
+                      month: 'short',
+                      day: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      hour12: false,
+                    })}
                   </div>
-                  {(b.meetingUrl || b.source) && (
-                    <div className="flex gap-2 mt-0.5 text-[11px]">
-                      {b.meetingUrl && (
+                  <div>
+                    <div className="text-[14px] font-medium text-ink">{b.customerName}</div>
+                    <div className="text-[12px] text-ink-mute">
+                      {b.customerEmail ?? b.customerPhone ?? '—'}
+                    </div>
+                    {(b.meetingUrl || b.source) && (
+                      <div className="flex gap-2 mt-0.5 text-[11px]">
+                        {b.meetingUrl && (
+                          <a
+                            href={b.meetingUrl}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-ink-mute hover:text-ink underline"
+                          >
+                            Join online
+                          </a>
+                        )}
+                        {b.source && (
+                          <span className="font-mono text-ink-soft">via {b.source}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <div className="text-[13px] text-ink-mute">{r?.name ?? '—'}</div>
+                  <div className="flex flex-col items-start gap-1">
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded font-medium uppercase tracking-wider"
+                      style={{ background: 'var(--accent-soft)', color: meta.color }}
+                    >
+                      {meta.label}
+                    </span>
+                    {payLabel && (
+                      <span className="text-[10px] text-ink-mute font-mono">
+                        {payLabel}
+                        {b.amountCents ? ` · ${money(b.amountCents, b.currency)}` : ''}
+                      </span>
+                    )}
+                    {b.customerConfirmedAt && isConfirmed && (
+                      <span
+                        className="text-[10px] text-ink-mute"
+                        title={`Customer confirmed via WhatsApp on ${b.customerConfirmedAt.toLocaleString()}`}
+                      >
+                        ✓ Confirmed by customer
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px]">
+                    {inv ? (
+                      inv.hostedUrl ? (
                         <a
-                          href={b.meetingUrl}
+                          href={inv.hostedUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-ink-mute hover:text-ink underline"
+                          className="text-ink hover:underline underline-offset-2"
+                          title={`${inv.provider} invoice · ${inv.status}`}
                         >
-                          Join online
+                          {inv.number ? `Invoice ${inv.number}` : 'Invoice'} ↗
                         </a>
-                      )}
-                      {b.source && <span className="font-mono text-ink-soft">via {b.source}</span>}
-                    </div>
-                  )}
-                </div>
-                <div className="text-[13px] text-ink-mute">{r?.name ?? '—'}</div>
-                <div className="flex flex-col items-start gap-1">
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded font-medium uppercase tracking-wider"
-                    style={{ background: 'var(--accent-soft)', color: meta.color }}
-                  >
-                    {meta.label}
-                  </span>
-                  {payLabel && (
-                    <span className="text-[10px] text-ink-mute font-mono">
-                      {payLabel}
-                      {b.amountCents ? ` · ${money(b.amountCents, b.currency)}` : ''}
-                    </span>
-                  )}
-                  {b.customerConfirmedAt && isConfirmed && (
-                    <span
-                      className="text-[10px] text-ink-mute"
-                      title={`Customer confirmed via WhatsApp on ${b.customerConfirmedAt.toLocaleString()}`}
-                    >
-                      ✓ Confirmed by customer
-                    </span>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px]">
-                  {inv ? (
-                    inv.hostedUrl ? (
-                      <a
-                        href={inv.hostedUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-ink hover:underline underline-offset-2"
-                        title={`${inv.provider} invoice · ${inv.status}`}
-                      >
-                        {inv.number ? `Invoice ${inv.number}` : 'Invoice'} ↗
-                      </a>
+                      ) : (
+                        <span className="text-ink-mute" title={inv.provider}>
+                          {inv.status === 'pending' ? 'Invoicing…' : `Invoice ${inv.number ?? ''}`}
+                        </span>
+                      )
                     ) : (
-                      <span className="text-ink-mute" title={inv.provider}>
-                        {inv.status === 'pending' ? 'Invoicing…' : `Invoice ${inv.number ?? ''}`}
-                      </span>
-                    )
-                  ) : (
-                    canInvoice &&
-                    b.serviceId &&
-                    b.status !== 'cancelled' &&
-                    b.status !== 'expired' && (
-                      <button
-                        type="button"
-                        className="text-ink-mute hover:text-ink"
-                        onClick={() => createInvoice.mutate({ bookingId: b.id })}
-                        disabled={createInvoice.isPending}
-                      >
-                        {createInvoice.isPending && createInvoice.variables?.bookingId === b.id
-                          ? 'Invoicing…'
-                          : 'Invoice'}
-                      </button>
-                    )
-                  )}
-                  {isConfirmed && (
-                    <>
-                      <button
-                        type="button"
-                        className="text-ink-mute hover:text-ink"
-                        onClick={() => complete.mutate({ id: b.id })}
-                        disabled={busy}
-                      >
-                        Complete
-                      </button>
+                      canInvoice &&
+                      b.serviceId &&
+                      b.status !== 'cancelled' &&
+                      b.status !== 'expired' && (
+                        <button
+                          type="button"
+                          className="text-ink-mute hover:text-ink"
+                          onClick={() => createInvoice.mutate({ bookingId: b.id })}
+                          disabled={createInvoice.isPending}
+                        >
+                          {createInvoice.isPending && createInvoice.variables?.bookingId === b.id
+                            ? 'Invoicing…'
+                            : 'Invoice'}
+                        </button>
+                      )
+                    )}
+                    {isConfirmed && (
+                      <>
+                        <button
+                          type="button"
+                          className="text-ink-mute hover:text-ink"
+                          onClick={() => setMovingId((id) => (id === b.id ? null : b.id))}
+                          aria-expanded={movingId === b.id}
+                        >
+                          Move
+                        </button>
+                        <button
+                          type="button"
+                          className="text-ink-mute hover:text-ink"
+                          onClick={() => complete.mutate({ id: b.id })}
+                          disabled={busy}
+                        >
+                          Complete
+                        </button>
+                        <button
+                          type="button"
+                          className="text-ink-mute hover:text-danger"
+                          onClick={() => noShow.mutate({ id: b.id })}
+                          disabled={busy}
+                        >
+                          No-show
+                        </button>
+                      </>
+                    )}
+                    {(isConfirmed || isPendingPayment) && (
                       <button
                         type="button"
                         className="text-ink-mute hover:text-danger"
-                        onClick={() => noShow.mutate({ id: b.id })}
+                        onClick={() => {
+                          const msg = isPaid
+                            ? 'Cancel this booking WITHOUT refunding the customer?'
+                            : 'Cancel this booking?';
+                          if (confirm(msg)) cancel.mutate({ id: b.id });
+                        }}
                         disabled={busy}
                       >
-                        No-show
+                        Cancel
                       </button>
-                    </>
-                  )}
-                  {(isConfirmed || isPendingPayment) && (
-                    <button
-                      type="button"
-                      className="text-ink-mute hover:text-danger"
-                      onClick={() => {
-                        const msg = isPaid
-                          ? 'Cancel this booking WITHOUT refunding the customer?'
-                          : 'Cancel this booking?';
-                        if (confirm(msg)) cancel.mutate({ id: b.id });
-                      }}
-                      disabled={busy}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                  {isAdmin && isConfirmed && isPaid && (
-                    <button
-                      type="button"
-                      className="text-ink-mute hover:text-danger"
-                      onClick={() => {
-                        if (confirm('Cancel this booking and refund the customer in full?')) {
-                          cancel.mutate({ id: b.id, refund: true });
-                        }
-                      }}
-                      disabled={busy}
-                    >
-                      Cancel + refund
-                    </button>
-                  )}
-                  {isAdmin && isPaid && (
-                    <button
-                      type="button"
-                      className="text-ink-mute hover:text-danger"
-                      onClick={() => onRefund(b)}
-                      disabled={busy}
-                    >
-                      Refund
-                    </button>
-                  )}
+                    )}
+                    {isAdmin && isConfirmed && isPaid && (
+                      <button
+                        type="button"
+                        className="text-ink-mute hover:text-danger"
+                        onClick={() => {
+                          if (confirm('Cancel this booking and refund the customer in full?')) {
+                            cancel.mutate({ id: b.id, refund: true });
+                          }
+                        }}
+                        disabled={busy}
+                      >
+                        Cancel + refund
+                      </button>
+                    )}
+                    {isAdmin && isPaid && (
+                      <button
+                        type="button"
+                        className="text-ink-mute hover:text-danger"
+                        onClick={() => onRefund(b)}
+                        disabled={busy}
+                      >
+                        Refund
+                      </button>
+                    )}
+                  </div>
                 </div>
+                {movingId === b.id && (
+                  <RescheduleForm
+                    booking={b}
+                    onCancel={() => setMovingId(null)}
+                    onDone={(msg) => {
+                      setMovingId(null);
+                      setActionError(null);
+                      setActionInfo(msg);
+                    }}
+                  />
+                )}
               </div>
             );
           })

@@ -28,6 +28,9 @@ export const dateStr = z
   .string()
   .refine(isValidDateStr, 'Expected a valid calendar date (YYYY-MM-DD)');
 
+// Wall-clock time of day, 24-hour "HH:mm".
+export const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Expected a time like 14:30');
+
 export function escapeHtml(s: string): string {
   return s
     .replace(/&/g, '&amp;')

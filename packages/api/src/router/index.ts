@@ -1,5 +1,6 @@
 import { router } from '../trpc';
 import { adminRouter } from './admin';
+import { assistantsRouter } from './assistants';
 import { authRouter } from './auth';
 import { bookingRouter } from './booking';
 import { channelsRouter } from './channels';
@@ -15,6 +16,7 @@ import { resourceRouter } from './resource';
 import { serviceRouter } from './service';
 import { teamRouter } from './team';
 import { tenantRouter } from './tenant';
+import { timeOffRouter } from './time-off';
 
 export const appRouter = router({
   auth: authRouter,
@@ -32,6 +34,8 @@ export const appRouter = router({
   report: reportRouter,
   channels: channelsRouter,
   membership: membershipRouter,
+  timeOff: timeOffRouter,
+  assistants: assistantsRouter,
   admin: adminRouter,
 });
 
