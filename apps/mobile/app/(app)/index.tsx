@@ -5,6 +5,7 @@ import { ResponsiveContent } from '@/components/responsive';
 import { useSession } from '@/lib/auth';
 import { calendarDateParts, formatTime, statusLabel } from '../../lib/format';
 import { errorMessage, trpc } from '../../lib/trpc';
+import { usePullToRefresh } from '../../lib/use-pull-to-refresh';
 
 export default function DashboardScreen() {
   const { data: session } = useSession();
@@ -14,6 +15,9 @@ export default function DashboardScreen() {
   const today = trpc.booking.listToday.useQuery();
   const locations = trpc.location.list.useQuery();
   const resources = trpc.resource.list.useQuery();
+  const pull = usePullToRefresh(() =>
+    Promise.all([today.refetch(), locations.refetch(), resources.refetch()]),
+  );
 
   // Drift probe: if useSession() shows a user but tRPC's auth.me returns
   // null, the Cookie header plumbing has regressed. Log loud so we notice.
@@ -34,16 +38,7 @@ export default function DashboardScreen() {
     <ScrollView
       className="flex-1 bg-bg"
       contentContainerClassName="px-6 pt-16 pb-12"
-      refreshControl={
-        <RefreshControl
-          refreshing={today.isRefetching}
-          onRefresh={() => {
-            void today.refetch();
-            void locations.refetch();
-            void resources.refetch();
-          }}
-        />
-      }
+      refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
     >
       <ResponsiveContent>
         <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">
@@ -56,6 +51,15 @@ export default function DashboardScreen() {
           <Metric label="Resources" value={String(resources.data?.length ?? 0)} />
           <Metric label="Locations" value={String(locations.data?.length ?? 0)} />
         </View>
+
+        <Link href="/bookings/new" withAnchor asChild>
+          <Pressable
+            accessibilityRole="button"
+            className="mt-4 bg-ink rounded-md py-3 active:opacity-90"
+          >
+            <Text className="text-bg text-center font-medium">+ New booking</Text>
+          </Pressable>
+        </Link>
 
         <Text className="text-xs uppercase tracking-wider text-ink-mute font-mono mt-9 mb-3">
           Today's bookings
@@ -76,7 +80,7 @@ export default function DashboardScreen() {
         ) : (
           <View className="bg-surface border border-border rounded-xl overflow-hidden">
             {bookings.map((b, i) => (
-              <Link key={b.id} href={`/bookings/${b.id}`} asChild>
+              <Link key={b.id} href={`/bookings/${b.id}`} withAnchor asChild>
                 <Pressable className={`px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
                   <Text className="text-sm font-medium text-ink">{b.customerName}</Text>
                   <Text className="text-xs text-ink-mute font-mono">

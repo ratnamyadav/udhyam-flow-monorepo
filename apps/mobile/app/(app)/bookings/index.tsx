@@ -4,6 +4,7 @@ import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native'
 import { ResponsiveContent } from '@/components/responsive';
 import { formatDateTime, statusLabel } from '../../../lib/format';
 import { errorMessage, trpc } from '../../../lib/trpc';
+import { usePullToRefresh } from '../../../lib/use-pull-to-refresh';
 
 const PAGE_SIZE = 50;
 
@@ -29,24 +30,35 @@ export default function BookingsListScreen() {
   const loadingMore = pageCount > 1 && !!last?.isLoading;
   const hasMore = !!last?.data && last.data.length === PAGE_SIZE;
   const error = pages.find((p) => p.error)?.error;
-  const refreshing = pages.some((p) => p.isRefetching);
+  const pull = usePullToRefresh(() => Promise.all(pages.map((p) => p.refetch())));
 
   return (
     <ScrollView
       className="flex-1 bg-bg"
       contentContainerClassName="px-6 pt-16 pb-12"
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={() => {
-            for (const p of pages) void p.refetch();
-          }}
-        />
-      }
+      refreshControl={<RefreshControl refreshing={pull.refreshing} onRefresh={pull.onRefresh} />}
     >
       <ResponsiveContent>
         <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">Bookings</Text>
         <Text className="text-3xl font-semibold text-ink mt-1">All bookings</Text>
+        <View className="flex-row gap-2 mt-5">
+          <Link href="/bookings/new" asChild>
+            <Pressable
+              accessibilityRole="button"
+              className="flex-1 bg-ink rounded-md py-3 active:opacity-90"
+            >
+              <Text className="text-bg text-center font-medium">+ New booking</Text>
+            </Pressable>
+          </Link>
+          <Link href="/bookings/time-off" asChild>
+            <Pressable
+              accessibilityRole="button"
+              className="flex-1 bg-surface border border-border rounded-md py-3 active:opacity-90"
+            >
+              <Text className="text-ink text-center font-medium">Time off</Text>
+            </Pressable>
+          </Link>
+        </View>
 
         <View className="bg-surface border border-border rounded-xl overflow-hidden mt-7">
           {firstLoading ? (

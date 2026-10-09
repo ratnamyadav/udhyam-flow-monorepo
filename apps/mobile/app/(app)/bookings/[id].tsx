@@ -1,4 +1,4 @@
-import { useLocalSearchParams } from 'expo-router';
+import { Link, useLocalSearchParams } from 'expo-router';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { ResponsiveContent } from '@/components/responsive';
 import { formatDateTime, formatMoney, formatTime, statusLabel } from '../../../lib/format';
@@ -99,6 +99,15 @@ export default function BookingDetailScreen() {
           <View className="mt-6 gap-2">
             {isConfirmed ? (
               <>
+                <Link href={{ pathname: '/bookings/move', params: { id: booking.id } }} asChild>
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={busy}
+                    className="rounded-md py-3.5 bg-surface border border-border active:opacity-90"
+                  >
+                    <Text className="text-center font-medium text-ink">Move booking</Text>
+                  </Pressable>
+                </Link>
                 <ActionButton
                   primary
                   label={complete.isPending ? 'Saving…' : 'Mark complete'}
