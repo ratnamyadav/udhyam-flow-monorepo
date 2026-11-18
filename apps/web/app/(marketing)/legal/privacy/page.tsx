@@ -136,7 +136,8 @@ export default function PrivacyPage() {
           body: (
             <p>
               For complaints about how your data is handled, under India’s Digital Personal Data
-              Protection Act, 2023 and the IT Rules, write to our grievance officer at{' '}
+              Protection Act, 2023 and the IT Rules, contact our grievance officer, Ratnam Yadav (
+              {LEGAL_ENTITY}), at{' '}
               <a href={`mailto:${LEGAL_CONTACT_EMAIL}`}>{LEGAL_CONTACT_EMAIL}</a>.
             </p>
           ),
