@@ -89,6 +89,7 @@ export function BookingInterface({
   headline,
   intro,
   source,
+  membershipId,
 }: {
   orgSlug: string;
   theme: TenantTheme;
@@ -103,12 +104,17 @@ export function BookingInterface({
   intro?: string | null;
   /** Raw `?source=` attribution, forwarded to booking.create (sanitized there). */
   source?: string;
+  membershipId?: string;
 }) {
   const profession = professionFor(theme.profession);
   const dense = density === 'compact';
   const customHeadline = headline?.trim() || null;
   const customIntro = intro?.trim() || null;
   const utils = trpc.useUtils();
+  const benefit = trpc.membership.benefit.useQuery(
+    { orgSlug, subscriptionId: membershipId ?? '' },
+    { enabled: !!membershipId },
+  );
 
   // --- Location → resource → service selection -------------------------------
   const [locationId, setLocationId] = useState<string | null>(locations[0]?.id ?? null);
@@ -134,6 +140,9 @@ export function BookingInterface({
   // Default to the first eligible service — the server requires one whenever
   // the resource offers any.
   const service = eligibleServices.find((s) => s.id === serviceId) ?? eligibleServices[0] ?? null;
+  // A membership covers only its plan's services.
+  const membershipCovers =
+    !membershipId || (!!service && !!benefit.data?.serviceIds.includes(service.id));
 
   // --- Date selection (in the location's timezone) ---------------------------
   const today = ymdInZone(new Date(), timezone);
@@ -150,6 +159,7 @@ export function BookingInterface({
   const [customerPhone, setCustomerPhone] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [redirecting, setRedirecting] = useState(false);
+  const [heldBookingId, setHeldBookingId] = useState<string | null>(null);
   const [confirmation, setConfirmation] = useState<{
     referenceCode: string;
     displayTime: string;
@@ -158,15 +168,19 @@ export function BookingInterface({
     meetingUrl: string | null;
   } | null>(null);
 
+  // A held booking belongs to the slot it was made for: picking another
+  // slot, service, resource, location or date starts a new booking.
   function clearSelection() {
     setSelected(null);
     setFormError(null);
+    setHeldBookingId(null);
   }
 
   const createCheckout = trpc.payment.createCheckout.useMutation();
   const create = trpc.booking.create.useMutation({
     onSuccess: async (res, vars) => {
       if (res.requiresPayment) {
+        setHeldBookingId(res.id);
         // Paid service with a gateway configured — the slot is held while the
         // customer pays. Never show "You're booked" before payment lands.
         setRedirecting(true);
@@ -215,12 +229,40 @@ export function BookingInterface({
   });
 
   function selectSlot(s: Slot, slotDate: string) {
+    if (selected?.start !== s.start) setHeldBookingId(null);
     setSelected({ ...s, date: slotDate });
     setFormError(null);
     create.reset();
   }
 
+  async function retryHeldCheckout(bookingId: string) {
+    setFormError(null);
+    setRedirecting(true);
+    try {
+      const checkout = await createCheckout.mutateAsync({ bookingId });
+      window.location.assign(checkout.redirectUrl);
+    } catch (err) {
+      setRedirecting(false);
+      const code = (err as { data?: { code?: string } } | null)?.data?.code;
+      // The hold lapsed or the booking moved on: drop it and re-pick.
+      if (code === 'PRECONDITION_FAILED' || code === 'NOT_FOUND') {
+        setHeldBookingId(null);
+        setSelected(null);
+        utils.booking.listSlots.invalidate();
+      }
+      setFormError(
+        err instanceof Error && err.message
+          ? `Couldn't start payment: ${err.message}`
+          : "Couldn't start payment. Please try again.",
+      );
+    }
+  }
+
   function submit() {
+    if (heldBookingId) {
+      void retryHeldCheckout(heldBookingId);
+      return;
+    }
     if (!selected || !resource || !location) return;
     if (eligibleServices.length > 0 && !service) {
       setFormError('Please choose a service.');
@@ -238,6 +280,7 @@ export function BookingInterface({
       slotStart: selected.start,
       slotEnd: selected.end,
       source,
+      membershipId,
     });
   }
 
@@ -374,7 +417,8 @@ export function BookingInterface({
     customerName.trim().length >= 2 &&
     (eligibleServices.length === 0 || !!service) &&
     !create.isPending &&
-    !redirecting;
+    !redirecting &&
+    (!membershipId || (!!benefit.data && membershipCovers));
   // Tenant vars + density + body font on the page root so every child
   // (including BookingSuccess) reads var(--accent-fg), var(--pad), etc.
   const rootProps = {
@@ -554,12 +598,32 @@ export function BookingInterface({
           />
         </div>
       </div>
-      {service && service.priceCents > 0 && (
+      {membershipId && (
+        <div className="text-sm">
+          {benefit.data
+            ? membershipCovers
+              ? `${benefit.data.planName}: ${benefit.data.remaining == null ? 'unlimited' : benefit.data.remaining} sessions until ${new Date(benefit.data.until).toLocaleDateString()}. This booking uses one session — use the email or phone on your membership.`
+              : `${benefit.data.planName} doesn't cover ${service?.name ?? 'this booking'}. Pick a covered service, or open the regular booking page to pay separately.`
+            : benefit.isLoading
+              ? 'Checking membership…'
+              : 'No paid membership sessions are available. Open the regular booking page to pay separately.'}
+        </div>
+      )}
+      {!membershipId && service && service.priceCents > 0 && (
         <div className="text-[12px] text-ink-mute">
           {service.name} · {priceFor(service.priceCents, service.currency)}
         </div>
       )}
-      {formError && <div className="text-[12px] text-danger">{formError}</div>}
+      {formError && (
+        <div role="alert" className="text-[12px] text-danger">
+          {formError}
+        </div>
+      )}
+      {heldBookingId && (
+        <a href={`/pay/${encodeURIComponent(heldBookingId)}`} className="underline text-sm">
+          Retry payment for your held booking
+        </a>
+      )}
       <button
         type="button"
         onClick={submit}

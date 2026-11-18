@@ -111,7 +111,7 @@ export default function TeamSettingsPage() {
   }
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="flex justify-between items-end mb-8">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
@@ -129,7 +129,11 @@ export default function TeamSettingsPage() {
       )}
       {info && <div className="mb-4 text-[12px] text-success">{info}</div>}
 
-      <div className={isAdmin ? 'grid grid-cols-[1fr_360px] gap-6' : 'grid gap-6'}>
+      <div
+        className={
+          isAdmin ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6' : 'grid gap-6'
+        }
+      >
         <div className="space-y-5">
           <div className="bg-surface border border-border rounded-xl">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">

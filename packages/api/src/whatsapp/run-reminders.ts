@@ -40,6 +40,8 @@ export async function runReminders(
       customerPhone: schema.booking.customerPhone,
       slotStart: schema.booking.slotStart,
       paymentStatus: schema.booking.paymentStatus,
+      amountCents: schema.booking.amountCents,
+      bookingCurrency: schema.booking.currency,
       meetingUrl: schema.booking.meetingUrl,
       enableSms: schema.tenantSettings.enableSms,
       enableWhatsapp: schema.tenantSettings.enableWhatsapp,
@@ -47,8 +49,9 @@ export async function runReminders(
       orgName: schema.organization.name,
       timezone: schema.location.timezone,
       resourceName: schema.resource.name,
+      // Only for bookings made before amount snapshots existed.
       priceCents: schema.service.priceCents,
-      currency: schema.service.currency,
+      serviceCurrency: schema.service.currency,
     })
     .from(schema.booking)
     .innerJoin(
@@ -93,10 +96,14 @@ export async function runReminders(
       continue;
     }
 
+    // The booking's own snapshot decides (membership bookings are 0 /
+    // `covered`); the catalog price is only a fallback for legacy rows.
+    const amountCents = b.amountCents ?? b.priceCents;
+    const currency = b.bookingCurrency ?? b.serviceCurrency;
     const payUrl = needsPayLink({
       paymentStatus: b.paymentStatus,
-      priceCents: b.priceCents,
-      providerConfigured: b.currency ? providerConfiguredFor(b.currency) : false,
+      amountCents,
+      providerConfigured: currency ? providerConfiguredFor(currency) : false,
     })
       ? `${appUrl}/pay/${b.id}`
       : null;
@@ -116,7 +123,14 @@ export async function runReminders(
       if (b.enableWhatsapp) {
         await senders.whatsApp({ to: b.customerPhone, ...messages.whatsapp });
       } else {
-        await senders.sms({ to: b.customerPhone, ...messages.sms });
+        if (!process.env.MSG91_SMS_REMINDER_TEMPLATE_ID && process.env.MSG91_AUTH_KEY) {
+          throw new Error('MSG91_SMS_REMINDER_TEMPLATE_ID is required for SMS reminders');
+        }
+        await senders.sms({
+          to: b.customerPhone,
+          ...messages.sms,
+          templateId: process.env.MSG91_SMS_REMINDER_TEMPLATE_ID,
+        });
       }
       result.sent++;
     } catch (err) {

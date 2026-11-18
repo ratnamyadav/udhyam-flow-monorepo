@@ -17,7 +17,14 @@ const BOOKABLE_DAYS = 14;
 
 export default function BookTenantScreen() {
   const router = useRouter();
-  const { orgSlug } = useLocalSearchParams<{ orgSlug: string }>();
+  const { orgSlug, membership: membershipId } = useLocalSearchParams<{
+    orgSlug: string;
+    membership?: string;
+  }>();
+  const benefit = trpc.membership.benefit.useQuery(
+    { orgSlug, subscriptionId: membershipId ?? '' },
+    { enabled: !!membershipId },
+  );
 
   const locations = trpc.location.listForTenant.useQuery({ orgSlug });
   const resources = trpc.resource.listForTenant.useQuery({ orgSlug });
@@ -119,6 +126,7 @@ export default function BookTenantScreen() {
       resourceId: resource.id,
       locationId: effectiveLocationId,
       serviceId: service?.id,
+      membershipId,
       customerName: name.trim(),
       customerEmail: email.trim() || undefined,
       customerPhone: phone.trim() || undefined,
@@ -154,7 +162,11 @@ export default function BookTenantScreen() {
 
   const busy = create.isPending || redirecting;
   const canSubmit =
-    !!selected && name.trim().length >= 2 && (!serviceRequired || !!service) && !busy;
+    !!selected &&
+    name.trim().length >= 2 &&
+    (!serviceRequired || !!service) &&
+    !busy &&
+    (!membershipId || !!benefit.data);
   const dayLabel = calendarDateParts(effectiveDate);
 
   return (
@@ -334,6 +346,13 @@ export default function BookTenantScreen() {
           </View>
         )}
 
+        {membershipId && (
+          <Text className="text-sm text-ink mt-6">
+            {benefit.data
+              ? `${benefit.data.planName}: ${benefit.data.remaining ?? 'unlimited'} sessions remaining. This booking uses one session.`
+              : 'No paid membership sessions are available.'}
+          </Text>
+        )}
         <SectionLabel>Your details</SectionLabel>
         <View className="gap-3">
           <Field

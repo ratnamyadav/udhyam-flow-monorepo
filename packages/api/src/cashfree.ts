@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 // Cashfree PG client: orders, refunds, and Easy Split vendors.
 //
 // Easy Split is how INR payments reach the *tenant's* bank account instead
@@ -59,6 +61,7 @@ export async function cashfreeRequest<T>(
   path: string,
   body?: unknown,
   fetchImpl: FetchLike = fetch,
+  idempotencyKey?: string,
 ): Promise<T> {
   const res = await fetchImpl(`${cashfreeBaseUrl()}${path}`, {
     method,
@@ -66,6 +69,7 @@ export async function cashfreeRequest<T>(
       'x-client-id': process.env.CASHFREE_CLIENT_ID ?? '',
       'x-client-secret': process.env.CASHFREE_CLIENT_SECRET ?? '',
       'x-api-version': API_VERSION,
+      ...(idempotencyKey ? { 'x-idempotency-key': idempotencyKey } : {}),
       ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
@@ -109,6 +113,7 @@ export async function cashfreeCreateOrder(
     customerId?: string;
     // After this the order can't be paid — matches the slot hold.
     expiresAt?: Date;
+    idempotencyKey?: string;
   },
   fetchImpl: FetchLike = fetch,
 ): Promise<{ paymentSessionId: string }> {
@@ -133,6 +138,7 @@ export async function cashfreeCreateOrder(
         : {}),
     },
     fetchImpl,
+    args.idempotencyKey,
   );
   return { paymentSessionId: json.payment_session_id };
 }
@@ -143,24 +149,49 @@ export async function cashfreeRefund(
     amountPaise: number;
     // Recover the refund from the vendor's share when the order was split.
     vendorId?: string | null;
+    refundId?: string;
   },
   fetchImpl: FetchLike = fetch,
-): Promise<void> {
+): Promise<{ id: string; status: string }> {
   const amount = paiseToRupees(args.amountPaise);
   const vendorAmount = args.vendorId ? Math.round(amount * vendorSplitPercent()) / 100 : undefined;
-  await cashfreeRequest(
+  const refundId = args.refundId ?? `rfd_${randomUUID().replace(/-/g, '')}`;
+  const result = await cashfreeRequest<{ refund_id?: string; refund_status?: string }>(
     'POST',
     `/orders/${encodeURIComponent(args.orderId)}/refunds`,
     {
       refund_amount: amount,
-      refund_id: `rfd_${args.orderId}_${Date.now()}`.slice(0, 40),
+      refund_id: refundId,
       refund_note: 'Refund from UdyamFlow dashboard',
       ...(args.vendorId && vendorAmount
         ? { refund_splits: [{ vendor_id: args.vendorId, amount: vendorAmount }] }
         : {}),
     },
     fetchImpl,
+    refundId.slice(4),
   );
+  return { id: result.refund_id ?? refundId, status: result.refund_status ?? 'PENDING' };
+}
+
+// A refund previously posted for this order, or null if Cashfree has none
+// with that id. Lets a retry reconcile instead of posting blind.
+export async function cashfreeGetRefund(
+  orderId: string,
+  refundId: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<{ id: string; status: string } | null> {
+  try {
+    const result = await cashfreeRequest<{ refund_id?: string; refund_status?: string }>(
+      'GET',
+      `/orders/${encodeURIComponent(orderId)}/refunds/${encodeURIComponent(refundId)}`,
+      undefined,
+      fetchImpl,
+    );
+    return { id: result.refund_id ?? refundId, status: result.refund_status ?? 'PENDING' };
+  } catch (err) {
+    if (err instanceof CashfreeError && err.status === 404) return null;
+    throw err;
+  }
 }
 
 export type VendorPayout =
@@ -233,4 +264,13 @@ export async function cashfreeFetchVendor(
     fetchImpl,
   );
   return { vendorId, status: json.status ?? 'UNKNOWN', remarks: json.remarks ?? null };
+}
+
+export function cashfreeGetOrder(orderId: string) {
+  return cashfreeRequest<{
+    payment_session_id: string;
+    order_status: string;
+    order_amount: number;
+    order_currency: string;
+  }>('GET', `/orders/${encodeURIComponent(orderId)}`);
 }

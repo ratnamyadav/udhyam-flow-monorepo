@@ -7,6 +7,7 @@ import { type Db, schema } from '@udyamflow/db';
 import { and, eq, inArray } from 'drizzle-orm';
 import { decrypt, encrypt } from '../crypto';
 import { computeGst, resolveGstThreshold } from '../gst/tax';
+import { refundDuplicatePayment } from '../payments/refunds';
 import { getStripe } from '../stripe';
 import { issueBuiltinInvoice } from './builtin';
 import {
@@ -195,7 +196,16 @@ export async function issueInvoiceForBooking(
   if (existing) {
     const stale =
       existing.status === 'pending' && existing.updatedAt.getTime() < Date.now() - STALE_CLAIM_MS;
-    if (!stale) return existing;
+    if (!stale) {
+      if (
+        ['paid', 'partially_refunded'].includes(booking.paymentStatus) &&
+        ['draft', 'open'].includes(existing.status)
+      ) {
+        await syncInvoicePayment(db, booking.id);
+        return (await findInvoiceForBooking(db, booking.id)) ?? existing;
+      }
+      return existing;
+    }
     await db
       .delete(schema.invoice)
       .where(and(eq(schema.invoice.id, existing.id), eq(schema.invoice.status, 'pending')));
@@ -231,7 +241,10 @@ export async function issueInvoiceForBooking(
   const [svc] = booking.serviceId
     ? await db.select().from(schema.service).where(eq(schema.service.id, booking.serviceId))
     : [];
-  if (!svc || svc.priceCents <= 0) {
+  const amountCents = booking.amountCents ?? svc?.priceCents ?? 0;
+  const currency = booking.currency ?? svc?.currency ?? 'INR';
+  const service = booking.serviceSnapshot ?? svc;
+  if (!service || amountCents <= 0) {
     throw new TRPCError({ code: 'BAD_REQUEST', message: 'This booking has nothing to invoice' });
   }
 
@@ -248,8 +261,8 @@ export async function issueInvoiceForBooking(
       customerId: booking.customerId,
       provider,
       status: 'pending',
-      amountCents: svc.priceCents,
-      currency: svc.currency,
+      amountCents: amountCents,
+      currency: currency,
     })
     .onConflictDoNothing({ target: schema.invoice.bookingId })
     .returning();
@@ -270,9 +283,9 @@ export async function issueInvoiceForBooking(
       settings?.gstThresholdCents,
       await getPlatformGstThreshold(db),
     ),
-    amountCents: svc.priceCents,
-    rateBps: svc.gstRateBps,
-    exempt: svc.gstExempt,
+    amountCents: amountCents,
+    rateBps: service.gstRateBps,
+    exempt: service.gstExempt,
     supplier: {
       registered: !!settings?.gstRegistered,
       gstin: settings?.gstin ?? null,
@@ -290,18 +303,18 @@ export async function issueInvoiceForBooking(
       phone: booking.customerPhone,
     },
     line: {
-      name: svc.name,
+      name: service.name,
       description: `${booking.slotStart.toISOString().slice(0, 16).replace('T', ' ')} UTC`,
-      amountCents: svc.priceCents,
+      amountCents: amountCents,
     },
-    currency: svc.currency.toUpperCase(),
+    currency: currency.toUpperCase(),
     alreadyPaid:
       booking.paymentStatus === 'paid' ? { via: booking.paymentProvider ?? 'online' } : null,
     send: args.send,
     dueDays: DEFAULT_DUE_DAYS,
     tax: {
       gst,
-      sacCode: svc.sacCode,
+      sacCode: service.sacCode,
       supplierGstin: settings?.gstRegistered ? (settings.gstin ?? null) : null,
       customerGstin: cust?.gstin ?? null,
     },
@@ -349,7 +362,7 @@ export async function issueInvoiceForBooking(
         sgstCents: gst.sgstCents,
         igstCents: gst.igstCents,
         gstRateBps: gst.rateBps,
-        sacCode: svc.sacCode,
+        sacCode: service.sacCode,
         placeOfSupply: gst.placeOfSupply,
         supplierGstin: draft.tax.supplierGstin,
         customerGstin: draft.tax.customerGstin,
@@ -419,6 +432,87 @@ export async function autoInvoiceIfEnabled(db: Db, bookingId: string) {
   }
 }
 
+// A booking was paid after its invoice went out (pay-later link, or an
+// invoice issued before checkout). Marks the invoice paid here and in the
+// provider that issued it, so the customer isn't asked to pay twice and the
+// tenant's books show the revenue. Never throws: the payment already
+// counts, so a provider failure is logged and the invoice left unpaid.
+export async function syncInvoicePayment(db: Db, bookingId: string): Promise<void> {
+  const [row] = await db
+    .select({ invoice: schema.invoice, booking: schema.booking })
+    .from(schema.invoice)
+    .innerJoin(schema.booking, eq(schema.booking.id, schema.invoice.bookingId))
+    .where(
+      and(
+        eq(schema.invoice.bookingId, bookingId),
+        inArray(schema.invoice.status, ['draft', 'open']),
+      ),
+    );
+  if (!row || !['paid', 'partially_refunded'].includes(row.booking.paymentStatus)) return;
+  const { invoice, booking } = row;
+  // Paid through this very Stripe invoice: its own webhook marks it paid.
+  if (invoice.provider === 'stripe' && booking.paymentId === invoice.externalId) return;
+  if (invoice.provider !== 'udyamflow' && !invoice.externalId) return;
+
+  // Claim it, so concurrent webhook deliveries record the payment once.
+  const claimedAt = new Date();
+  const [claimed] = await db
+    .update(schema.invoice)
+    .set({ status: 'paid', updatedAt: claimedAt })
+    .where(and(eq(schema.invoice.id, invoice.id), eq(schema.invoice.status, invoice.status)))
+    .returning({ id: schema.invoice.id });
+  if (!claimed || invoice.provider === 'udyamflow') return;
+
+  const externalId = invoice.externalId!;
+  const payment = {
+    bookingId,
+    amountCents: invoice.amountCents,
+    via: booking.paymentProvider ?? 'online',
+  };
+  try {
+    if (invoice.provider === 'freshbooks') {
+      const s = await getFreshbooksSession(db, booking.organizationId);
+      await new FreshBooksClient(s.accessToken).recordPayment(s.accountId, externalId, payment);
+    } else if (invoice.provider === 'zoho_books') {
+      const z = await getZohoSession(db, booking.organizationId);
+      await new ZohoBooksClient(z.accessToken, z.apiDomain).recordPayment(
+        z.orgId,
+        externalId,
+        payment,
+      );
+    } else if (invoice.provider === 'stripe') {
+      const stripe = getStripe();
+      const [settings] = await db
+        .select({ stripeAccountId: schema.tenantSettings.stripeAccountId })
+        .from(schema.tenantSettings)
+        .where(eq(schema.tenantSettings.organizationId, booking.organizationId));
+      if (!stripe || !settings?.stripeAccountId) throw new Error('Stripe is not configured');
+      await stripe.invoices.pay(
+        externalId,
+        { paid_out_of_band: true },
+        { stripeAccount: settings.stripeAccountId },
+      );
+    }
+  } catch (err) {
+    // Release the claim (unless something else has updated it since) so a
+    // manual re-issue or a later delivery can try again.
+    await db
+      .update(schema.invoice)
+      .set({ status: invoice.status, updatedAt: new Date() })
+      .where(
+        and(
+          eq(schema.invoice.id, invoice.id),
+          eq(schema.invoice.status, 'paid'),
+          eq(schema.invoice.updatedAt, claimedAt),
+        ),
+      );
+    console.error(
+      `[invoicing] couldn't record payment on ${invoice.provider} invoice ${invoice.id}:`,
+      err,
+    );
+  }
+}
+
 // Mirrors a Stripe-generated invoice (Checkout `invoice_creation`) into our
 // table. Upserts so it also fills in a claim left by a racing auto-invoice.
 export async function recordStripeInvoice(
@@ -453,7 +547,11 @@ export async function recordStripeInvoice(
 // so a later refund goes back through the account that took the money.
 export async function syncStripeInvoiceStatus(
   db: Db,
-  inv: StripeInvoiceLike,
+  inv: StripeInvoiceLike & {
+    amount_paid?: number;
+    paid_out_of_band?: boolean;
+    metadata?: Record<string, string> | null;
+  },
   opts: { account?: string | null } = {},
 ) {
   if (!inv.id) return;
@@ -464,7 +562,7 @@ export async function syncStripeInvoiceStatus(
     .where(and(eq(schema.invoice.provider, 'stripe'), eq(schema.invoice.externalId, inv.id)))
     .returning({ bookingId: schema.invoice.bookingId });
   if (row && status === 'paid') {
-    await db
+    const updated = await db
       .update(schema.booking)
       .set({
         paymentStatus: 'paid',
@@ -481,7 +579,32 @@ export async function syncStripeInvoiceStatus(
           eq(schema.booking.id, row.bookingId),
           inArray(schema.booking.paymentStatus, ['unpaid', 'pending', 'failed']),
         ),
-      );
+      )
+      .returning({ id: schema.booking.id });
+    if (updated.length) return;
+    // Already settled another way (e.g. Checkout) and the customer also paid
+    // this emailed invoice: refund the second charge like any duplicate.
+    // Invoices Checkout generated (`attemptId`) or marked paid out of band
+    // carry no money of their own.
+    const charged = inv.amount_paid ?? inv.total;
+    if (inv.paid_out_of_band || inv.metadata?.attemptId || charged <= 0) return;
+    const [booking] = await db
+      .select()
+      .from(schema.booking)
+      .where(eq(schema.booking.id, row.bookingId));
+    if (
+      !booking ||
+      booking.paymentId === inv.id ||
+      !['paid', 'partially_refunded', 'refunded'].includes(booking.paymentStatus)
+    )
+      return;
+    await refundDuplicatePayment(db, {
+      bookingId: booking.id,
+      provider: 'stripe',
+      paymentId: inv.id,
+      amountCents: charged,
+      accountId: opts.account ?? null,
+    });
   }
 }
 

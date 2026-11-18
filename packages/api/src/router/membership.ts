@@ -1,13 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { TRPCError } from '@trpc/server';
-import { schema } from '@udyamflow/db';
+import { atomic, type Db, schema } from '@udyamflow/db';
 import { MEMBERSHIP_INTERVALS } from '@udyamflow/db/schema';
-import { and, asc, desc, eq, ne } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   CashfreeApiError,
   cashfreeSubscriptionsFromEnv,
 } from '../memberships/cashfree-subscriptions';
+import { membershipBenefit } from '../memberships/credits';
 import {
   cancelSubscription,
   resolveTenantSettlement,
@@ -15,7 +16,7 @@ import {
 } from '../memberships/service';
 import { isTerminalSubscriptionStatus, normalizeIndianMobile } from '../memberships/status';
 import { enforceRateLimit, ipKeyFromHeaders } from '../rate-limit';
-import { publicProcedure, router, tenantProcedure } from '../trpc';
+import { publicProcedure, router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 import { upsertCustomer } from './customer';
 
 // Recurring memberships billed through Cashfree Subscriptions (UPI Autopay /
@@ -40,6 +41,28 @@ function gatewayError(err: unknown): never {
   throw err;
 }
 
+// A plan covers an explicit list of services (at least one).
+const serviceIdsInput = z.array(z.string()).min(1, 'Pick at least one service').max(100);
+
+// Rejects services from other tenants or archived ones; returns de-duped ids.
+async function assertPlanServices(db: Db, organizationId: string, ids: string[]) {
+  const unique = [...new Set(ids)];
+  const owned = await db
+    .select({ id: schema.service.id })
+    .from(schema.service)
+    .where(
+      and(
+        inArray(schema.service.id, unique),
+        eq(schema.service.organizationId, organizationId),
+        isNull(schema.service.archivedAt),
+      ),
+    );
+  if (owned.length !== unique.length) {
+    throw new TRPCError({ code: 'BAD_REQUEST', message: 'Pick active services from your catalog' });
+  }
+  return unique;
+}
+
 const planInput = z.object({
   name: z.string().trim().min(2).max(100),
   description: z.string().trim().max(500).optional(),
@@ -54,47 +77,85 @@ const planInput = z.object({
   interval: z.enum(MEMBERSHIP_INTERVALS),
   intervalCount: z.number().int().min(1).max(12).default(1),
   sessionsPerCycle: z.number().int().min(1).max(365).nullable().optional(),
+  serviceIds: serviceIdsInput,
 });
 
 export const membershipRouter = router({
-  listPlans: tenantProcedure.query(({ ctx }) =>
-    ctx.db
+  listPlans: tenantProcedure.query(async ({ ctx }) => {
+    const plans = await ctx.db
       .select()
       .from(schema.membershipPlan)
       .where(eq(schema.membershipPlan.organizationId, ctx.organizationId))
-      .orderBy(desc(schema.membershipPlan.active), asc(schema.membershipPlan.createdAt)),
-  ),
+      .orderBy(desc(schema.membershipPlan.active), asc(schema.membershipPlan.createdAt));
+    const links = await ctx.db
+      .select({
+        planId: schema.membershipPlanService.planId,
+        serviceId: schema.service.id,
+        name: schema.service.name,
+      })
+      .from(schema.membershipPlanService)
+      .innerJoin(schema.service, eq(schema.service.id, schema.membershipPlanService.serviceId))
+      .where(
+        and(
+          eq(schema.membershipPlanService.organizationId, ctx.organizationId),
+          isNull(schema.service.archivedAt),
+        ),
+      )
+      .orderBy(asc(schema.service.name));
+    return plans.map((p) => ({
+      ...p,
+      services: links
+        .filter((l) => l.planId === p.id)
+        .map((l) => ({ id: l.serviceId, name: l.name })),
+    }));
+  }),
 
-  createPlan: tenantProcedure.input(planInput).mutation(async ({ ctx, input }) => {
+  createPlan: tenantAdminProcedure.input(planInput).mutation(async ({ ctx, input }) => {
     const id = `mpl_${randomUUID()}`;
-    await ctx.db.insert(schema.membershipPlan).values({
-      id,
-      organizationId: ctx.organizationId,
-      name: input.name,
-      description: input.description || null,
-      amountCents: input.amountCents,
-      currency: input.currency,
-      interval: input.interval,
-      intervalCount: input.intervalCount,
-      sessionsPerCycle: input.sessionsPerCycle ?? null,
-    });
+    const serviceIds = await assertPlanServices(ctx.db, ctx.organizationId, input.serviceIds);
+    await atomic(ctx.db, [
+      ctx.db.insert(schema.membershipPlan).values({
+        id,
+        organizationId: ctx.organizationId,
+        name: input.name,
+        description: input.description || null,
+        amountCents: input.amountCents,
+        currency: input.currency,
+        interval: input.interval,
+        intervalCount: input.intervalCount,
+        sessionsPerCycle: input.sessionsPerCycle ?? null,
+      }),
+      ctx.db.insert(schema.membershipPlanService).values(
+        serviceIds.map((serviceId) => ({
+          planId: id,
+          serviceId,
+          organizationId: ctx.organizationId,
+        })),
+      ),
+    ]);
     return { id };
   }),
 
   // Amount / interval / currency are deliberately not editable: the plan
   // is immutable at Cashfree and existing mandates were approved for it.
   // To change the price, create a new plan and deactivate the old one.
-  updatePlan: tenantProcedure
+  // Covered services are ours alone (not part of the Cashfree plan), so
+  // they can change; new bookings use the new list.
+  updatePlan: tenantAdminProcedure
     .input(
       z.object({
         id: z.string(),
         name: z.string().trim().min(2).max(100).optional(),
         description: z.string().trim().max(500).nullable().optional(),
         active: z.boolean().optional(),
+        serviceIds: serviceIdsInput.optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
-      const { id, description, ...patch } = input;
+      const { id, description, serviceIds: requested, ...patch } = input;
+      const serviceIds = requested
+        ? await assertPlanServices(ctx.db, ctx.organizationId, requested)
+        : null;
       const updated = await ctx.db
         .update(schema.membershipPlan)
         .set({
@@ -110,6 +171,20 @@ export const membershipRouter = router({
         )
         .returning({ id: schema.membershipPlan.id });
       if (updated.length === 0) throw new TRPCError({ code: 'NOT_FOUND' });
+      if (serviceIds) {
+        await atomic(ctx.db, [
+          ctx.db
+            .delete(schema.membershipPlanService)
+            .where(eq(schema.membershipPlanService.planId, id)),
+          ctx.db.insert(schema.membershipPlanService).values(
+            serviceIds.map((serviceId) => ({
+              planId: id,
+              serviceId,
+              organizationId: ctx.organizationId,
+            })),
+          ),
+        ]);
+      }
       return { ok: true };
     }),
 
@@ -149,7 +224,7 @@ export const membershipRouter = router({
       .limit(500),
   ),
 
-  cancelSubscription: tenantProcedure
+  cancelSubscription: tenantAdminProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ ctx, input }) => {
       const [row] = await ctx.db
@@ -208,6 +283,32 @@ export const membershipRouter = router({
       return plans;
     }),
 
+  benefit: publicProcedure
+    .input(z.object({ orgSlug: z.string(), subscriptionId: z.string() }))
+    .query(async ({ ctx, input }) => {
+      await enforceRateLimit({
+        key: `membership-benefit:${ipKeyFromHeaders(ctx.headers)}`,
+        limit: 60,
+        windowSec: 60,
+      });
+      const [org] = await ctx.db
+        .select()
+        .from(schema.organization)
+        .where(eq(schema.organization.slug, input.orgSlug));
+      const benefit = org ? await membershipBenefit(ctx.db, org.id, input.subscriptionId) : null;
+      if (!benefit) return null;
+      // The subscription id travels in shareable links: return nothing
+      // about the member (name / contact) — only what the plan covers.
+      return {
+        planName: benefit.plan.name,
+        remaining:
+          benefit.cycle.sessionLimit == null
+            ? null
+            : benefit.cycle.sessionLimit - benefit.cycle.sessionsUsed,
+        until: benefit.cycle.endsAt,
+        serviceIds: benefit.serviceIds,
+      };
+    }),
   subscribe: publicProcedure
     .input(
       z.object({

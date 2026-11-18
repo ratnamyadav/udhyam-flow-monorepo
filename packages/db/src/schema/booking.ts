@@ -40,9 +40,11 @@ export const SLOT_BLOCKING_STATUSES = [
 // Payment lifecycle: `unpaid` (free service, or pay-at-venue when no gateway
 // is configured), `pending` (checkout opened, webhook not yet observed),
 // `paid`, `partially_refunded`, `refunded`, `failed`. Driven by the Stripe /
-// Cashfree webhooks.
+// Cashfree webhooks. `covered`: a membership credit paid for it — nothing is
+// due, so it never gets a pay link or checkout.
 export const PAYMENT_STATUSES = [
   'unpaid',
+  'covered',
   'pending',
   'paid',
   'partially_refunded',
@@ -102,6 +104,16 @@ export const booking = pgTable(
     currency: text('currency'),
     paidAt: timestamp('paid_at'),
     refundedCents: integer('refunded_cents').notNull().default(0),
+    refundReservedCents: integer('refund_reserved_cents').notNull().default(0),
+    refundCompletedCents: integer('refund_completed_cents').notNull().default(0),
+    refundObservedCents: integer('refund_observed_cents').notNull().default(0),
+    refundBaselineCents: integer('refund_baseline_cents').notNull().default(0),
+    serviceSnapshot: jsonb('service_snapshot').$type<{
+      name: string;
+      gstRateBps: number;
+      gstExempt: boolean;
+      sacCode: string | null;
+    }>(),
     cancelReason: text('cancel_reason'),
     intake: jsonb('intake').$type<Record<string, unknown>>(),
     createdAt: timestamp('created_at').notNull().defaultNow(),

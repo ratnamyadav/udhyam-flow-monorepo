@@ -1,9 +1,10 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { authClient, signOut } from '@udyamflow/auth/client';
 import { readableTextOn, type TenantTheme } from '@udyamflow/tokens';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname } from 'next/navigation';
 import { useTheme } from 'next-themes';
 import { useCallback, useRef, useState, useTransition } from 'react';
 import { useOutsideClick } from '@/lib/use-outside-click';
@@ -30,7 +31,7 @@ export function Topbar({
   user: { name: string | null; email: string };
 }) {
   const pathname = usePathname();
-  const router = useRouter();
+  const queryClient = useQueryClient();
   const [isPending, startTransition] = useTransition();
   // Workspace (organization) switcher — not to be confused with a
   // business's physical locations, which live under Settings → Locations.
@@ -49,13 +50,15 @@ export function Topbar({
     setSwitchError(null);
     startTransition(async () => {
       try {
+        await queryClient.cancelQueries();
+        queryClient.clear();
         const res = await authClient.organization.setActive({ organizationId: id });
         if (res.error) {
           setSwitchError(res.error.message ?? 'Could not switch workspace');
           return;
         }
         setOpenOrg(false);
-        router.refresh();
+        window.location.assign(pathname);
       } catch (e) {
         setSwitchError(e instanceof Error ? e.message : 'Could not switch workspace');
       }
@@ -196,8 +199,10 @@ export function Topbar({
               <button
                 type="button"
                 onClick={async () => {
+                  await queryClient.cancelQueries();
+                  queryClient.clear();
                   await signOut();
-                  router.push('/sign-in');
+                  window.location.assign('/sign-in');
                 }}
                 className="w-full text-left px-3 py-2 rounded-md hover:bg-surface-mute text-[13px] text-ink-mute"
               >

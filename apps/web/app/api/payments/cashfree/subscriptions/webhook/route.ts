@@ -1,3 +1,4 @@
+import { applyCashfreeBilling } from '@udyamflow/api';
 import {
   applySubscriptionWebhook,
   cashfreeSubscriptionsFromEnv,
@@ -33,6 +34,7 @@ export async function POST(req: NextRequest) {
   const event = parseSubscriptionWebhook(rawBody);
   if (!event) return new Response('Bad payload', { status: 400 });
 
+  if (await applyCashfreeBilling(db, event)) return Response.json({ received: true });
   const result = await applySubscriptionWebhook(db, cashfreeSubscriptionsFromEnv(), event);
   if (!result.handled) {
     console.info(`[memberships] ignored Cashfree ${event.type}: ${result.reason}`);

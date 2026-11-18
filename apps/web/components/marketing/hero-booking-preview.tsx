@@ -8,7 +8,7 @@ export function HeroBookingPreview() {
   const slots = ['09:00', '09:30', '10:00', '10:30', '11:00', '11:30', '14:00', '14:30'];
 
   return (
-    <div className="grid grid-cols-[320px_1fr] h-[540px] bg-surface">
+    <div className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[320px_minmax(0,1fr)] min-h-[540px] bg-surface">
       <div className="p-8 border-r border-border bg-bg">
         <div className="flex items-center gap-2.5 mb-6">
           <div
@@ -34,7 +34,7 @@ export function HeroBookingPreview() {
           <div>₹ &nbsp;₹800 · paid at clinic</div>
         </div>
       </div>
-      <div className="px-9 py-8">
+      <div className="px-4 sm:px-9 py-8">
         <div className="flex justify-between items-center mb-4">
           <div className="text-sm font-medium text-ink">April 2026</div>
           <div className="flex gap-1.5">

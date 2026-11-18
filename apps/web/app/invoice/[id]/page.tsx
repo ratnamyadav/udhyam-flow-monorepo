@@ -48,12 +48,12 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
   const rate = (inv.gstRateBps ?? 0) / 100;
 
   return (
-    <div className="min-h-screen bg-neutral-100 py-10 print:bg-white print:py-0 text-neutral-900">
+    <div className="min-h-screen bg-neutral-100 px-4 sm:px-6 py-10 print:bg-white print:px-0 print:py-0 text-neutral-900">
       <div className="max-w-[820px] mx-auto mb-4 flex justify-end print:hidden">
         <PrintButton />
       </div>
-      <article className="max-w-[820px] mx-auto bg-white shadow-sm print:shadow-none p-10 text-[13px]">
-        <header className="flex justify-between items-start border-b border-neutral-200 pb-6">
+      <article className="max-w-[820px] mx-auto bg-white shadow-sm print:shadow-none p-5 sm:p-10 print:p-10 text-[13px] break-words">
+        <header className="flex flex-col gap-4 sm:flex-row sm:justify-between sm:items-start print:flex-row print:justify-between print:items-start border-b border-neutral-200 pb-6">
           <div>
             {tenant.logoUrl && (
               <img src={tenant.logoUrl} alt="" className="h-10 mb-3 object-contain" />
@@ -69,7 +69,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             )}
             {inv.supplierGstin && <div className="mt-1 font-mono">GSTIN: {inv.supplierGstin}</div>}
           </div>
-          <div className="text-right">
+          <div className="sm:text-right print:text-right">
             <div
               className="text-[22px] font-semibold tracking-tight"
               style={{ color: tenant.accent ?? undefined }}
@@ -90,14 +90,14 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           </div>
         </header>
 
-        <section className="grid grid-cols-2 gap-6 py-6 border-b border-neutral-200">
+        <section className="grid grid-cols-1 sm:grid-cols-2 print:grid-cols-2 gap-6 py-6 border-b border-neutral-200">
           <div>
             <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">
               Billed to
             </div>
             <div className="font-medium">{booking.customerName}</div>
             {booking.customerEmail && (
-              <div className="text-neutral-600">{booking.customerEmail}</div>
+              <div className="text-neutral-600 break-all">{booking.customerEmail}</div>
             )}
             {booking.customerPhone && (
               <div className="text-neutral-600">{booking.customerPhone}</div>
@@ -105,7 +105,7 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
             {inv.customerGstin && <div className="mt-1 font-mono">GSTIN: {inv.customerGstin}</div>}
           </div>
           {inv.documentType !== 'invoice' && (
-            <div className="text-right">
+            <div className="sm:text-right print:text-right">
               <div className="text-[11px] uppercase tracking-wider text-neutral-500 mb-1">
                 Place of supply
               </div>
@@ -115,34 +115,36 @@ export default async function InvoicePage({ params }: { params: Promise<{ id: st
           )}
         </section>
 
-        <table className="w-full mt-6">
-          <thead>
-            <tr className="text-left text-[11px] uppercase tracking-wider text-neutral-500 border-b border-neutral-200">
-              <th className="py-2 font-medium">Description</th>
-              <th className="py-2 font-medium">SAC</th>
-              <th className="py-2 font-medium text-right">
-                {taxInvoice ? 'Taxable value' : 'Amount'}
-              </th>
-              {taxInvoice && <th className="py-2 font-medium text-right">GST</th>}
-            </tr>
-          </thead>
-          <tbody>
-            <tr className="border-b border-neutral-100 align-top">
-              <td className="py-3">
-                <div className="font-medium">{serviceName}</div>
-                <div className="text-neutral-600">{serviceDate}</div>
-              </td>
-              <td className="py-3 font-mono">{inv.sacCode ?? '—'}</td>
-              <td className="py-3 text-right font-mono">
-                {amt(inv.taxableCents ?? inv.amountCents)}
-              </td>
-              {taxInvoice && <td className="py-3 text-right font-mono">{rate}%</td>}
-            </tr>
-          </tbody>
-        </table>
+        <div className="overflow-x-auto print:overflow-visible mt-6">
+          <table className="w-full">
+            <thead>
+              <tr className="text-left text-[11px] uppercase tracking-wider text-neutral-500 border-b border-neutral-200">
+                <th className="py-2 font-medium">Description</th>
+                <th className="py-2 font-medium">SAC</th>
+                <th className="py-2 font-medium text-right">
+                  {taxInvoice ? 'Taxable value' : 'Amount'}
+                </th>
+                {taxInvoice && <th className="py-2 font-medium text-right">GST</th>}
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="border-b border-neutral-100 align-top">
+                <td className="py-3">
+                  <div className="font-medium">{serviceName}</div>
+                  <div className="text-neutral-600">{serviceDate}</div>
+                </td>
+                <td className="py-3 font-mono">{inv.sacCode ?? '—'}</td>
+                <td className="py-3 text-right font-mono">
+                  {amt(inv.taxableCents ?? inv.amountCents)}
+                </td>
+                {taxInvoice && <td className="py-3 text-right font-mono">{rate}%</td>}
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
         <div className="flex justify-end mt-6">
-          <dl className="w-[300px] space-y-1.5">
+          <dl className="w-full sm:w-[300px] print:w-[300px] space-y-1.5">
             {taxInvoice && (
               <>
                 <Row label="Taxable value" value={amt(inv.taxableCents)} />

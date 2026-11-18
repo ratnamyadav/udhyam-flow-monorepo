@@ -19,6 +19,7 @@ export const SETTINGS_NAV: NavItem[] = [
   { href: '/settings/services', label: 'Services' },
   { href: '/settings/locations', label: 'Locations' },
   { href: '/settings/team', label: 'Team' },
+  { href: '/settings/billing', label: 'Workspace billing' },
   { href: '/settings/payments', label: 'Payments' },
   { href: '/settings/invoicing', label: 'Invoicing' },
   { href: '/settings/memberships', label: 'Memberships' },

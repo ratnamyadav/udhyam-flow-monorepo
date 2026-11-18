@@ -29,14 +29,14 @@ export default function MarketingLandingPage() {
     <div className="min-h-screen bg-bg text-ink">
       <MarketingNav activeHref="/" />
 
-      <section className="px-14 pt-28 pb-20 max-w-[1280px] mx-auto">
+      <section className="px-4 sm:px-8 lg:px-14 pt-12 sm:pt-20 lg:pt-28 pb-20 max-w-[1280px] mx-auto">
         <div className="inline-flex items-center gap-2 text-xs text-ink-mute px-3 py-1 border border-border rounded-full bg-surface mb-8 font-mono">
           <span className="w-1.5 h-1.5 rounded-full bg-[#3d7c4d]" />
           Free for the first 6 months · No card required
         </div>
 
         <h1
-          className="text-[84px] font-medium m-0 max-w-[980px] text-ink"
+          className="text-[42px] sm:text-[64px] lg:text-[84px] font-medium m-0 max-w-[980px] text-ink"
           style={{ lineHeight: 0.96, letterSpacing: '-2.6px', textWrap: 'balance' }}
         >
           Bookings, branded —
@@ -64,7 +64,7 @@ export default function MarketingLandingPage() {
           afternoon.
         </p>
 
-        <div className="flex gap-3 mt-10 items-center">
+        <div className="flex flex-wrap gap-3 mt-10 items-center">
           <Link
             href="/sign-up"
             className="bg-ink text-bg px-5.5 py-3.5 rounded-lg text-[15px] font-medium hover:opacity-90"
@@ -81,42 +81,13 @@ export default function MarketingLandingPage() {
         </div>
 
         <div className="mt-20 relative">
-          <BrowserChrome url="patel-clinic.udyamflow.com">
+          <BrowserChrome url="udyamflow.com/book/patel-clinic">
             <HeroBookingPreview />
           </BrowserChrome>
-          <div className="absolute -right-4 top-16 bg-surface border border-border rounded-xl px-4.5 py-3.5 text-xs shadow-[0_12px_32px_rgba(0,0,0,.06)]">
+          <div className="hidden sm:block absolute right-4 top-16 bg-surface border border-border rounded-xl px-4.5 py-3.5 text-xs shadow-[0_12px_32px_rgba(0,0,0,.06)]">
             <div className="text-ink-soft text-[11px] uppercase tracking-wider mb-1">This week</div>
             <div className="text-[28px] font-medium font-mono leading-none text-ink">148</div>
             <div className="text-ink-mute text-xs mt-1">bookings · ▲ 22% vs. last</div>
-          </div>
-        </div>
-      </section>
-
-      <section className="px-14 py-10 border-y border-border">
-        <div className="max-w-[1280px] mx-auto flex items-center gap-14">
-          <span className="text-xs text-ink-soft whitespace-nowrap uppercase tracking-wider">
-            Trusted by 4,200+ businesses
-          </span>
-          <div className="flex gap-12 flex-1 justify-around text-ink-soft text-[17px] font-medium">
-            {[
-              'Northshore Clinic',
-              'Lumen Tutors',
-              'Baseline Sports',
-              'Evergreen Spa',
-              'Forge Fitness',
-              'Quietmind',
-            ].map((n, i) => (
-              <span
-                key={n}
-                style={{
-                  fontFamily: i % 2 ? 'var(--font-fraunces), Georgia, serif' : 'inherit',
-                  fontStyle: i % 2 ? 'italic' : 'normal',
-                  opacity: 0.7,
-                }}
-              >
-                {n}
-              </span>
-            ))}
           </div>
         </div>
       </section>
@@ -125,12 +96,11 @@ export default function MarketingLandingPage() {
 
       <section
         id="features"
-        className="px-14 py-30 bg-surface border-y border-border scroll-mt-20"
-        style={{ padding: '120px 56px' }}
+        className="px-4 sm:px-8 lg:px-14 py-12 sm:py-20 lg:py-30 bg-surface border-y border-border scroll-mt-20"
       >
         <div className="max-w-[1280px] mx-auto">
           <h2
-            className="text-[48px] leading-[1.05] font-medium m-0 max-w-[700px] text-ink"
+            className="text-[32px] sm:text-[42px] lg:text-[48px] leading-[1.05] font-medium m-0 max-w-[700px] text-ink"
             style={{ letterSpacing: '-1.4px', textWrap: 'balance' }}
           >
             Your booking page should look like{' '}
@@ -146,23 +116,23 @@ export default function MarketingLandingPage() {
             </em>
             , not ours.
           </h2>
-          <div className="grid grid-cols-[1.1fr_1fr] gap-20 mt-16 items-center">
+          <div className="grid grid-cols-1 lg:grid-cols-[1.1fr_1fr] gap-8 lg:gap-20 mt-16 items-center">
             <ThemePreviewCard />
             <div>
               <FeatureRow
                 num="01"
                 title="Drop in your logo."
-                body="SVG, PNG, or whatever your designer left you with. Crop, color-shift, done."
+                body="Upload a PNG, JPEG, or WebP logo. We resize it for your booking page."
               />
               <FeatureRow
                 num="02"
-                title="Pick your colors — or steal them."
-                body="Paste any URL and we extract the palette. Or pick from oklch-balanced presets."
+                title="Pick your colors."
+                body="Pick a preset or enter your brand color — we derive a matching tint and text shade. Preview the result before saving."
               />
               <FeatureRow
                 num="03"
                 title="Choose a font pairing."
-                body="Inter, Fraunces, JetBrains Mono — and 12 more pairings tuned for legibility."
+                body="Choose heading and body fonts from seven options, including Inter, Fraunces, and Playfair Display."
               />
               <FeatureRow
                 num="04"
@@ -176,10 +146,9 @@ export default function MarketingLandingPage() {
 
       <section
         id="locations"
-        className="px-14 py-30 max-w-[1280px] mx-auto scroll-mt-20"
-        style={{ padding: '120px 56px' }}
+        className="px-4 sm:px-8 lg:px-14 py-12 sm:py-20 lg:py-30 max-w-[1280px] mx-auto scroll-mt-20"
       >
-        <div className="grid grid-cols-2 gap-20">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-8 lg:gap-20">
           <div>
             <div
               className="text-xs uppercase tracking-wider mb-3.5 font-medium"
@@ -188,7 +157,7 @@ export default function MarketingLandingPage() {
               Multi-location
             </div>
             <h2
-              className="text-[48px] leading-[1.05] font-medium m-0 text-ink"
+              className="text-[32px] sm:text-[42px] lg:text-[48px] leading-[1.05] font-medium m-0 text-ink"
               style={{ letterSpacing: '-1.4px', textWrap: 'balance' }}
             >
               One account.
@@ -196,13 +165,13 @@ export default function MarketingLandingPage() {
               Every location.
             </h2>
             <p className="text-base text-ink-mute mt-5 leading-relaxed max-w-[460px]">
-              Switch between branches in the top bar. Each location keeps its own staff, hours,
-              prices, and policies — but rolls up into one dashboard so you see the whole business
-              at once.
+              Add every branch to one workspace. Each location has its own timezone, currency, and
+              bookable resources — doctors, courts, stylists — each with their own weekly hours.
+              Pick a location on the dashboard to see its day.
             </p>
-            <div className="mt-9 flex gap-6">
-              <Stat n="∞" l="Locations on every plan" />
-              <Stat n="1" l="Unified dashboard" />
+            <div className="mt-9 flex flex-wrap gap-6">
+              <Stat n="∞" l="No cap on locations" />
+              <Stat n="4" l="Service currencies" />
               <Stat n="6" l="Templates" />
             </div>
           </div>
@@ -210,13 +179,13 @@ export default function MarketingLandingPage() {
         </div>
       </section>
 
-      <section className="px-14 py-30 bg-ink text-bg" style={{ padding: '120px 56px' }}>
+      <section className="px-4 sm:px-8 lg:px-14 py-12 sm:py-20 lg:py-30 bg-ink text-bg">
         <div className="max-w-[1100px] mx-auto text-center">
           <div className="text-xs uppercase tracking-wider mb-4 font-medium text-white/50">
             Simple pricing
           </div>
           <h2
-            className="text-[56px] m-0 font-medium"
+            className="text-[40px] sm:text-[56px] m-0 font-medium"
             style={{ lineHeight: 1.02, letterSpacing: '-1.6px', textWrap: 'balance' }}
           >
             Free for six months.
@@ -224,9 +193,9 @@ export default function MarketingLandingPage() {
             <span className="text-white/50">Then $10 per location.</span>
           </h2>
           <p className="text-base text-white/60 mt-6 leading-relaxed max-w-[540px] mx-auto">
-            No per-booking fees. No per-staff fees. Cancel any time, keep your data.
+            No per-booking fees. No per-staff fees. No lock-in — cancel any time.
           </p>
-          <div className="flex gap-3 mt-10 justify-center">
+          <div className="flex flex-wrap gap-3 mt-10 justify-center">
             <Link
               href="/sign-up"
               className="bg-bg text-ink px-5.5 py-3.5 rounded-lg text-[15px] font-medium hover:opacity-90"

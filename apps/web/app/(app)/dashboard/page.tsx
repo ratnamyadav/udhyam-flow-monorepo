@@ -123,7 +123,7 @@ export default function DashboardPage() {
       delta: dayDelta === null ? '' : `${dayDelta >= 0 ? '+' : ''}${dayDelta} vs yesterday`,
     },
     {
-      label: profession.metricLabels[1],
+      label: 'Bookings this week',
       value: weekly.error ? '!' : weekly.data ? String(weekly.data.thisWeek) : '—',
       delta:
         weekly.data && weekly.data.lastWeek > 0
@@ -144,7 +144,7 @@ export default function DashboardPage() {
   ];
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="flex items-end justify-between mb-7">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
@@ -212,7 +212,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-4 gap-3 mb-9">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-9">
         {metrics.map((m) => (
           <div key={m.label} className="bg-surface border border-border rounded-xl p-5">
             <div className="text-[11px] uppercase tracking-wider text-ink-soft font-mono">
@@ -226,7 +226,7 @@ export default function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-[1fr_400px] gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-6">
         <div className="bg-surface border border-border rounded-xl">
           <div className="px-5 py-4 border-b border-border flex items-center justify-between">
             <div className="text-[14px] font-medium text-ink">Today's bookings</div>
@@ -252,14 +252,16 @@ export default function DashboardPage() {
               {todaysList.map((b) => (
                 <div
                   key={b.id}
-                  className="grid grid-cols-[80px_1fr_auto] items-center gap-4 px-5 py-3.5 border-t border-border first:border-t-0 hover:bg-surface-mute"
+                  className="grid grid-cols-[56px_minmax(0,1fr)_auto] sm:grid-cols-[80px_minmax(0,1fr)_auto] items-center gap-3 sm:gap-4 px-4 sm:px-5 py-3.5 border-t border-border first:border-t-0 hover:bg-surface-mute"
                 >
                   <div className="text-[13px] font-mono tabular-nums text-ink-mute">
                     {formatTimeInZone(b.slotStart, timezone)}
                   </div>
-                  <div>
-                    <div className="text-[14px] font-medium text-ink">{b.customerName}</div>
-                    <div className="text-[12px] text-ink-mute">
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-medium text-ink truncate">
+                      {b.customerName}
+                    </div>
+                    <div className="text-[12px] text-ink-mute truncate">
                       {b.customerEmail ?? b.customerPhone ?? '—'}
                     </div>
                   </div>

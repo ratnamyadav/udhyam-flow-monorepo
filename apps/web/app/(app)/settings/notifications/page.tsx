@@ -33,7 +33,7 @@ export default function NotificationsSettingsPage() {
   ];
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="mb-8">
         <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
           Settings · Notifications

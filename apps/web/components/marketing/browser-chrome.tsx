@@ -7,7 +7,7 @@ export function BrowserChrome({ url, children }: { url: string; children: React.
           <span className="w-[11px] h-[11px] rounded-full bg-[#e0ddd4]" />
           <span className="w-[11px] h-[11px] rounded-full bg-[#e0ddd4]" />
         </div>
-        <div className="flex-1 ml-2.5 px-3 py-1 bg-surface rounded-md text-xs text-ink-mute text-center font-mono">
+        <div className="min-w-0 break-all flex-1 ml-2.5 px-3 py-1 bg-surface rounded-md text-xs text-ink-mute text-center font-mono">
           {url}
         </div>
       </div>

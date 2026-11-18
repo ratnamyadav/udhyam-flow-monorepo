@@ -16,9 +16,7 @@
       "supportsTablet": true,
       "requireFullScreen": false,
       "bundleIdentifier": "com.udyamflow.app",
-      "associatedDomains": [
-        "applinks:udyamflow.com"
-      ]
+      "associatedDomains": ["applinks:udyamflow.com"]
     },
     "android": {
       "package": "com.udyamflow.app",
@@ -37,10 +35,7 @@
               "pathPrefix": "/book/"
             }
           ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },

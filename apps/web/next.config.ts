@@ -15,14 +15,7 @@ loadEnvConfig(path.resolve(__dirname, '../..'));
 // Skip the check inside Next's static-page collection workers — those spawn
 // separate processes without inheriting parent env, and the actual runtime
 // requests will validate on the real server path.
-if (!process.env.NEXT_PHASE?.includes('page-data')) {
-  try {
-    getServerEnv();
-  } catch (err) {
-    console.error(err instanceof Error ? err.message : err);
-    if (process.env.NODE_ENV !== 'production') throw err;
-  }
-}
+getServerEnv();
 
 const config: NextConfig = {
   reactStrictMode: true,

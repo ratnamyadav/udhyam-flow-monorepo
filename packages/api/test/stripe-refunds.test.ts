@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,9 +26,13 @@ const fakeStripe = {
     },
   },
   refunds: {
+    list: async (...args: unknown[]) => {
+      calls.push({ method: 'refunds.list', args });
+      return { data: [] };
+    },
     create: async (...args: unknown[]) => {
       calls.push({ method: 'refunds.create', args });
-      return { id: 're_1' };
+      return { id: `re_${randomUUID()}`, status: 'succeeded' };
     },
   },
 };
@@ -81,7 +86,7 @@ describe('refunding Stripe payments', () => {
     const id = await paidBooking(f, { paymentId: 'in_123', paymentAccountId: null });
 
     const res = await userCaller(db, f.ownerId, f.orgId).payment.refund({ bookingId: id });
-    expect(res).toEqual({ ok: true, paymentStatus: 'refunded' });
+    expect(res).toMatchObject({ ok: true, paymentStatus: 'refunded', pending: false });
 
     expect(call('sessions.retrieve')).toBeUndefined();
     expect(call('invoicePayments.list')?.args).toEqual([
@@ -89,8 +94,12 @@ describe('refunding Stripe payments', () => {
       { stripeAccount: 'acct_tenant' },
     ]);
     expect(call('refunds.create')?.args).toEqual([
-      { payment_intent: 'pi_invoice', amount: 5_000 },
-      { stripeAccount: 'acct_tenant' },
+      expect.objectContaining({
+        payment_intent: 'pi_invoice',
+        amount: 5_000,
+        metadata: expect.objectContaining({ bookingId: id }),
+      }),
+      expect.objectContaining({ stripeAccount: 'acct_tenant', idempotencyKey: expect.any(String) }),
     ]);
   });
 
@@ -100,8 +109,11 @@ describe('refunding Stripe payments', () => {
     await userCaller(db, f.ownerId, f.orgId).payment.refund({ bookingId: id, amountCents: 1_000 });
     expect(call('sessions.retrieve')?.args[0]).toBe('cs_456');
     expect(call('refunds.create')?.args).toEqual([
-      { payment_intent: 'pi_checkout', amount: 1_000 },
-      { stripeAccount: 'acct_recorded' },
+      expect.objectContaining({ payment_intent: 'pi_checkout', amount: 1_000 }),
+      expect.objectContaining({
+        stripeAccount: 'acct_recorded',
+        idempotencyKey: expect.any(String),
+      }),
     ]);
   });
 

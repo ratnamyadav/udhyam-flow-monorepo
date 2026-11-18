@@ -11,7 +11,7 @@ export function useActiveRole() {
   return {
     role,
     organizationId: membership.data?.organizationId ?? null,
-    isAdmin: role ? role === 'owner' || role === 'admin' : true,
+    isAdmin: role === 'owner' || role === 'admin',
     isLoading: membership.isLoading,
   };
 }

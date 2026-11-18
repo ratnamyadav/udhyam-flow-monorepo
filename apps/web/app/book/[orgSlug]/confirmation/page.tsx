@@ -123,7 +123,7 @@ export default async function BookingConfirmationPage({
       <Shell brand={brand}>
         <FallbackCard
           title="Your hold expired"
-          body={`We held ${displayTime} while you paid, but payment didn't complete in time, so the slot was released. You haven't been charged — pick a new time to book again. Reference ${referenceCode}.`}
+          body={`We held ${displayTime} while you paid, but payment didn't complete in time, so the slot was released. If your bank shows a charge, contact the business with this reference before booking again. Reference ${referenceCode}.`}
           href={backHref}
           cta="Pick a new time"
         />
@@ -168,14 +168,14 @@ export default async function BookingConfirmationPage({
     ? formatInZone(holdExpiresAt, timezone, { hour: '2-digit', minute: '2-digit', hour12: false })
     : null;
 
-  if (booking.paymentStatus === 'failed') {
+  if (booking.paymentStatus === 'failed' && holdLive) {
     return (
       <Shell brand={brand}>
         <FallbackCard
           title="Payment didn't go through"
           body={`Your bank declined or couldn't complete the payment, so ${displayTime} isn't booked yet. You haven't been charged. Please try again.`}
-          href={backHref}
-          cta="Try again"
+          href={`/pay/${encodeURIComponent(booking.id)}`}
+          cta="Retry payment"
         />
       </Shell>
     );
@@ -201,8 +201,8 @@ export default async function BookingConfirmationPage({
         <FallbackCard
           title="Checkout cancelled"
           body={`You weren't charged. We're holding ${displayTime} for you until ${holdUntil} (${timezone}); after that the slot is released.`}
-          href={backHref}
-          cta="Back to booking"
+          href={`/pay/${encodeURIComponent(booking.id)}`}
+          cta="Resume payment"
         />
       </Shell>
     );

@@ -4,11 +4,10 @@ export function TemplatesGrid() {
   return (
     <section
       id="templates"
-      className="px-14 py-30 max-w-[1280px] mx-auto scroll-mt-20"
-      style={{ padding: '120px 56px' }}
+      className="px-4 sm:px-8 lg:px-14 py-12 sm:py-20 lg:py-30 max-w-[1280px] mx-auto scroll-mt-20"
     >
-      <div className="grid grid-cols-[1fr_1.4fr] gap-20 items-start">
-        <div className="sticky top-24">
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1.4fr] gap-8 lg:gap-20 items-start">
+        <div className="lg:sticky lg:top-24">
           <div
             className="text-xs uppercase tracking-wider mb-3.5 font-medium"
             style={{ color: '#c8704a' }}
@@ -16,7 +15,7 @@ export function TemplatesGrid() {
             One platform · six templates
           </div>
           <h2
-            className="text-[48px] leading-[1.05] font-medium m-0 text-ink"
+            className="text-[32px] sm:text-[42px] lg:text-[48px] leading-[1.05] font-medium m-0 text-ink"
             style={{ letterSpacing: '-1.4px', textWrap: 'balance' }}
           >
             Built for whatever
@@ -24,11 +23,11 @@ export function TemplatesGrid() {
             gets booked.
           </h2>
           <p className="text-base text-ink-mute mt-5 leading-relaxed">
-            Each template ships with the right fields, slot lengths, and policies for your trade.
-            You change the parts that matter — never the plumbing.
+            Each template provides profession-specific labels and default slot lengths. You change
+            the parts that matter — never the plumbing.
           </p>
         </div>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {TEMPLATES.map((t) => (
             <div
               key={t.id}

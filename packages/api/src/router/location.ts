@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server';
 import { atomic, SLOT_BLOCKING_STATUSES, schema } from '@udyamflow/db';
 import { and, asc, eq, gte, inArray, isNull } from 'drizzle-orm';
 import { z } from 'zod';
+import { cancelLocationSubscription } from '../billing/service';
 import { currency, timeZone } from '../lib/validate';
 import { publicProcedure, router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 
@@ -129,6 +130,22 @@ export const locationRouter = router({
           message: 'Cancel future bookings at this location before removing it.',
         });
       }
+      const subscriptions = await ctx.db
+        .select()
+        .from(schema.locationSubscription)
+        .where(
+          and(
+            eq(schema.locationSubscription.locationId, input.id),
+            inArray(schema.locationSubscription.status, [
+              'initializing',
+              'pending',
+              'active',
+              'past_due',
+            ]),
+          ),
+        );
+      for (const subscription of subscriptions)
+        await cancelLocationSubscription(ctx.db, subscription);
       const now = new Date();
       // The location's resources are archived with it.
       await atomic(ctx.db, [

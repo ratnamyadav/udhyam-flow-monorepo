@@ -11,6 +11,7 @@ import {
 import { PROFESSIONS, type ProfessionId } from '@udyamflow/tokens';
 import { and, asc, desc, eq, gt, gte, inArray, isNull, lt, notInArray } from 'drizzle-orm';
 import { z } from 'zod';
+import { locationBillingAccess } from '../billing/service';
 import { generateSlots, type Interval, overlaps, type Slot } from '../lib/slots';
 import {
   addDaysToDate,
@@ -21,6 +22,12 @@ import {
   todayInTz,
 } from '../lib/time';
 import { dateStr } from '../lib/validate';
+import {
+  contactMatchesMember,
+  insertCoveredBooking,
+  membershipBenefit,
+  releaseMembershipCredit,
+} from '../memberships/credits';
 import { notifyCancelled, notifyConfirmed, referenceCodeFor } from '../notify';
 import { resolveMeetingUrl } from '../online';
 import { expireStaleHolds, refundBooking } from '../payments/lifecycle';
@@ -221,6 +228,11 @@ export const bookingRouter = router({
         return { slots: [], timezone: 'UTC', date: input.date ?? todayInTz('UTC') };
       }
       const b = resolved.value;
+      if (!(await locationBillingAccess(ctx.db, b.orgId, b.locationId)))
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'This location is not accepting new bookings. Please contact the business.',
+        });
       const now = new Date();
       const date = input.date ?? todayInTz(b.timezone, now);
       if (!isWithinHorizon(date, b.timezone, now)) {
@@ -241,6 +253,7 @@ export const bookingRouter = router({
         resourceId: z.string(),
         locationId: z.string(),
         serviceId: z.string().optional(),
+        membershipId: z.string().optional(),
         customerName: z.string().trim().min(2).max(120),
         customerEmail: z.email().optional(),
         customerPhone: z.string().max(32).optional(),
@@ -264,6 +277,11 @@ export const bookingRouter = router({
       const resolved = await resolveBookable(ctx.db, input);
       if (!resolved.ok) throw new TRPCError({ code: resolved.code, message: resolved.message });
       const b = resolved.value;
+      if (!(await locationBillingAccess(ctx.db, b.orgId, b.locationId)))
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: 'This location is not accepting new bookings. Please contact the business.',
+        });
       if (b.eligibleServiceCount > 0 && !b.service) {
         throw new TRPCError({ code: 'BAD_REQUEST', message: 'Please choose a service.' });
       }
@@ -291,7 +309,37 @@ export const bookingRouter = router({
       const taken = await takenIntervals(ctx.db, b.resourceId, { start: slotStart, end: slotEnd });
       if (taken.some((t) => overlaps(t, { start: slotStart, end: slotEnd }))) throw slotTakenError;
 
-      const amountCents = b.service?.priceCents ?? 0;
+      const benefit = input.membershipId
+        ? await membershipBenefit(ctx.db, b.orgId, input.membershipId)
+        : null;
+      if (input.membershipId && !benefit)
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'This membership has no paid booking cycle. Check your membership page or book without it.',
+        });
+      if (
+        benefit &&
+        !contactMatchesMember(benefit.customer, {
+          email: input.customerEmail,
+          phone: input.customerPhone,
+        })
+      )
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message:
+            'Enter the email or phone number you used for this membership to book with it, or book without the membership.',
+        });
+      // Plans cover an explicit list of services — never charge silently,
+      // tell the member instead. insertCoveredBooking re-checks atomically.
+      if (benefit && (!b.service || !benefit.serviceIds.includes(b.service.id)))
+        throw new TRPCError({
+          code: 'PRECONDITION_FAILED',
+          message: b.service
+            ? `${benefit.plan.name} doesn't include ${b.service.name}. Pick a service your membership covers, or book without the membership.`
+            : `${benefit.plan.name} doesn't cover this booking. Book without the membership.`,
+        });
+      const amountCents = benefit ? 0 : (b.service?.priceCents ?? 0);
       const currency = b.service?.currency ?? null;
       const provider = amountCents > 0 && currency ? pickProvider(currency) : 'none';
       // Price > 0 with no gateway configured = pay at the venue.
@@ -300,11 +348,13 @@ export const bookingRouter = router({
         ? new Date(now.getTime() + HOLD_MINUTES * 60_000)
         : null;
 
-      const customerId = await upsertCustomer(ctx.db, b.orgId, {
-        name: input.customerName,
-        email: input.customerEmail,
-        phone: input.customerPhone,
-      });
+      const customerId =
+        benefit?.customer.id ??
+        (await upsertCustomer(ctx.db, b.orgId, {
+          name: input.customerName,
+          email: input.customerEmail,
+          phone: input.customerPhone,
+        }));
 
       // Online services get a join link: the practitioner's own room if set,
       // else a generated Jitsi room.
@@ -316,16 +366,16 @@ export const bookingRouter = router({
       const id = `bkg_${randomUUID()}`;
       const status: BookingStatus = requiresPayment ? 'pending_payment' : 'confirmed';
       try {
-        await ctx.db.insert(schema.booking).values({
+        const values: typeof schema.booking.$inferInsert = {
           id,
           organizationId: b.orgId,
           resourceId: b.resourceId,
           locationId: b.locationId,
           serviceId: b.service?.id,
           customerId,
-          customerName: input.customerName,
-          customerEmail: input.customerEmail,
-          customerPhone: input.customerPhone,
+          customerName: benefit?.customer.name ?? input.customerName,
+          customerEmail: benefit?.customer.email ?? input.customerEmail,
+          customerPhone: benefit?.customer.phone ?? input.customerPhone,
           slotStart,
           slotEnd,
           intake: input.intake,
@@ -335,7 +385,17 @@ export const bookingRouter = router({
           currency,
           meetingUrl,
           source: sanitizeSource(input.source),
-        });
+          serviceSnapshot: b.service
+            ? {
+                name: b.service.name,
+                gstRateBps: b.service.gstRateBps,
+                gstExempt: b.service.gstExempt,
+                sacCode: b.service.sacCode,
+              }
+            : null,
+        };
+        if (benefit) await insertCoveredBooking(ctx.db, benefit.cycle.id, values);
+        else await ctx.db.insert(schema.booking).values(values);
       } catch (err) {
         // The DB constraints are the real race guard — a concurrent booking
         // that slipped past the check above lands here.
@@ -461,7 +521,7 @@ export const bookingRouter = router({
         lt(schema.booking.slotStart, window.end),
         notInArray(schema.booking.status, ['cancelled', 'expired']),
       ];
-      if (input.locationId) conditions.push(eq(schema.booking.locationId, input.locationId));
+      if (location) conditions.push(eq(schema.booking.locationId, location.id));
       const bookings = await ctx.db
         .select()
         .from(schema.booking)
@@ -520,14 +580,16 @@ export const bookingRouter = router({
       assertTransition(booking.status, 'cancelled');
 
       await transition(ctx.db, booking, 'cancelled', { cancelReason: input.reason ?? null });
+      await releaseMembershipCredit(ctx.db, booking.id);
       await notifyCancelled(ctx.db, booking.id);
 
       // Refund after cancelling: a gateway failure must not leave the slot
       // booked, and the refund can be retried from payment.refund.
       let refundError: string | null = null;
+      let refundPending = false;
       if (input.refund) {
         try {
-          await refundBooking(ctx.db, booking);
+          refundPending = (await refundBooking(ctx.db, booking)).pending;
         } catch (err) {
           refundError = err instanceof Error ? err.message : 'Refund failed.';
         }
@@ -535,7 +597,8 @@ export const bookingRouter = router({
       return {
         ok: true as const,
         status: 'cancelled' as const,
-        refunded: input.refund && !refundError,
+        refunded: input.refund && !refundError && !refundPending,
+        refundPending: input.refund && !refundError && refundPending,
         refundError,
       };
     }),

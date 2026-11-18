@@ -121,7 +121,15 @@ function SignUpInner() {
           {pending ? 'Creating account…' : 'Create account →'}
         </Button>
         <p className="text-[11px] text-ink-soft text-center">
-          By creating an account you agree to our Terms and Privacy Policy.
+          By creating an account you agree to our{' '}
+          <Link href="/legal/terms" className="underline underline-offset-2 hover:text-ink">
+            Terms
+          </Link>{' '}
+          and{' '}
+          <Link href="/legal/privacy" className="underline underline-offset-2 hover:text-ink">
+            Privacy Policy
+          </Link>
+          .
         </p>
       </div>
     </form>

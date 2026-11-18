@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'node:crypto';
 import { PROFESSIONS, TENANT_LIST } from '@udyamflow/tokens';
+import { eq } from 'drizzle-orm';
 import { db } from './client';
 import { location, organization, resource, resourceHours, tenantSettings } from './schema';
 
@@ -52,7 +53,14 @@ async function main() {
       })
       .onConflictDoNothing();
 
-    for (const r of profession.sampleResources) {
+    // Safe to re-run: sample staff are only added to a location that has none.
+    const existing = await db
+      .select({ id: resource.id })
+      .from(resource)
+      .where(eq(resource.locationId, locId))
+      .limit(1);
+    const sampleResources = existing.length ? [] : profession.sampleResources;
+    for (const r of sampleResources) {
       const resId = `res_${t.id}_${r.avatar.toLowerCase()}_${randomUUID().slice(0, 6)}`;
       await db
         .insert(resource)

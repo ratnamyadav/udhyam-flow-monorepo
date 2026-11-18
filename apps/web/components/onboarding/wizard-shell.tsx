@@ -18,7 +18,7 @@ export function OnboardingSteps() {
   const created = !!state.organizationId;
 
   return (
-    <div className="mt-14 flex flex-col gap-1">
+    <div className="mt-4 md:mt-14 flex md:flex-col gap-1 overflow-x-auto">
       {STEPS.map((key, i) => {
         const href = `/onboarding/${key}`;
         const active = pathname === href;
@@ -45,7 +45,7 @@ export function OnboardingSteps() {
             key={key}
             aria-disabled
             title="Create your workspace first"
-            className="flex items-center gap-3.5 px-3 py-2.5 rounded-lg opacity-50 cursor-not-allowed"
+            className="shrink-0 flex items-center gap-2 md:gap-3.5 px-2 md:px-3 py-2.5 rounded-lg opacity-50 cursor-not-allowed"
           >
             {inner}
           </div>
@@ -54,7 +54,7 @@ export function OnboardingSteps() {
             key={key}
             href={href}
             aria-current={active ? 'step' : undefined}
-            className="flex items-center gap-3.5 px-3 py-2.5 rounded-lg hover:bg-surface-mute transition-colors"
+            className="shrink-0 flex items-center gap-2 md:gap-3.5 px-2 md:px-3 py-2.5 rounded-lg hover:bg-surface-mute transition-colors"
           >
             {inner}
           </Link>
@@ -79,7 +79,7 @@ export function StepHeading({
         {kicker}
       </div>
       <h2
-        className="text-[36px] font-medium m-0 text-ink"
+        className="text-[28px] sm:text-[36px] font-medium m-0 text-ink"
         style={{ letterSpacing: '-1.2px', lineHeight: 1.05 }}
       >
         {title}
@@ -117,7 +117,7 @@ export function WizardFooter({
   const isLast = step === 'ready';
 
   return (
-    <div className="px-20 py-5 border-t border-border bg-surface flex justify-between items-center gap-4">
+    <div className="px-4 sm:px-8 lg:px-20 py-5 border-t border-border bg-surface flex justify-between items-center gap-4">
       {isFirst || !prevHref ? (
         <span />
       ) : (

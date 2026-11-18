@@ -38,24 +38,28 @@ describe('reminderWindow', () => {
 });
 
 describe('needsPayLink', () => {
-  it('only for unpaid, priced bookings with a gateway configured', () => {
+  it('only for unpaid bookings that still owe money, with a gateway configured', () => {
     expect(
-      needsPayLink({ paymentStatus: 'unpaid', priceCents: 50000, providerConfigured: true }),
+      needsPayLink({ paymentStatus: 'unpaid', amountCents: 50000, providerConfigured: true }),
     ).toBe(true);
     expect(
-      needsPayLink({ paymentStatus: 'paid', priceCents: 50000, providerConfigured: true }),
+      needsPayLink({ paymentStatus: 'paid', amountCents: 50000, providerConfigured: true }),
     ).toBe(false);
     expect(
-      needsPayLink({ paymentStatus: 'pending', priceCents: 50000, providerConfigured: true }),
+      needsPayLink({ paymentStatus: 'pending', amountCents: 50000, providerConfigured: true }),
     ).toBe(false);
-    expect(needsPayLink({ paymentStatus: 'unpaid', priceCents: 0, providerConfigured: true })).toBe(
-      false,
-    );
+    // Membership bookings: nothing due.
     expect(
-      needsPayLink({ paymentStatus: 'unpaid', priceCents: null, providerConfigured: true }),
+      needsPayLink({ paymentStatus: 'covered', amountCents: 50000, providerConfigured: true }),
     ).toBe(false);
     expect(
-      needsPayLink({ paymentStatus: 'unpaid', priceCents: 50000, providerConfigured: false }),
+      needsPayLink({ paymentStatus: 'unpaid', amountCents: 0, providerConfigured: true }),
+    ).toBe(false);
+    expect(
+      needsPayLink({ paymentStatus: 'unpaid', amountCents: null, providerConfigured: true }),
+    ).toBe(false);
+    expect(
+      needsPayLink({ paymentStatus: 'unpaid', amountCents: 50000, providerConfigured: false }),
     ).toBe(false);
   });
 });

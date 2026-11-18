@@ -1,4 +1,4 @@
-import { minutesToHHmm, wallTimeToUtc } from './time';
+import { formatInTz, minutesToHHmm, wallTimeToUtc } from './time';
 
 // A slot returned to the booking page. `start`/`end` are the canonical UTC ISO
 // strings the create mutation expects; `displayTime` is the HH:mm in the
@@ -27,15 +27,37 @@ export function generateSlots(args: {
   const { date, timezone, openMin, closeMin, slotMin, taken, now } = args;
   if (slotMin <= 0) return [];
   const slots: Slot[] = [];
+  const starts = new Map<number, { start: Date; label: string }>();
   for (let m = openMin; m + slotMin <= closeMin; m += slotMin) {
-    const start = wallTimeToUtc(date, m, timezone);
+    const local = `${date} ${minutesToHHmm(m)}`;
+    const guessed = wallTimeToUtc(date, m, timezone);
+    // Check nearby offsets as well, so both occurrences of a repeated hour
+    // are offered (including half-hour DST changes). Gaps fail the round trip.
+    for (let delta = -120; delta <= 120; delta += 15) {
+      const start = new Date(guessed.getTime() + delta * 60_000);
+      if (formatInTz(start, timezone, 'yyyy-MM-dd HH:mm') === local) {
+        starts.set(start.getTime(), { start, label: minutesToHHmm(m) });
+      }
+    }
+  }
+  const labels = new Map<string, number>();
+  for (const { label } of starts.values()) labels.set(label, (labels.get(label) ?? 0) + 1);
+  for (const { start, label } of [...starts.values()].sort(
+    (a, b) => a.start.getTime() - b.start.getTime(),
+  )) {
     const end = new Date(start.getTime() + slotMin * 60_000);
     if (start <= now) continue;
+    const endDate = formatInTz(end, timezone, 'yyyy-MM-dd');
+    const endMin =
+      Number(formatInTz(end, timezone, 'H')) * 60 + Number(formatInTz(end, timezone, 'm'));
+    if (endDate !== date && closeMin !== 1440) continue;
+    if (endDate === date && endMin > closeMin) continue;
     if (taken.some((t) => overlaps(t, { start, end }))) continue;
     slots.push({
       start: start.toISOString(),
       end: end.toISOString(),
-      displayTime: minutesToHHmm(m),
+      displayTime:
+        (labels.get(label) ?? 0) > 1 ? `${label} (${formatInTz(start, timezone, 'xxx')})` : label,
     });
   }
   return slots;

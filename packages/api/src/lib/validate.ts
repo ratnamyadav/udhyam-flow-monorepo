@@ -1,6 +1,6 @@
 import { FONT_IDS } from '@udyamflow/tokens';
 import { z } from 'zod';
-import { isValidTimeZone } from './time';
+import { isValidDateStr, isValidTimeZone } from './time';
 
 export const hexColor = z
   .string()
@@ -16,15 +16,14 @@ export const timeZone = z.string().refine(isValidTimeZone, 'Unknown timezone');
 
 export const currency = z.enum(['USD', 'INR']);
 
-// Service prices can be in any ISO 4217 currency: INR checks out via
-// Cashfree, everything else via Stripe.
+// Supported currencies use two decimal minor units throughout the app.
 export const serviceCurrency = z
   .string()
   .trim()
   .transform((v) => v.toUpperCase())
-  .pipe(z.string().regex(/^[A-Z]{3}$/, 'Use a 3-letter currency code, e.g. INR, USD, EUR'));
+  .pipe(z.enum(['INR', 'USD', 'EUR', 'GBP']));
 
-export const dateStr = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Expected YYYY-MM-DD');
+export const dateStr = z.string().refine(isValidDateStr, 'Expected a valid YYYY-MM-DD date');
 
 export function escapeHtml(s: string): string {
   return s

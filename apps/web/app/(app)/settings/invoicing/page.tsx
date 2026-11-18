@@ -30,7 +30,7 @@ const selectCls = 'h-10 w-full rounded-md border border-border bg-surface px-3 t
 
 export default function InvoicingSettingsPage() {
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="mb-8">
         <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
           Settings · Invoicing
@@ -526,7 +526,7 @@ function ExportPanel() {
         {showLedgers ? 'Hide' : 'Edit'} Tally ledger names
       </button>
       {showLedgers && (
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           {(Object.keys(ledgers) as (keyof typeof ledgers)[]).map((k) => (
             <div key={k} className="space-y-1.5">
               <Label htmlFor={`led-${k}`}>
@@ -539,7 +539,7 @@ function ExportPanel() {
               />
             </div>
           ))}
-          <div className="col-span-3 text-[11px] text-ink-soft">
+          <div className="sm:col-span-3 text-[11px] text-ink-soft">
             These ledgers must already exist in Tally. Customer ledgers are created under Sundry
             Debtors automatically.
           </div>

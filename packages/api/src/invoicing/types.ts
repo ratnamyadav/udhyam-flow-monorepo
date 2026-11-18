@@ -41,6 +41,14 @@ export type InvoiceDraft = {
   };
 };
 
+// A booking payment applied to an invoice in the tenant's accounting tool.
+export type InvoicePayment = {
+  bookingId: string;
+  amountCents: number;
+  // Gateway that took the money (`stripe`, `cashfree`, …).
+  via: string;
+};
+
 export type IssuedInvoice = {
   externalId: string;
   number: string | null;

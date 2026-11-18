@@ -116,7 +116,7 @@ export default function ServicesSettingsPage() {
   }
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="flex justify-between items-end mb-8">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
@@ -128,7 +128,11 @@ export default function ServicesSettingsPage() {
 
       {!isAdmin && <MemberNote what="change the service catalog" />}
 
-      <div className={isAdmin ? 'grid grid-cols-[1fr_380px] gap-6' : 'grid gap-6'}>
+      <div
+        className={
+          isAdmin ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6' : 'grid gap-6'
+        }
+      >
         <div className="bg-surface border border-border rounded-xl h-fit">
           {services.isLoading ? (
             <div className="p-8 text-center text-[13px] text-ink-mute">Loading…</div>
@@ -141,7 +145,7 @@ export default function ServicesSettingsPage() {
               ) : (
                 <div
                   key={s.id}
-                  className="px-5 py-4 border-t border-border first:border-t-0 grid grid-cols-[1fr_140px_120px_140px] gap-4 items-start hover:bg-surface-mute"
+                  className="px-5 py-4 border-t border-border first:border-t-0 grid grid-cols-1 md:grid-cols-[1fr_140px_120px_140px] gap-4 items-start hover:bg-surface-mute"
                 >
                   <div>
                     <div className="text-[14px] font-medium text-ink">{s.name}</div>
@@ -374,8 +378,8 @@ function EditServiceRow({
   }
 
   return (
-    <div className="px-5 py-4 border-t border-border first:border-t-0 bg-surface-mute space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+    <div className="px-4 sm:px-5 py-4 border-t border-border first:border-t-0 bg-surface-mute space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor={`sname-${service.id}`}>Name</Label>
           <Input
@@ -393,7 +397,7 @@ function EditServiceRow({
           />
         </div>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor={`sdur-${service.id}`}>Duration (min)</Label>
           <Input

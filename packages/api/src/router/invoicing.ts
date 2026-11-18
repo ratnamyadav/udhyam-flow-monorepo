@@ -15,7 +15,7 @@ import { createOAuthState } from '../invoicing/oauth-state';
 import { INVOICE_PROVIDERS } from '../invoicing/types';
 import { zohoAuthorizeUrl, zohoConfig } from '../invoicing/zoho';
 import { getStripe } from '../stripe';
-import { router, tenantProcedure } from '../trpc';
+import { router, tenantAdminProcedure, tenantProcedure } from '../trpc';
 
 // Invoicing: pick where invoices are issued (built-in GST invoices, Stripe
 // Invoicing, or a connected accounting tool), connect FreshBooks / Zoho
@@ -249,7 +249,7 @@ export const invoicingRouter = router({
     ),
 
   // Idempotent: returns the existing invoice if the booking already has one.
-  create: tenantProcedure
+  create: tenantAdminProcedure
     .input(z.object({ bookingId: z.string(), send: z.boolean().default(true) }))
     .mutation(({ ctx, input }) =>
       issueInvoiceForBooking(ctx.db, {

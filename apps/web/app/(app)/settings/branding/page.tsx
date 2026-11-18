@@ -304,7 +304,7 @@ export default function BrandingSettingsPage() {
   const loading = settingsQuery.isLoading;
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="mb-8 flex items-end justify-between gap-6">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
@@ -325,7 +325,7 @@ export default function BrandingSettingsPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-[440px_1fr] gap-10 items-start">
+      <div className="grid grid-cols-1 xl:grid-cols-[440px_minmax(0,1fr)] gap-6 lg:gap-6 lg:gap-10 items-start">
         {/* The fieldset disables every control for members, who can't save. */}
         <fieldset disabled={!isAdmin || loading} className="min-w-0">
           <legend className="sr-only">Brand settings</legend>

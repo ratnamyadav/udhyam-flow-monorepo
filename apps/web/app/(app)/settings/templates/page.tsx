@@ -28,19 +28,20 @@ export default function TemplatePickerPage() {
   const dirty = settings.data?.templateId !== selected;
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="mb-8">
         <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
           Settings · Templates
         </div>
         <h1 className="text-[32px] font-medium tracking-tight text-ink">Switch your template</h1>
         <p className="text-[14px] text-ink-mute mt-2 max-w-[640px]">
-          Switching templates rewires the slot durations, intake fields, and dashboard metrics to
-          match your trade. Existing bookings are preserved.
+          Switching templates changes the wording on your booking page and dashboard, and the
+          default slot length used when a service has none. Existing services and bookings are
+          preserved.
         </p>
       </div>
 
-      <div className="grid grid-cols-[280px_1fr] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-[280px_minmax(0,1fr)] gap-6">
         <div className="space-y-1.5">
           {TEMPLATES.map((t) => {
             const active = selected === t.id;
@@ -58,7 +59,7 @@ export default function TemplatePickerPage() {
                 <div className="w-8 h-8 rounded-md bg-surface-mute grid place-items-center text-sm text-ink">
                   {PROFESSIONS[t.id].icon}
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <div className="text-sm font-medium text-ink">{t.title}</div>
                   <div className="text-xs text-ink-mute">{t.tagline}</div>
                 </div>
@@ -67,13 +68,13 @@ export default function TemplatePickerPage() {
           })}
         </div>
 
-        <div className="bg-surface border border-border rounded-xl p-7">
+        <div className="bg-surface border border-border rounded-xl p-5 sm:p-7 min-w-0">
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
             Preview
           </div>
           <h2 className="text-[24px] font-medium text-ink mb-4">{profession.name}</h2>
 
-          <div className="grid grid-cols-2 gap-x-10 gap-y-5 text-[13px]">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-5 text-[13px]">
             <div>
               <div className="text-ink-soft mb-1.5 uppercase tracking-wider text-[10px]">
                 Resource
@@ -104,24 +105,9 @@ export default function TemplatePickerPage() {
                 {profession.sampleSlots.slice(0, 4).join(' · ')}…
               </div>
             </div>
-            <div className="col-span-2 mt-2">
-              <div className="text-ink-soft mb-1.5 uppercase tracking-wider text-[10px]">
-                Intake fields
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {profession.intakeFields.map((f) => (
-                  <span
-                    key={f}
-                    className="text-[11px] px-2 py-0.5 bg-surface-mute text-ink-mute rounded"
-                  >
-                    {f}
-                  </span>
-                ))}
-              </div>
-            </div>
           </div>
 
-          <div className="mt-7 flex justify-end gap-3 items-center">
+          <div className="mt-7 flex flex-wrap justify-end gap-3 items-center">
             {update.error && (
               <span className="text-[12px] text-danger">{update.error.message}</span>
             )}

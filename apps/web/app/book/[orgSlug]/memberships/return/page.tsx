@@ -111,11 +111,12 @@ export default async function MembershipReturnPage({
             <>
               <strong className="text-ink">{found.planName}</strong> is active at {price}.{' '}
               {nextCharge ? `Your next payment is on ${nextCharge}.` : ''} Your bank will debit it
-              automatically — you'll get a notice before each debit.
+              automatically — you'll get a notice before each debit. Sessions become available after
+              a successful payment. Keep your membership booking link private.
             </>
           }
-          href={`/book/${orgSlug}`}
-          cta="Book a session"
+          href={`/book/${orgSlug}?membership=${encodeURIComponent(row.id)}`}
+          cta="Use membership sessions"
         />
       );
       break;

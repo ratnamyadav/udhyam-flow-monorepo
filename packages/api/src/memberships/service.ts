@@ -1,3 +1,4 @@
+import { grantPaidCycle } from './credits';
 // DB orchestration for memberships: lazily creating Cashfree plans,
 // starting subscriptions, syncing status and recording debits. The HTTP
 // client (cashfree-subscriptions.ts) knows nothing about our tables; this
@@ -279,7 +280,7 @@ export async function recordPayment(
 ): Promise<'inserted' | 'updated' | 'ignored'> {
   const status = mapPaymentStatus(payment.status);
   if (!status) return 'ignored';
-  const paidAt = status === 'paid' ? new Date() : null;
+  const paidAt = status === 'paid' ? (parseCashfreeTime(payment.paidAt) ?? new Date()) : null;
 
   const inserted = await db
     .insert(schema.membershipPayment)
@@ -295,7 +296,10 @@ export async function recordPayment(
     })
     .onConflictDoNothing({ target: schema.membershipPayment.cashfreePaymentId })
     .returning({ id: schema.membershipPayment.id });
-  if (inserted.length > 0) return 'inserted';
+  if (inserted.length > 0) {
+    if (status === 'paid') await grantPaidCycle(db, inserted[0]!.id);
+    return 'inserted';
+  }
 
   if (status === 'pending') return 'ignored';
   const upgradable =
@@ -308,8 +312,26 @@ export async function recordPayment(
   const updated = await db
     .update(schema.membershipPayment)
     .set({ status, paidAt, failureReason: payment.failureReason })
-    .where(and(eq(schema.membershipPayment.cashfreePaymentId, payment.key), upgradable))
+    .where(
+      and(
+        eq(schema.membershipPayment.cashfreePaymentId, payment.key),
+        eq(schema.membershipPayment.subscriptionId, row.id),
+        upgradable,
+      ),
+    )
     .returning({ id: schema.membershipPayment.id });
+  if (status === 'paid') {
+    const [paid] = await db
+      .select()
+      .from(schema.membershipPayment)
+      .where(
+        and(
+          eq(schema.membershipPayment.cashfreePaymentId, payment.key),
+          eq(schema.membershipPayment.subscriptionId, row.id),
+        ),
+      );
+    if (paid) await grantPaidCycle(db, paid.id);
+  }
   return updated.length > 0 ? 'updated' : 'ignored';
 }
 

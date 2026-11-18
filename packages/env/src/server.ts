@@ -4,7 +4,7 @@
 
 import { z } from 'zod';
 
-export const serverEnvSchema = z.object({
+const serverEnvObject = z.object({
   DATABASE_URL: z.url(),
   BETTER_AUTH_SECRET: z.string().min(16, 'must be ≥16 chars (try `openssl rand -hex 32`)'),
   BETTER_AUTH_URL: z.url(),
@@ -56,6 +56,7 @@ export const serverEnvSchema = z.object({
   // latter, cancellation SMS are skipped rather than sending the wrong text).
   MSG91_SMS_TEMPLATE_ID: z.string().optional(),
   MSG91_SMS_CANCEL_TEMPLATE_ID: z.string().optional(),
+  MSG91_SMS_REMINDER_TEMPLATE_ID: z.string().optional(),
   MSG91_WHATSAPP_INTEGRATED_NUMBER: z.string().optional(),
   // Shared secret for the MSG91 inbound WhatsApp webhook (customer button
   // replies). Passed as `?secret=` in the webhook URL configured in MSG91.
@@ -103,6 +104,13 @@ export const serverEnvSchema = z.object({
   // to /api/cron/*. Unset → cron endpoints return 503.
   CRON_SECRET: z.string().optional(),
 });
+
+export const serverEnvSchema = z.preprocess((value) => {
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, entry === '' ? undefined : entry]),
+  );
+}, serverEnvObject);
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 

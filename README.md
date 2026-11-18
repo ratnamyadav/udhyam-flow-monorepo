@@ -118,7 +118,8 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | `/pay/[bookingId]` | Pay link from reminders — starts Stripe / Cashfree checkout for an unpaid booking |
 | `/api/cron/reminders` | Hourly cron via GitHub Actions (`.github/workflows/reminders.yml`, `Authorization: Bearer $CRON_SECRET`; set the `REMINDERS_APP_URL` + `CRON_SECRET` repo secrets) — WhatsApp/SMS reminders ~24h before confirmed bookings |
 | `/api/notifications/whatsapp/inbound` | MSG91 inbound WhatsApp webhook (`?secret=$MSG91_WEBHOOK_SECRET`) — Confirm / Cancel / Reschedule button replies |
-| `/settings/memberships` | Recurring membership plans (Cashfree Subscriptions) + subscribers, with cancel |
+| `/settings/memberships` | Recurring membership plans (Cashfree Subscriptions) + subscribers, with cancel. Each plan covers an explicit list of services; a member's booking spends one session credit and is stored with payment status `covered` |
+| `/settings/billing` | UdyamFlow's own per-location billing: free for 6 months from workspace creation, then $10/month (Stripe) or ₹299/month for INR locations (Cashfree UPI Autopay / eNACH). Public booking for a location pauses when it's unpaid, after a 3-day grace period for late renewals (`BILLING_GRACE_MS` in `packages/api/src/billing/service.ts`) |
 | `/book/[orgSlug]/memberships` | Public membership plans + sign-up (UPI Autopay / eNACH / card mandate) |
 | `/book/[orgSlug]/memberships/authorize?sub=…` | Opens Cashfree's mandate-approval checkout for a pending sign-up (shareable / resumable) |
 | `/book/[orgSlug]/memberships/return?sub=…` | Post-mandate landing — syncs status from Cashfree and auto-refreshes until settled |
@@ -398,7 +399,6 @@ The flow on first sign-up:
 
 ## Not yet built
 
-- **Subscription billing** for UdyamFlow itself (the free-6-months / per-location pricing on `/pricing`) — no plan, trial or invoicing code exists yet.
 - Customer self-service rescheduling/cancellation links and appointment reminders.
 
 ---

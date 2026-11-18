@@ -132,14 +132,14 @@ export default function StepLocations() {
 
   return (
     <>
-      <div className="flex-1 px-20 py-16 overflow-auto">
+      <div className="flex-1 px-4 sm:px-8 lg:px-20 py-8 sm:py-16 overflow-auto">
         <StepHeading
           kicker="04 / Locations"
           title="Where do you take bookings?"
-          subtitle="Add your physical or virtual locations. Each gets its own hours, staff, and pricing."
+          subtitle="Add your physical or virtual locations. Each has its own timezone and currency, and its own bookable resources with their own working hours."
         />
 
-        <div className="grid grid-cols-[1fr_380px] gap-10 max-w-[920px]">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-10 max-w-[920px]">
           <div className="space-y-3">
             {locations.map((l) => (
               <div
@@ -192,7 +192,7 @@ export default function StepLocations() {
                 onChange={(e) => setDraftCity(e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-[1fr_96px] gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2">
               <div className="space-y-1.5">
                 <Label htmlFor="ltz">Timezone</Label>
                 <select

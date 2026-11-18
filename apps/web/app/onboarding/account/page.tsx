@@ -33,7 +33,7 @@ export default function StepAccount() {
 
   return (
     <>
-      <div className="flex-1 px-20 py-16 overflow-auto">
+      <div className="flex-1 px-4 sm:px-8 lg:px-20 py-8 sm:py-16 overflow-auto">
         <StepHeading
           kicker="01 / Account"
           title="Let's set up your workspace"

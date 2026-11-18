@@ -9,13 +9,13 @@ export default function StepTemplate() {
 
   return (
     <>
-      <div className="flex-1 px-20 py-16 overflow-auto">
+      <div className="flex-1 px-4 sm:px-8 lg:px-20 py-8 sm:py-16 overflow-auto">
         <StepHeading
           kicker="02 / Template"
           title="Pick your starting template"
-          subtitle="Each ships with the right slot lengths, intake fields, and policies. You can change it later."
+          subtitle="Each sets the labels your customers see and a default slot length. You can change it later."
         />
-        <div className="grid grid-cols-3 gap-3.5 max-w-[860px]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5 max-w-[860px]">
           {TEMPLATES.map((t) => {
             const active = state.templateId === t.id;
             return (

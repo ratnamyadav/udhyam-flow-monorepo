@@ -32,7 +32,11 @@ export default function StepReady() {
   // below (an explicit action), not on unmount — StrictMode's mount/unmount
   // double-invoke would otherwise wipe the state while this page is showing.
   if (!hydrated || !created) {
-    return <div className="flex-1 px-20 py-16 text-[13px] text-ink-mute">Loading…</div>;
+    return (
+      <div className="flex-1 px-4 sm:px-8 lg:px-20 py-8 sm:py-16 text-[13px] text-ink-mute">
+        Loading…
+      </div>
+    );
   }
 
   const cards = [
@@ -59,13 +63,13 @@ export default function StepReady() {
 
   return (
     <>
-      <div className="flex-1 px-20 py-16 overflow-auto">
+      <div className="flex-1 px-4 sm:px-8 lg:px-20 py-8 sm:py-16 overflow-auto">
         <StepHeading
           kicker="05 / Ready"
           title="Your workspace is ready."
           subtitle="We've created your organization, applied your brand, and saved your locations. Take it for a spin."
         />
-        <div className="grid grid-cols-3 gap-3 max-w-[860px]">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-[860px]">
           {cards.map((c) => (
             <Link
               key={c.title}

@@ -1,6 +1,7 @@
 import { type Db, schema } from '@udyamflow/db';
 import { sendWhatsAppText } from '@udyamflow/notifications';
 import { and, eq, gt, gte } from 'drizzle-orm';
+import { releaseMembershipCredit } from '../memberships/credits';
 import { notifyCancelled } from '../notify';
 import { bookingUrlFor } from '../source';
 import { type InboundReply, parseInboundWhatsApp, phonesMatch } from './inbound';
@@ -128,6 +129,7 @@ export async function handleInboundWhatsApp(
       return { outcome: 'not_cancellable', bookingId: booking.id };
     }
     // Same notice the tenant-side cancel sends.
+    await releaseMembershipCredit(db, booking.id);
     await notifyCancelled(db, booking.id);
     return { outcome: 'cancelled', bookingId: booking.id };
   }

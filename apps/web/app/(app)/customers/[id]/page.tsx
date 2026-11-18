@@ -49,7 +49,7 @@ export default function CustomerDetailPage() {
   }
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="mb-6">
         <Link href="/customers" className="text-[12px] text-ink-mute hover:text-ink font-mono">
           ← All customers
@@ -61,8 +61,8 @@ export default function CustomerDetailPage() {
       ) : !customer.data ? (
         <div className="text-[13px] text-danger">Customer not found.</div>
       ) : (
-        <div className="grid grid-cols-[1fr_420px] gap-6">
-          <div className="bg-surface border border-border rounded-xl">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_420px] gap-6">
+          <div className="bg-surface border border-border rounded-xl min-w-0">
             <div className="px-5 py-4 border-b border-border flex items-center justify-between">
               <div className="text-[14px] font-medium text-ink">Booking history</div>
               <div className="text-[11px] text-ink-soft font-mono">
@@ -75,7 +75,7 @@ export default function CustomerDetailPage() {
               bookings.data.map((b) => (
                 <div
                   key={b.id}
-                  className="grid grid-cols-[160px_1fr_120px] px-5 py-3.5 border-t border-border first:border-t-0 items-center"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[160px_minmax(0,1fr)_120px] gap-x-3 px-4 sm:px-5 py-3.5 border-t border-border first:border-t-0 items-center"
                 >
                   <div className="text-[12px] font-mono tabular-nums text-ink-mute">
                     {b.slotStart.toLocaleString([], {
@@ -86,7 +86,9 @@ export default function CustomerDetailPage() {
                       hour12: false,
                     })}
                   </div>
-                  <div className="text-[13px] text-ink">{b.id.slice(-6).toUpperCase()}</div>
+                  <div className="text-[13px] text-ink order-last sm:order-none">
+                    {b.id.slice(-6).toUpperCase()}
+                  </div>
                   <div className="text-[10px] uppercase tracking-wider font-mono text-ink-mute">
                     {b.status}
                   </div>
@@ -113,7 +115,7 @@ export default function CustomerDetailPage() {
               <Label htmlFor="cphone">Phone</Label>
               <Input id="cphone" value={phone} onChange={(e) => setPhone(e.target.value)} />
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="cgstin">GSTIN (business)</Label>
                 <Input id="cgstin" value={gstin} onChange={(e) => setGstin(e.target.value)} />

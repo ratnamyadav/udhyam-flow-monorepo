@@ -67,6 +67,36 @@ function createQueryClient() {
 }
 
 export function TRPCProvider({ children }: { children: ReactNode }) {
+  const { data: session, isPending } = expoAuthClient.useSession();
+  return <ScopedProvider key={useScopeKey(session, isPending)}>{children}</ScopedProvider>;
+}
+
+// Remount key for the query cache: bumps only when the signed-in user or
+// active workspace changes. The first settled session is adopted without a
+// bump, so the initial loading → loaded step doesn't remount the whole app.
+function useScopeKey(
+  session:
+    | { user: { id: string }; session: { activeOrganizationId?: string | null } }
+    | null
+    | undefined,
+  isPending: boolean,
+) {
+  const scope = isPending
+    ? null
+    : `${session?.user.id ?? 'guest'}:${session?.session.activeOrganizationId ?? ''}`;
+  const [state, setState] = useState<{ scope: string | null; key: number }>({
+    scope: null,
+    key: 0,
+  });
+  if (scope !== null && scope !== state.scope) {
+    const next = { scope, key: state.scope === null ? state.key : state.key + 1 };
+    setState(next);
+    return next.key;
+  }
+  return state.key;
+}
+
+function ScopedProvider({ children }: { children: ReactNode }) {
   const [queryClient] = useState(createQueryClient);
 
   const [trpcClient] = useState(() =>

@@ -12,6 +12,10 @@ export const APP_URL = process.env.NEXT_PUBLIC_APP_URL ?? 'http://localhost:3000
 // little longer than the session to absorb webhook latency.
 export const CHECKOUT_SESSION_MINUTES = 31;
 export const HOLD_MINUTES = 35;
+// Ceiling on a held slot across checkout retries, counted from the booking.
+// Each fresh checkout attempt extends the hold, so without a cap a customer
+// retrying every half hour could keep the slot forever.
+export const MAX_HOLD_MINUTES = 70;
 
 // ─── Cashfree order ids ──────────────────────────────────────────────────
 
@@ -30,7 +34,9 @@ export function bookingIdFromOrderId(orderId: string): string {
 // per-attempt order ids used the booking id itself (and stored the payment
 // session id in payment_id).
 export function cashfreeOrderIdFor(booking: { id: string; paymentId: string | null }): string {
-  return booking.paymentId?.startsWith(`${booking.id}__`) ? booking.paymentId : booking.id;
+  return booking.paymentId?.startsWith('pmt_') || booking.paymentId?.startsWith(`${booking.id}__`)
+    ? booking.paymentId
+    : booking.id;
 }
 
 // ─── Routing ─────────────────────────────────────────────────────────────

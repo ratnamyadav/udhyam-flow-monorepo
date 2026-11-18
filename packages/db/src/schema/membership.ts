@@ -8,6 +8,8 @@
 // - membership_subscription: one customer's mandate on a plan. The
 //   Cashfree `subscription_id` is merchant-chosen and unique, so webhooks
 //   find the row by it.
+// - membership_plan_service: the services a plan covers. A membership
+//   booking is free only for a service on this list.
 // - membership_payment: each debit Cashfree reports. Unique on the Cashfree
 //   payment id so webhook retries can't double-record.
 
@@ -22,6 +24,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { customer } from './customer';
 import { organization } from './org';
+import { service } from './service';
 
 export const MEMBERSHIP_INTERVALS = ['week', 'month', 'year'] as const;
 export type MembershipInterval = (typeof MEMBERSHIP_INTERVALS)[number];
@@ -58,7 +61,7 @@ export const membershipPlan = pgTable(
     currency: text('currency').notNull().default('INR'),
     interval: text('interval').$type<MembershipInterval>().notNull().default('month'),
     intervalCount: integer('interval_count').notNull().default(1),
-    // Informational only ("8 classes / month") — we don't enforce it.
+    // Null means unlimited appointments for a paid cycle.
     sessionsPerCycle: integer('sessions_per_cycle'),
     // Inactive plans are hidden from the public page; existing
     // subscriptions keep billing until cancelled.
@@ -70,6 +73,56 @@ export const membershipPlan = pgTable(
   },
   (t) => [index('membership_plan_org_idx').on(t.organizationId)],
 );
+
+// Services a plan covers. Editable at any time (not a Cashfree term); a
+// booking with ?membership= is only free for a service on this list.
+export const membershipPlanService = pgTable(
+  'membership_plan_service',
+  {
+    planId: text('plan_id')
+      .notNull()
+      .references(() => membershipPlan.id, { onDelete: 'cascade' }),
+    serviceId: text('service_id')
+      .notNull()
+      .references(() => service.id, { onDelete: 'cascade' }),
+    organizationId: text('organization_id')
+      .notNull()
+      .references(() => organization.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('membership_plan_service_uniq').on(t.planId, t.serviceId),
+    index('membership_plan_service_service_idx').on(t.serviceId),
+  ],
+);
+
+export const membershipCycle = pgTable(
+  'membership_cycle',
+  {
+    id: text('id').primaryKey(),
+    subscriptionId: text('subscription_id')
+      .notNull()
+      .references(() => membershipSubscription.id, { onDelete: 'cascade' }),
+    paymentId: text('payment_id')
+      .notNull()
+      .references(() => membershipPayment.id),
+    startsAt: timestamp('starts_at').notNull(),
+    endsAt: timestamp('ends_at').notNull(),
+    sessionLimit: integer('session_limit'),
+    sessionsUsed: integer('sessions_used').notNull().default(0),
+  },
+  (t) => [
+    uniqueIndex('membership_cycle_payment_uniq').on(t.paymentId),
+    index('membership_cycle_subscription_idx').on(t.subscriptionId),
+  ],
+);
+
+export const membershipUsage = pgTable('membership_usage', {
+  bookingId: text('booking_id').primaryKey(),
+  cycleId: text('cycle_id')
+    .notNull()
+    .references(() => membershipCycle.id),
+  releasedAt: timestamp('released_at'),
+});
 
 export const membershipSubscription = pgTable(
   'membership_subscription',

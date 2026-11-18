@@ -14,7 +14,7 @@
 // persist the new pair before doing anything else.
 
 import { centsToDecimalString, isoDate } from './money';
-import type { InvoiceDraft, IssuedInvoice } from './types';
+import type { InvoiceDraft, InvoicePayment, IssuedInvoice } from './types';
 
 const AUTH_URL = 'https://auth.freshbooks.com/oauth/authorize';
 const API_URL = 'https://api.freshbooks.com';
@@ -256,17 +256,16 @@ export class FreshBooksClient {
 
     let status: IssuedInvoice['status'] = 'draft';
     if (draft.alreadyPaid) {
-      // Record the checkout payment so the FreshBooks invoice shows paid and
-      // the revenue lands in their books without a second charge.
-      await this.call('POST', `${base}/payments/payments`, {
-        payment: {
-          invoiceid: Number(invoiceId),
-          amount: { amount: centsToDecimalString(draft.line.amountCents) },
-          date: isoDate(now),
-          type: draft.alreadyPaid.via === 'stripe' ? 'Credit Card' : 'Other',
-          note: `Paid online via ${draft.alreadyPaid.via} (UdyamFlow booking ${draft.bookingId})`,
+      await this.recordPayment(
+        accountId,
+        invoiceId,
+        {
+          bookingId: draft.bookingId,
+          amountCents: draft.line.amountCents,
+          via: draft.alreadyPaid.via,
         },
-      });
+        now,
+      );
       status = 'paid';
     } else if (draft.send && draft.customer.email) {
       await this.call('PUT', `${base}/invoices/invoices/${invoiceId}`, {
@@ -286,5 +285,24 @@ export class FreshBooksClient {
     }
 
     return { externalId: invoiceId, number: inv.invoice_number, status, hostedUrl };
+  }
+
+  // Records the checkout payment so the FreshBooks invoice shows paid and the
+  // revenue lands in their books without a second charge.
+  async recordPayment(
+    accountId: string,
+    invoiceId: string,
+    payment: InvoicePayment,
+    now = new Date(),
+  ): Promise<void> {
+    await this.call('POST', `/accounting/account/${accountId}/payments/payments`, {
+      payment: {
+        invoiceid: Number(invoiceId),
+        amount: { amount: centsToDecimalString(payment.amountCents) },
+        date: isoDate(now),
+        type: payment.via === 'stripe' ? 'Credit Card' : 'Other',
+        note: `Paid online via ${payment.via} (UdyamFlow booking ${payment.bookingId})`,
+      },
+    });
   }
 }

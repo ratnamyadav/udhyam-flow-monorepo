@@ -20,7 +20,7 @@ export default function PricingPage() {
     <div className="min-h-screen bg-bg text-ink">
       <MarketingNav activeHref="/pricing" />
 
-      <section className="px-14 pt-24 pb-14 max-w-[1100px] mx-auto text-center">
+      <section className="px-4 sm:px-8 lg:px-14 pt-12 sm:pt-20 lg:pt-24 pb-14 max-w-[1100px] mx-auto text-center">
         <div
           className="text-xs uppercase tracking-wider mb-4 font-medium"
           style={{ color: '#c8704a' }}
@@ -28,7 +28,7 @@ export default function PricingPage() {
           Pricing · Launch offer
         </div>
         <h1
-          className="text-[76px] font-medium m-0 text-ink"
+          className="text-[40px] sm:text-[58px] lg:text-[76px] font-medium m-0 text-ink"
           style={{ lineHeight: 1, letterSpacing: '-2.2px', textWrap: 'balance' }}
         >
           Free for six months.
@@ -71,8 +71,8 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="px-14 max-w-[1100px] mx-auto pb-24">
-        <div className="grid grid-cols-2 gap-6">
+      <section className="px-4 sm:px-8 lg:px-14 max-w-[1100px] mx-auto pb-24">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <div className="bg-surface border border-border rounded-2xl p-9">
             <div className="text-xs uppercase tracking-wider text-ink-mute mb-2">
               First 6 months
@@ -86,7 +86,7 @@ export default function PricingPage() {
                 'Unlimited staff',
                 'All 6 templates',
                 'Multi-location ready',
-                'Email + SMS reminders',
+                'SMS and WhatsApp reminders when configured',
               ].map((f) => (
                 <li key={f} className="flex items-start gap-2.5">
                   <span className="text-[#3d7c4d] mt-0.5">✓</span>
@@ -125,10 +125,10 @@ export default function PricingPage() {
             <ul className="space-y-3 text-[14px] text-ink">
               {[
                 'Everything in Free',
-                'Custom domain',
-                'Branded emails + SMS',
-                'Priority support',
-                'Audit log + exports',
+                'Branded booking page',
+                'Email confirmations, plus SMS/WhatsApp confirmations and reminders',
+                'Invoice CSV and Tally exports',
+                "Today's bookings as CSV",
               ].map((f) => (
                 <li key={f} className="flex items-start gap-2.5">
                   <span className="text-[#3d7c4d] mt-0.5">✓</span>
@@ -152,7 +152,7 @@ export default function PricingPage() {
         </div>
       </section>
 
-      <section className="px-14 py-20 border-t border-border bg-surface">
+      <section className="px-4 sm:px-8 lg:px-14 py-20 border-t border-border bg-surface">
         <div className="max-w-[900px] mx-auto">
           <h3 className="text-[24px] font-medium text-ink mb-8">Common questions</h3>
           <div className="space-y-6">
@@ -167,11 +167,11 @@ export default function PricingPage() {
               },
               {
                 q: 'Can I switch between USD and INR?',
-                a: 'You bill in your home currency, but each location can collect in any currency. Your patients pay in INR, your dashboard rolls up in USD if you want.',
+                a: 'Workspace billing is ₹299 per INR location or $10 per USD location. Services support INR, USD, EUR, and GBP. Revenue is reported separately for each currency.',
               },
               {
                 q: 'What happens after 6 months?',
-                a: 'You decide. Keep going at the listed rate, or export your data and walk away — no lock-in.',
+                a: 'You decide. Keep going at the listed rate, or stop — no lock-in. Invoices can be exported as CSV or Tally XML at any time.',
               },
             ].map((faq) => (
               <div key={faq.q} className="border-b border-border pb-6 last:border-b-0">

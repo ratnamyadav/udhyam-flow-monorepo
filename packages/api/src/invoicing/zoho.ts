@@ -10,7 +10,7 @@
 // on refresh (unlike FreshBooks). Every Books call needs `organization_id`.
 
 import { isoDate } from './money';
-import type { InvoiceDraft, IssuedInvoice } from './types';
+import type { InvoiceDraft, InvoicePayment, IssuedInvoice } from './types';
 
 type FetchLike = typeof fetch;
 
@@ -301,17 +301,16 @@ export class ZohoBooksClient {
 
     let status: IssuedInvoice['status'] = draft.send && draft.customer.email ? 'open' : 'draft';
     if (draft.alreadyPaid) {
-      // Payments can only be applied to sent invoices.
-      await this.call('POST', `/invoices/${inv.invoice_id}/status/sent`, orgId);
-      await this.call('POST', '/customerpayments', orgId, {
-        customer_id: contactId,
-        payment_mode: PAYMENT_MODE[draft.alreadyPaid.via] ?? 'others',
-        amount: draft.line.amountCents / 100,
-        date: isoDate(now),
-        reference_number: draft.bookingId.slice(-12),
-        description: `Paid online via ${draft.alreadyPaid.via} (UdyamFlow)`,
-        invoices: [{ invoice_id: inv.invoice_id, amount_applied: draft.line.amountCents / 100 }],
-      });
+      await this.recordPayment(
+        orgId,
+        String(inv.invoice_id),
+        {
+          bookingId: draft.bookingId,
+          amountCents: draft.line.amountCents,
+          via: draft.alreadyPaid.via,
+        },
+        { customerId: contactId, sent: false, now },
+      );
       status = 'paid';
     }
 
@@ -321,5 +320,38 @@ export class ZohoBooksClient {
       status,
       hostedUrl: inv.invoice_url ?? null,
     };
+  }
+
+  // Applies a booking payment to an invoice. Pass what's already known about
+  // the invoice to skip looking it up; otherwise it is fetched.
+  async recordPayment(
+    orgId: string,
+    invoiceId: string,
+    payment: InvoicePayment,
+    known: { customerId: string; sent: boolean; now?: Date } | null = null,
+  ): Promise<void> {
+    let customerId = known?.customerId;
+    let sent = known?.sent;
+    if (!customerId || sent === undefined) {
+      const { invoice } = await this.call<{ invoice: { customer_id: string; status: string } }>(
+        'GET',
+        `/invoices/${invoiceId}`,
+        orgId,
+      );
+      customerId = String(invoice.customer_id);
+      sent = invoice.status !== 'draft';
+    }
+    // Payments can only be applied to sent invoices.
+    if (!sent) await this.call('POST', `/invoices/${invoiceId}/status/sent`, orgId);
+    const amount = payment.amountCents / 100;
+    await this.call('POST', '/customerpayments', orgId, {
+      customer_id: customerId,
+      payment_mode: PAYMENT_MODE[payment.via] ?? 'others',
+      amount,
+      date: isoDate(known?.now ?? new Date()),
+      reference_number: payment.bookingId.slice(-12),
+      description: `Paid online via ${payment.via} (UdyamFlow)`,
+      invoices: [{ invoice_id: invoiceId, amount_applied: amount }],
+    });
   }
 }

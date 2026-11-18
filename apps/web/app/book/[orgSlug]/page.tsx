@@ -41,6 +41,7 @@ export async function generateMetadata({
     },
     ...(settings?.logoUrl ? { icons: { icon: settings.logoUrl } } : {}),
     // Tenant booking pages aren't for general SEO indexing.
+    referrer: 'no-referrer',
     robots: { index: false },
   };
 }
@@ -50,10 +51,15 @@ export default async function BookingPage({
   searchParams,
 }: {
   params: Promise<{ orgSlug: string }>;
-  searchParams: Promise<{ layout?: string; source?: string; utm_source?: string }>;
+  searchParams: Promise<{
+    layout?: string;
+    source?: string;
+    utm_source?: string;
+    membership?: string;
+  }>;
 }) {
   const { orgSlug } = await params;
-  const { layout: layoutParam, source, utm_source } = await searchParams;
+  const { layout: layoutParam, source, utm_source, membership } = await searchParams;
 
   // Resolve org + tenantSettings + active locations, resources and services.
   const [org] = await db
@@ -127,6 +133,7 @@ export default async function BookingPage({
   const page = (
     <BookingInterface
       orgSlug={orgSlug}
+      membershipId={membership}
       theme={theme}
       locations={locations.map((l) => ({
         id: l.id,

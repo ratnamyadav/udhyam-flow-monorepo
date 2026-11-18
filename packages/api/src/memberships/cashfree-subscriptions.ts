@@ -78,6 +78,7 @@ export type CreateSubscriptionInput = {
   planId: string;
   customer: { name: string; email: string; phone: string };
   returnUrl: string;
+  firstChargeAt?: Date;
   // Easy Split vendor routing (SDK: `subscription_payment_splits`).
   splits?: Array<{ vendorId: string; percentage: number }>;
   tags?: Record<string, string>;
@@ -188,6 +189,9 @@ export class CashfreeSubscriptionsClient {
         },
         plan_details: { plan_id: input.planId },
         subscription_meta: { return_url: input.returnUrl },
+        ...(input.firstChargeAt
+          ? { subscription_first_charge_time: input.firstChargeAt.toISOString() }
+          : {}),
         ...(input.tags ? { subscription_tags: input.tags } : {}),
         ...(input.splits && input.splits.length > 0
           ? {

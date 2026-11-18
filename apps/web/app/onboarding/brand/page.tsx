@@ -41,14 +41,14 @@ export default function StepBrand() {
 
   return (
     <>
-      <div className="flex-1 px-20 py-16 overflow-auto">
+      <div className="flex-1 px-4 sm:px-8 lg:px-20 py-8 sm:py-16 overflow-auto">
         <StepHeading
           kicker="03 / Brand"
           title="Make it look like your business"
-          subtitle="A logo, an accent color, and a heading font — that's all you need to launch."
+          subtitle="Logo initials, an accent color, and a heading font — that's all you need to launch."
         />
 
-        <div className="grid grid-cols-[1fr_400px] gap-12 max-w-[920px]">
+        <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-12 max-w-[920px]">
           <div className="space-y-6">
             <div className="space-y-1.5">
               <Label htmlFor="logo">Logo text</Label>

@@ -15,6 +15,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 const PAYMENT_LABELS: Record<string, string> = {
+  covered: 'Membership',
   pending: 'Payment pending',
   paid: 'Paid',
   partially_refunded: 'Part refunded',
@@ -99,7 +100,15 @@ export default function BookingsPage() {
 
   const cancel = trpc.booking.cancel.useMutation({
     onSuccess: (res) =>
-      onDone(res.refunded ? 'Booking cancelled and refunded.' : 'Booking cancelled.'),
+      onDone(
+        res.refunded
+          ? 'Booking cancelled and refunded.'
+          : res.refundPending
+            ? 'Booking cancelled. Refund is processing.'
+            : res.refundError
+              ? `Booking cancelled, but the refund failed: ${res.refundError} Retry it from Refund.`
+              : 'Booking cancelled.',
+      ),
     onError,
   });
   const noShow = trpc.booking.markNoShow.useMutation({
@@ -112,7 +121,13 @@ export default function BookingsPage() {
   });
   const refund = trpc.payment.refund.useMutation({
     onSuccess: (res) =>
-      onDone(res.paymentStatus === 'refunded' ? 'Refund issued.' : 'Partial refund issued.'),
+      onDone(
+        res.pending
+          ? 'Refund requested. Awaiting gateway confirmation.'
+          : res.paymentStatus === 'refunded'
+            ? 'Refund completed.'
+            : 'Partial refund completed.',
+      ),
     onError,
   });
   const invoicing = trpc.invoicing.status.useQuery();
@@ -171,7 +186,7 @@ export default function BookingsPage() {
     'text-[13px] bg-surface border border-border rounded-md px-2.5 py-1.5 text-ink';
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="flex justify-between items-end mb-8 gap-4 flex-wrap">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
@@ -253,7 +268,7 @@ export default function BookingsPage() {
       )}
 
       <div className="bg-surface border border-border rounded-xl overflow-hidden">
-        <div className="grid grid-cols-[160px_1fr_180px_150px_280px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
+        <div className="hidden lg:grid grid-cols-[160px_minmax(0,1fr)_180px_150px_280px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
           <div>When</div>
           <div>Customer</div>
           <div>Resource</div>
@@ -287,7 +302,7 @@ export default function BookingsPage() {
             return (
               <div
                 key={b.id}
-                className="grid grid-cols-[160px_1fr_180px_150px_280px] px-5 py-3.5 border-t border-border first:border-t-0 items-center hover:bg-surface-mute"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 lg:gap-0 lg:grid-cols-[160px_minmax(0,1fr)_180px_150px_280px] px-4 sm:px-5 py-3.5 border-t border-border first:border-t-0 sm:items-start lg:items-center hover:bg-surface-mute"
               >
                 <div className="text-[12px] font-mono tabular-nums text-ink">
                   {b.slotStart.toLocaleString([], {
@@ -299,9 +314,11 @@ export default function BookingsPage() {
                     hour12: false,
                   })}
                 </div>
-                <div>
-                  <div className="text-[14px] font-medium text-ink">{b.customerName}</div>
-                  <div className="text-[12px] text-ink-mute">
+                <div className="min-w-0">
+                  <div className="text-[14px] font-medium text-ink break-words">
+                    {b.customerName}
+                  </div>
+                  <div className="text-[12px] text-ink-mute break-all">
                     {b.customerEmail ?? b.customerPhone ?? '—'}
                   </div>
                   {(b.meetingUrl || b.source) && (
@@ -343,7 +360,7 @@ export default function BookingsPage() {
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-x-2 gap-y-1 text-[12px]">
+                <div className="flex flex-wrap gap-x-3 lg:gap-x-2 gap-y-1 text-[12px] sm:col-span-2 lg:col-span-1">
                   {inv ? (
                     inv.hostedUrl ? (
                       <a
@@ -361,6 +378,7 @@ export default function BookingsPage() {
                       </span>
                     )
                   ) : (
+                    isAdmin &&
                     canInvoice &&
                     b.serviceId &&
                     b.status !== 'cancelled' &&

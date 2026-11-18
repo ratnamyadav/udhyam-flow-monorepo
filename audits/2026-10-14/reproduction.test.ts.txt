@@ -1,0 +1,140 @@
+import { readFileSync } from 'node:fs';
+import { schema, type Db } from '@udyamflow/db';
+import { eq } from 'drizzle-orm';
+import { beforeAll, afterEach, expect, it, vi } from 'vitest';
+import { serverEnvSchema } from '../../env/src/server';
+import { cashfreeRefund } from '../src/cashfree';
+import { issueInvoiceForBooking } from '../src/invoicing/issue';
+import { autoInvoiceIfEnabled } from '../src/invoicing/issue';
+import { generateSlots } from '../src/lib/slots';
+import { formatInTz } from '../src/lib/time';
+import { markBookingPaid, recordRefundTotal, refundBooking } from '../src/payments/lifecycle';
+import { addMember, addService, createTestDb, publicCaller, seedOrg, slotOn, uid, userCaller } from './helpers/harness';
+
+let db: Db;
+beforeAll(async () => { db = await createTestDb(); });
+afterEach(() => vi.restoreAllMocks());
+
+async function createBooking(price = 2500) {
+  const f = await seedOrg(db);
+  const serviceId = await addService(db, f.orgId, { priceCents: price });
+  const { start } = slotOn(f, 2, '10:00');
+  const b = await publicCaller(db).booking.create({ orgSlug: f.slug, locationId: f.locationId, resourceId: f.resourceId, serviceId, customerName: 'Audit Customer', slotStart: start.toISOString() });
+  return { f, b, serviceId };
+}
+
+it('reproduces an invoice using an edited catalog price instead of the booking snapshot', async () => {
+  const { f, b, serviceId } = await createBooking();
+  await db.update(schema.tenantSettings).set({ invoiceProvider: 'udyamflow' }).where(eq(schema.tenantSettings.organizationId, f.orgId));
+  await db.update(schema.service).set({ priceCents: 9000 }).where(eq(schema.service.id, serviceId));
+  const invoice = await issueInvoiceForBooking(db, { organizationId: f.orgId, bookingId: b.id, send: false });
+  expect(b.amountCents).toBe(2500);
+  expect(invoice.amountCents).toBe(9000);
+});
+
+it('reproduces a member creating a financial plan and issuing an invoice', async () => {
+  const { f, b } = await createBooking();
+  const userId = uid('usr');
+  await addMember(db, f.orgId, userId, 'member');
+  const caller = userCaller(db, userId, f.orgId);
+  await expect(caller.membership.createPlan({ name: 'Unauthorized Plan', amountCents: 5000, interval: 'month', intervalCount: 1, currency: 'INR' })).resolves.toHaveProperty('id');
+  await db.update(schema.tenantSettings).set({ invoiceProvider: 'udyamflow' }).where(eq(schema.tenantSettings.organizationId, f.orgId));
+  await expect(caller.invoicing.create({ bookingId: b.id, send: false })).resolves.toHaveProperty('number');
+});
+
+it('reproduces identical refund IDs across calls for a real booking ID', async () => {
+  const ids: string[] = [];
+  const mockFetch = vi.fn(async (_url, init) => { ids.push(JSON.parse(String(init?.body)).refund_id); return Response.json({ refund_status: 'SUCCESS' }); }) as unknown as typeof fetch;
+  const orderId = 'bkg_12345678-1234-4234-8234-123456789012__attempt';
+  vi.spyOn(Date, 'now').mockReturnValueOnce(1000).mockReturnValueOnce(2000);
+  await cashfreeRefund({ orderId, amountPaise: 1000 }, mockFetch);
+  await cashfreeRefund({ orderId, amountPaise: 500 }, mockFetch);
+  expect(ids[0]).toBe(ids[1]);
+  expect(ids[0]).toHaveLength(40);
+});
+
+it('reproduces marking a pending gateway refund as completed locally', async () => {
+  const { b } = await createBooking();
+  await db.update(schema.booking).set({ paymentStatus: 'paid', paymentProvider: 'cashfree', paymentId: `${b.id}__attempt` }).where(eq(schema.booking.id, b.id));
+  const row = (await db.select().from(schema.booking).where(eq(schema.booking.id, b.id)))[0]!;
+  vi.stubGlobal('fetch', vi.fn(async () => Response.json({ refund_status: 'PENDING', refund_id: 'rfd_test' })));
+  try {
+    await expect(refundBooking(db, row)).resolves.toMatchObject({ paymentStatus: 'refunded', refundedCents: 2500 });
+  } finally { vi.unstubAllGlobals(); }
+});
+
+it('reproduces the example optional env values failing validation', () => {
+  const example = readFileSync(new URL('../../../.env.example', import.meta.url), 'utf8');
+  const env: Record<string,string> = {};
+  for (const line of example.split('\n')) {
+    const match = line.match(/^([A-Z_]+)="([^"]*)"/);
+    if (match) env[match[1]!] = match[2]!;
+  }
+  const result = serverEnvSchema.safeParse(env);
+  expect(result.success).toBe(false);
+  if (!result.success) expect(result.error.issues.map(i => i.path[0])).toContain('ENCRYPTION_KEY');
+});
+
+// Pause the lifecycle's first UPDATE until another writer has changed the
+// row. Real SQL executes both operations; only their order is controlled.
+function updateAfter(hook: () => Promise<void>): Db {
+  let fired = false;
+  function wrap(query: any): any {
+    return new Proxy(query, { get(target, prop) {
+      if (prop === 'returning') return async (...args: any[]) => { if (!fired) { fired = true; await hook(); } return target.returning(...args); };
+      if (prop === 'then') return (resolve: any, reject: any) => (async () => { if (!fired) { fired = true; await hook(); } return await target; })().then(resolve, reject);
+      const value = Reflect.get(target, prop);
+      return typeof value === 'function' ? (...args: any[]) => wrap(value.apply(target, args)) : value;
+    }});
+  }
+  return new Proxy(db, { get(target, prop) {
+    if (prop === 'update') return (table: any) => wrap(target.update(table));
+    const value = Reflect.get(target, prop);
+    return typeof value === 'function' ? value.bind(target) : value;
+  }});
+}
+
+it('reproduces payment success resurrecting a concurrently cancelled booking', async () => {
+  const { b } = await createBooking();
+  await db.update(schema.booking).set({ status: 'pending_payment', paymentStatus: 'pending' }).where(eq(schema.booking.id, b.id));
+  const racingDb = updateAfter(async () => { await db.update(schema.booking).set({ status: 'cancelled' }).where(eq(schema.booking.id, b.id)); });
+  expect(await markBookingPaid(racingDb, { bookingId: b.id })).toBe('confirmed');
+  expect((await db.select().from(schema.booking).where(eq(schema.booking.id, b.id)))[0]!.status).toBe('confirmed');
+});
+
+it('reproduces a stale refund webhook lowering the stored cumulative amount', async () => {
+  const { b } = await createBooking();
+  await db.update(schema.booking).set({ paymentStatus: 'paid', refundedCents: 0 }).where(eq(schema.booking.id, b.id));
+  const racingDb = updateAfter(async () => { await db.update(schema.booking).set({ refundedCents: 2000, paymentStatus: 'partially_refunded' }).where(eq(schema.booking.id, b.id)); });
+  await recordRefundTotal(racingDb, { bookingId: b.id, refundedCents: 1000 });
+  expect((await db.select().from(schema.booking).where(eq(schema.booking.id, b.id)))[0]!.refundedCents).toBe(1000);
+});
+
+it('reproduces a built-in invoice staying open after its booking is paid', async () => {
+  const { f, b } = await createBooking();
+  await db.update(schema.tenantSettings).set({ invoiceProvider: 'udyamflow', autoInvoice: true }).where(eq(schema.tenantSettings.organizationId, f.orgId));
+  const invoice = await issueInvoiceForBooking(db, { organizationId: f.orgId, bookingId: b.id, send: false });
+  await markBookingPaid(db, { bookingId: b.id });
+  await autoInvoiceIfEnabled(db, b.id);
+  expect((await db.select().from(schema.invoice).where(eq(schema.invoice.id, invoice.id)))[0]!.status).toBe('open');
+});
+
+it('reproduces duplicate and mislabeled slots on the spring DST transition', () => {
+  const slots = generateSlots({ date: '2026-03-08', timezone: 'America/New_York', openMin: 60, closeMin: 240, slotMin: 30, taken: [], now: new Date('2026-03-01T00:00:00Z') });
+  expect(new Set(slots.map(s => s.start)).size).toBeLessThan(slots.length);
+  expect(slots.some(s => formatInTz(new Date(s.start), 'America/New_York', 'HH:mm') !== s.displayTime)).toBe(true);
+});
+
+it('reproduces a new Cashfree order being created for every checkout retry', async () => {
+  vi.stubEnv('CASHFREE_CLIENT_ID', 'audit_dummy');
+  vi.stubEnv('CASHFREE_CLIENT_SECRET', 'audit_dummy');
+  const ids: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (_url, init) => { ids.push(JSON.parse(String(init?.body)).order_id); return Response.json({ payment_session_id: 'audit_session' }); }));
+  try {
+    const { b } = await createBooking();
+    await publicCaller(db).payment.createCheckout({ bookingId: b.id });
+    await publicCaller(db).payment.createCheckout({ bookingId: b.id });
+    expect(ids).toHaveLength(2);
+    expect(ids[0]).not.toBe(ids[1]);
+  } finally { vi.unstubAllGlobals(); vi.unstubAllEnvs(); }
+});

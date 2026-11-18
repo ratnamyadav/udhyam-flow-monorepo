@@ -29,7 +29,7 @@ export default function PaymentsSettingsPage() {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? '';
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="mb-8">
         <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
           Settings · Payments
@@ -43,7 +43,7 @@ export default function PaymentsSettingsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-2 gap-4 max-w-[860px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-[860px]">
         <StripeConnectCard platformReady={stripeReady} />
         <CashfreePayoutCard />
       </div>
@@ -55,7 +55,9 @@ export default function PaymentsSettingsPage() {
         <div className="text-[13px] text-ink space-y-4">
           <div>
             <div className="font-medium">Stripe — two endpoints, same URL</div>
-            <div className="font-mono mt-1">POST {appUrl}/api/payments/stripe/webhook</div>
+            <div className="font-mono mt-1 break-all">
+              POST {appUrl}/api/payments/stripe/webhook
+            </div>
             <ol className="text-[12px] text-ink-mute mt-2 space-y-1.5 list-decimal pl-5">
               <li>
                 <strong className="text-ink">Platform endpoint</strong> ("Events on your account"):{' '}
@@ -76,7 +78,9 @@ export default function PaymentsSettingsPage() {
           </div>
           <div>
             <div className="font-medium">Cashfree</div>
-            <div className="font-mono mt-1">POST {appUrl}/api/payments/cashfree/webhook</div>
+            <div className="font-mono mt-1 break-all">
+              POST {appUrl}/api/payments/cashfree/webhook
+            </div>
             <div className="text-[12px] text-ink-mute mt-1">
               Set this as the payment webhook in the platform's Cashfree dashboard (payouts to your
               account happen through Easy Split). Every request is signature-verified with{' '}

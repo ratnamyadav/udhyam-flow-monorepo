@@ -20,7 +20,7 @@ export default function ChannelsSettingsPage() {
   const data = overview.data;
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="mb-8">
         <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
           Settings · Channels
@@ -32,7 +32,7 @@ export default function ChannelsSettingsPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-[1fr_380px] gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_380px] gap-6">
         <div className="space-y-6">
           <div className="bg-surface border border-border rounded-xl">
             <div className="px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
@@ -62,7 +62,7 @@ export default function ChannelsSettingsPage() {
           </div>
 
           <div className="bg-surface border border-border rounded-xl">
-            <div className="grid grid-cols-[1fr_120px_120px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
+            <div className="grid grid-cols-[minmax(0,1fr)_72px_72px] sm:grid-cols-[minmax(0,1fr)_120px_120px] gap-2 px-4 sm:px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
               <div>Source · last 30 days</div>
               <div className="text-right">Bookings</div>
               <div className="text-right">Cancelled</div>
@@ -76,9 +76,9 @@ export default function ChannelsSettingsPage() {
               data.bySource.map((r) => (
                 <div
                   key={r.source ?? '__direct'}
-                  className="grid grid-cols-[1fr_120px_120px] px-5 py-3 border-t border-border first:border-t-0 items-center text-[13px]"
+                  className="grid grid-cols-[minmax(0,1fr)_72px_72px] sm:grid-cols-[minmax(0,1fr)_120px_120px] gap-2 px-4 sm:px-5 py-3 border-t border-border first:border-t-0 items-center text-[13px]"
                 >
-                  <div className="text-ink">
+                  <div className="text-ink min-w-0 break-words">
                     {r.source ? (CHANNEL_LABELS[r.source] ?? r.source) : 'Direct / untagged'}
                     {r.source && (
                       <span className="ml-2 font-mono text-[11px] text-ink-soft">{r.source}</span>
@@ -126,9 +126,12 @@ export default function ChannelsSettingsPage() {
 function LinkRow({ label, url }: { label: string; url: string }) {
   const [copied, setCopied] = useState(false);
   return (
-    <div className="grid grid-cols-[180px_1fr_80px] gap-4 px-5 py-3 border-t border-border first:border-t-0 items-center">
+    <div className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[180px_minmax(0,1fr)_80px] gap-x-4 gap-y-1 px-4 sm:px-5 py-3 border-t border-border first:border-t-0 items-center">
       <div className="text-[13px] text-ink">{label}</div>
-      <div className="text-[12px] font-mono text-ink-mute truncate" title={url}>
+      <div
+        className="text-[12px] font-mono text-ink-mute truncate col-span-2 order-last sm:col-span-1 sm:order-none"
+        title={url}
+      >
         {url}
       </div>
       <button

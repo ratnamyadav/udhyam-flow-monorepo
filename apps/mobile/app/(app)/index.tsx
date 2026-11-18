@@ -1,5 +1,5 @@
 import { Link } from 'expo-router';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ResponsiveContent } from '@/components/responsive';
 import { useSession } from '@/lib/auth';
@@ -11,8 +11,14 @@ export default function DashboardScreen() {
   const me = trpc.auth.me.useQuery();
   // { timezone, date, bookings } — the day window is computed server-side in
   // the (first) location's timezone, so times render in that timezone too.
-  const today = trpc.booking.listToday.useQuery();
   const locations = trpc.location.list.useQuery();
+  const [pickedLocationId, setPickedLocationId] = useState<string | null>(null);
+  const selectedLocation =
+    locations.data?.find((l) => l.id === pickedLocationId) ?? locations.data?.[0];
+  const today = trpc.booking.listToday.useQuery(
+    { locationId: selectedLocation?.id },
+    { enabled: !locations.isLoading },
+  );
   const resources = trpc.resource.list.useQuery();
 
   // Drift probe: if useSession() shows a user but tRPC's auth.me returns
@@ -47,9 +53,24 @@ export default function DashboardScreen() {
     >
       <ResponsiveContent>
         <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono">
-          {locations.data?.[0]?.name ?? 'Loading…'}
+          {selectedLocation?.name ?? 'Loading…'}
         </Text>
         <Text className="text-3xl font-semibold text-ink mt-1">Good day, {first}</Text>
+        {(locations.data?.length ?? 0) > 1 && (
+          <View className="flex-row flex-wrap gap-2 mt-4">
+            {locations.data?.map((location) => (
+              <Pressable
+                key={location.id}
+                onPress={() => setPickedLocationId(location.id)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: location.id === selectedLocation?.id }}
+                className="px-3 py-2 border border-border rounded-md"
+              >
+                <Text>{location.name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
 
         <View className="flex-row gap-2 mt-7">
           <Metric label="Today" value={String(bookings.length)} />

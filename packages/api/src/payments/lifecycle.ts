@@ -1,9 +1,15 @@
 import { TRPCError } from '@trpc/server';
 import { type Db, isConflictError, type PaymentStatus, schema } from '@udyamflow/db';
 import { and, eq, inArray, lt } from 'drizzle-orm';
-import { cashfreeRefund } from '../cashfree';
+import { syncInvoicePayment } from '../invoicing/issue';
 import { notifyConfirmed } from '../notify';
-import { cashfreeOrderIdFor, getStripe } from './providers';
+import type { getStripe } from './providers';
+import {
+  refundDuplicatePayment,
+  requestBookingRefund,
+  submitRefund,
+  syncRefundedTotal,
+} from './refunds';
 
 // Booking payment state transitions shared by the tRPC routers and the
 // Stripe / Cashfree webhooks. Every transition is guarded on the current
@@ -34,19 +40,50 @@ export type PaidOutcome = 'confirmed' | 'already_settled' | 'needs_refund' | 'no
 // booking is marked paid but left unconfirmed so staff can refund it.
 export async function markBookingPaid(
   db: Db,
-  args: { bookingId: string; paymentId?: string },
+  args: {
+    bookingId: string;
+    paymentId?: string;
+    provider?: 'stripe' | 'cashfree';
+    accountId?: string | null;
+    vendorId?: string | null;
+  },
 ): Promise<PaidOutcome> {
   const [booking] = await db
     .select()
     .from(schema.booking)
     .where(eq(schema.booking.id, args.bookingId));
   if (!booking) return 'not_found';
-  if (SETTLED.includes(booking.paymentStatus)) return 'already_settled';
+  if (SETTLED.includes(booking.paymentStatus)) {
+    if (
+      args.paymentId &&
+      booking.paymentId &&
+      args.paymentId !== booking.paymentId &&
+      args.provider &&
+      booking.amountCents
+    ) {
+      await refundDuplicatePayment(db, {
+        bookingId: booking.id,
+        provider: args.provider,
+        paymentId: args.paymentId,
+        amountCents: booking.amountCents,
+        accountId: args.accountId,
+        vendorId: args.vendorId,
+      });
+    }
+    return 'already_settled';
+  }
 
   const payment = {
     paymentStatus: 'paid' as const,
     paidAt: new Date(),
     ...(args.paymentId ? { paymentId: args.paymentId } : {}),
+    ...(args.provider
+      ? {
+          paymentProvider: args.provider,
+          paymentAccountId: args.accountId ?? null,
+          paymentVendorId: args.vendorId ?? null,
+        }
+      : {}),
   };
   const notSettled = and(
     eq(schema.booking.id, booking.id),
@@ -58,9 +95,17 @@ export async function markBookingPaid(
       const updated = await db
         .update(schema.booking)
         .set({ ...payment, status: 'confirmed', holdExpiresAt: null })
-        .where(notSettled)
+        .where(and(notSettled, inArray(schema.booking.status, ['pending_payment', 'expired'])))
         .returning({ id: schema.booking.id });
-      if (updated.length === 0) return 'already_settled';
+      if (updated.length === 0) {
+        const [latest] = await db
+          .select()
+          .from(schema.booking)
+          .where(eq(schema.booking.id, booking.id));
+        if (latest && SETTLED.includes(latest.paymentStatus)) return markBookingPaid(db, args);
+        return recordUnwantedPayment(db, booking.id, payment);
+      }
+      await syncInvoicePayment(db, booking.id);
       await notifyConfirmed(db, booking.id);
       return 'confirmed';
     } catch (err) {
@@ -68,15 +113,89 @@ export async function markBookingPaid(
       // An expired hold whose slot was re-booked: fall through.
     }
   } else if (booking.status === 'confirmed') {
-    await db.update(schema.booking).set(payment).where(notSettled);
-    return 'confirmed';
+    // Pay-later link. Guarded on the status too: staff may cancel the
+    // booking while the customer is at checkout.
+    const updated = await db
+      .update(schema.booking)
+      .set(payment)
+      .where(and(notSettled, eq(schema.booking.status, 'confirmed')))
+      .returning({ id: schema.booking.id });
+    if (updated.length) {
+      await syncInvoicePayment(db, booking.id);
+      return 'confirmed';
+    }
+    const [latest] = await db
+      .select()
+      .from(schema.booking)
+      .where(eq(schema.booking.id, booking.id));
+    if (latest && SETTLED.includes(latest.paymentStatus)) return markBookingPaid(db, args);
+    return recordUnwantedPayment(db, booking.id, payment);
   }
 
-  await db.update(schema.booking).set(payment).where(notSettled);
   console.error(
     `[payments] booking ${booking.id} was paid while ${booking.status}; it needs a refund.`,
   );
-  return 'needs_refund';
+  return recordUnwantedPayment(db, booking.id, payment);
+}
+
+// Records money that arrived for a booking that no longer wants it. Only the
+// delivery that actually flips the payment to paid reports `needs_refund`;
+// a concurrent or repeated one sees the settled booking instead.
+async function recordUnwantedPayment(
+  db: Db,
+  bookingId: string,
+  payment: Partial<Booking>,
+): Promise<PaidOutcome> {
+  const updated = await db
+    .update(schema.booking)
+    .set(payment)
+    .where(
+      and(
+        eq(schema.booking.id, bookingId),
+        inArray(schema.booking.paymentStatus, ['unpaid', 'pending', 'failed']),
+      ),
+    )
+    .returning({ id: schema.booking.id });
+  return updated.length ? 'needs_refund' : 'already_settled';
+}
+
+// A gateway captured a payment (webhook). Marks the booking paid and, when
+// this delivery captured money for a booking already cancelled or expired,
+// refunds it. Redeliveries for a booking staff have since cancelled (and
+// chose to keep the payment) settle as `already_settled` and refund nothing.
+export async function capturePayment(
+  db: Db,
+  args: Parameters<typeof markBookingPaid>[1],
+): Promise<{ outcome: PaidOutcome; booking: Booking | undefined }> {
+  const outcome = await markBookingPaid(db, args);
+  let [latest] = await db
+    .select()
+    .from(schema.booking)
+    .where(eq(schema.booking.id, args.bookingId));
+  if (
+    outcome === 'needs_refund' &&
+    latest &&
+    ['cancelled', 'expired'].includes(latest.status) &&
+    latest.paymentId === args.paymentId &&
+    ['paid', 'partially_refunded'].includes(latest.paymentStatus)
+  ) {
+    await refundBooking(db, latest);
+    [latest] = await db.select().from(schema.booking).where(eq(schema.booking.id, latest.id));
+  } else if (outcome === 'already_settled' && latest) {
+    // A retried delivery after the gateway timed out on that refund: resume
+    // the refund already in flight (never start a new one).
+    const unsent = await db
+      .select()
+      .from(schema.paymentRefund)
+      .where(
+        and(
+          eq(schema.paymentRefund.bookingId, latest.id),
+          eq(schema.paymentRefund.status, 'created'),
+        ),
+      );
+    for (const refund of unsent) await submitRefund(db, refund);
+  }
+  return { outcome, booking: latest };
 }
 
 // Checkout failed or was abandoned. `releaseHold` frees the slot right away
@@ -105,62 +224,34 @@ export async function markPaymentFailed(
     .where(
       and(
         eq(schema.booking.id, booking.id),
+        ...(args.paymentId ? [eq(schema.booking.paymentId, args.paymentId)] : []),
+        ...(args.releaseHold ? [eq(schema.booking.status, 'pending_payment')] : []),
         inArray(schema.booking.paymentStatus, ['unpaid', 'pending']),
       ),
     );
 }
 
-function refundStatusFor(amountCents: number | null, refundedCents: number): PaymentStatus {
-  if (amountCents == null || refundedCents >= amountCents) return 'refunded';
-  return refundedCents > 0 ? 'partially_refunded' : 'paid';
-}
-
-// A gateway reported the booking's cumulative refunded amount (webhook).
-// Takes the max so a late or repeated event never lowers what we recorded.
+// A gateway reported the booking's cumulative refunded amount. Pass the
+// provider's *current* figure (re-fetched, not an event snapshot): it can go
+// down when a refund fails, and it only ever adds refunds missing from our
+// ledger — see syncRefundedTotal.
 export async function recordRefundTotal(
   db: Db,
   args: { bookingId: string; refundedCents: number },
 ): Promise<void> {
-  const [booking] = await db
-    .select()
-    .from(schema.booking)
-    .where(eq(schema.booking.id, args.bookingId));
-  if (!booking || !SETTLED.includes(booking.paymentStatus)) return;
-  const refundedCents = Math.max(booking.refundedCents, args.refundedCents);
-  await db
+  if (!Number.isSafeInteger(args.refundedCents) || args.refundedCents < 0) return;
+  const updated = await db
     .update(schema.booking)
-    .set({ refundedCents, paymentStatus: refundStatusFor(booking.amountCents, refundedCents) })
-    .where(eq(schema.booking.id, booking.id));
-}
-
-// Amount the customer paid. Bookings made before price snapshots existed
-// fall back to the service's current price.
-async function chargedCents(db: Db, booking: Booking): Promise<number | null> {
-  if (booking.amountCents != null) return booking.amountCents;
-  if (!booking.serviceId) return null;
-  const [svc] = await db
-    .select({ priceCents: schema.service.priceCents })
-    .from(schema.service)
-    .where(eq(schema.service.id, booking.serviceId));
-  return svc?.priceCents ?? null;
+    .set({ refundObservedCents: args.refundedCents })
+    .where(
+      and(eq(schema.booking.id, args.bookingId), inArray(schema.booking.paymentStatus, SETTLED)),
+    )
+    .returning({ id: schema.booking.id });
+  if (updated.length) await syncRefundedTotal(db, args.bookingId);
 }
 
 type StripeClient = NonNullable<ReturnType<typeof getStripe>>;
 type StripeReqOpts = { stripeAccount: string } | undefined;
-
-// The Stripe account a booking's payment lives on. Checkout payments record
-// it at checkout time (null = platform). Invoice payments (`in_…`, from
-// invoicing) are always issued on the tenant's Connect account; bookings paid
-// that way before the account was recorded fall back to the tenant's.
-async function stripeAccountForBooking(db: Db, booking: Booking): Promise<string | undefined> {
-  if (booking.paymentAccountId?.startsWith('acct_')) return booking.paymentAccountId;
-  if (!booking.paymentId?.startsWith('in_')) return undefined;
-  const [tenant] = await db
-    .select({ accountId: schema.tenantSettings.stripeAccountId })
-    .from(schema.tenantSettings)
-    .where(eq(schema.tenantSettings.organizationId, booking.organizationId));
-  return tenant?.accountId ?? undefined;
-}
 
 // What to refund: the payment behind a Checkout Session (`cs_…`) or behind a
 // paid invoice (`in_…`). Invoices expose it through Invoice Payments (the
@@ -196,63 +287,13 @@ export async function stripeRefundTarget(
 
 // Issues a refund through the gateway that took the payment, against the
 // same merchant account. `amountCents` omitted = everything not yet refunded.
-export async function refundBooking(
-  db: Db,
-  booking: Booking,
-  amountCents?: number,
-): Promise<{ paymentStatus: PaymentStatus; refundedCents: number }> {
-  if (booking.paymentStatus !== 'paid' && booking.paymentStatus !== 'partially_refunded') {
-    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Booking is not paid.' });
-  }
-  if (!booking.paymentProvider || !booking.paymentId) {
-    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'No payment record.' });
-  }
-  const charged = await chargedCents(db, booking);
-  if (charged == null) {
-    throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Unknown payment amount.' });
-  }
-  const remaining = charged - booking.refundedCents;
-  const amount = amountCents ?? remaining;
-  if (amount <= 0 || amount > remaining) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: `Refund must be between 1 and ${remaining} (minor units).`,
-    });
-  }
-
-  try {
-    if (booking.paymentProvider === 'stripe') {
-      const stripe = getStripe();
-      if (!stripe) {
-        throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Stripe is not configured.' });
-      }
-      const account = await stripeAccountForBooking(db, booking);
-      const reqOpts = account ? { stripeAccount: account } : undefined;
-      const target = await stripeRefundTarget(stripe, booking.paymentId, reqOpts);
-      await stripe.refunds.create({ ...target, amount }, reqOpts);
-    } else if (booking.paymentProvider === 'cashfree') {
-      // Split orders recover the refund from the tenant's vendor share.
-      await cashfreeRefund({
-        orderId: cashfreeOrderIdFor(booking),
-        amountPaise: amount,
-        vendorId: booking.paymentVendorId,
-      });
-    } else {
-      throw new TRPCError({ code: 'PRECONDITION_FAILED', message: 'Unknown payment provider.' });
-    }
-  } catch (err) {
-    if (err instanceof TRPCError) throw err;
-    throw new TRPCError({
-      code: 'BAD_GATEWAY',
-      message: err instanceof Error ? err.message : 'Refund failed at the payment gateway.',
-    });
-  }
-
-  const refundedCents = booking.refundedCents + amount;
-  const paymentStatus = refundStatusFor(charged, refundedCents);
-  await db
-    .update(schema.booking)
-    .set({ refundedCents, paymentStatus })
-    .where(eq(schema.booking.id, booking.id));
-  return { paymentStatus, refundedCents };
+export async function refundBooking(db: Db, booking: Booking, amountCents?: number) {
+  const refund = await requestBookingRefund(db, booking, amountCents);
+  const [latest] = await db.select().from(schema.booking).where(eq(schema.booking.id, booking.id));
+  return {
+    paymentStatus: latest!.paymentStatus,
+    refundedCents: latest!.refundedCents,
+    pending: refund.status !== 'succeeded',
+    refundId: refund.id,
+  };
 }

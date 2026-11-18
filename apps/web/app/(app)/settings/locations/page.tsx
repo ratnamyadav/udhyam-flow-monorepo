@@ -60,8 +60,8 @@ export default function LocationsSettingsPage() {
   }
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
-      <div className="flex justify-between items-end mb-8">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
+      <div className="flex flex-wrap justify-between items-end gap-4 mb-8">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
             Settings · Locations
@@ -72,9 +72,13 @@ export default function LocationsSettingsPage() {
 
       {!isAdmin && <MemberNote what="add, edit or remove locations" />}
 
-      <div className={isAdmin ? 'grid grid-cols-[1fr_360px] gap-6' : 'grid gap-6'}>
+      <div
+        className={
+          isAdmin ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6' : 'grid gap-6'
+        }
+      >
         <div className="bg-surface border border-border rounded-xl h-fit">
-          <div className="grid grid-cols-[1fr_180px_90px_110px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
+          <div className="hidden sm:grid grid-cols-[minmax(0,1fr)_180px_90px_110px] gap-3 px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
             <div>Location</div>
             <div>Timezone</div>
             <div>Currency</div>
@@ -96,13 +100,13 @@ export default function LocationsSettingsPage() {
               ) : (
                 <div
                   key={l.id}
-                  className="grid grid-cols-[1fr_180px_90px_110px] px-5 py-3.5 border-t border-border first:border-t-0 hover:bg-surface-mute items-center"
+                  className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_180px_90px_110px] gap-x-3 gap-y-1 px-4 sm:px-5 py-3.5 border-t border-border first:border-t-0 hover:bg-surface-mute items-center"
                 >
-                  <div>
-                    <div className="text-[14px] font-medium text-ink">{l.name}</div>
+                  <div className="min-w-0">
+                    <div className="text-[14px] font-medium text-ink break-words">{l.name}</div>
                     {l.address && <div className="text-[12px] text-ink-mute">{l.address}</div>}
                   </div>
-                  <div className="text-[13px] text-ink-mute font-mono">{l.timezone}</div>
+                  <div className="text-[13px] text-ink-mute font-mono break-all">{l.timezone}</div>
                   <div className="text-[13px] text-ink font-mono">{l.currency}</div>
                   <div className="flex gap-2">
                     {isAdmin && (
@@ -167,7 +171,7 @@ export default function LocationsSettingsPage() {
                 onChange={(e) => setAddress(e.target.value)}
               />
             </div>
-            <div className="grid grid-cols-[1fr_96px] gap-2">
+            <div className="grid grid-cols-[minmax(0,1fr)_96px] gap-2">
               <div className="space-y-1.5">
                 <Label htmlFor="ltz">Timezone</Label>
                 <select
@@ -258,7 +262,7 @@ function EditLocationRow({
 
   return (
     <div className="px-5 py-4 border-t border-border first:border-t-0 bg-surface-mute space-y-3">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor={`ename-${location.id}`}>Name</Label>
           <Input
@@ -276,7 +280,7 @@ function EditLocationRow({
           />
         </div>
       </div>
-      <div className="grid grid-cols-[1fr_120px] gap-3">
+      <div className="grid grid-cols-[minmax(0,1fr)_120px] gap-3">
         <div className="space-y-1.5">
           <Label htmlFor={`etz-${location.id}`}>Timezone</Label>
           <select

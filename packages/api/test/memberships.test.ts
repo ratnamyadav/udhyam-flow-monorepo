@@ -415,7 +415,11 @@ describe('membership orchestration', () => {
 // conflict + update outcome scripted per test.
 function paymentDb(opts: { conflict: boolean; updated: boolean }) {
   const ops: Array<{ op: string; values: Record<string, unknown> }> = [];
+  // grantPaidCycle looks the payment up via select().from().innerJoin()…where();
+  // resolving to no row makes it a no-op, keeping these tests on recordPayment.
+  const noRows = { from: () => noRows, innerJoin: () => noRows, where: async () => [] };
   const db = {
+    select: () => noRows,
     insert: () => ({
       values: (values: Record<string, unknown>) => ({
         onConflictDoNothing: () => ({
@@ -586,6 +590,7 @@ describe('webhook payload parsing', () => {
       amount: 2000,
       status: 'SUCCESS',
       failureReason: null,
+      paidAt: null,
     });
   });
 

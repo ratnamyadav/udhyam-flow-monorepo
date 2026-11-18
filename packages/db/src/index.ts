@@ -1,6 +1,7 @@
 export { atomic, isConflictError, pgErrorCode } from './atomic';
 export type { Db } from './client';
 export { db } from './client';
+export { queryRows } from './query';
 export * as schema from './schema';
 export {
   BOOKING_STATUSES,

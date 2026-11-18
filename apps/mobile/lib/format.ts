@@ -102,6 +102,7 @@ const STATUS_LABELS: Record<string, string> = {
   no_show: 'No-show',
   expired: 'Expired',
   unpaid: 'Unpaid',
+  covered: 'Membership',
   pending: 'Pending',
   paid: 'Paid',
   partially_refunded: 'Partially refunded',

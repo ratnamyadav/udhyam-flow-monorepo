@@ -29,6 +29,27 @@
       "when": 1790761036059,
       "tag": "0003_invoicing_memberships_gst",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1791955878205,
+      "tag": "0004_payment_integrity_billing_credits",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794736073568,
+      "tag": "0005_membership_plan_services",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1795036512793,
+      "tag": "0006_backfill_booking_snapshots",
+      "breakpoints": true
     }
   ]
 }

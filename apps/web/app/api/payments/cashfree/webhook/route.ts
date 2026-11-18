@@ -1,13 +1,13 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import {
   bookingIdFromOrderId,
-  markBookingPaid,
+  capturePayment,
   markPaymentFailed,
-  recordRefundTotal,
+  recordProviderRefund,
 } from '@udyamflow/api';
 import { autoInvoiceIfEnabled } from '@udyamflow/api/invoicing';
 import { db, schema } from '@udyamflow/db';
-import { eq } from 'drizzle-orm';
+import { and, eq, or } from 'drizzle-orm';
 import { after, type NextRequest } from 'next/server';
 
 // Cashfree PG webhook. Signature spec:
@@ -24,7 +24,13 @@ type CashfreeEvent = {
   data: {
     order?: { order_id?: string; order_amount?: number; order_currency?: string };
     payment?: { payment_status?: string };
-    refund?: { order_id?: string; refund_amount?: number; refund_status?: string };
+    refund?: {
+      order_id?: string;
+      refund_amount?: number;
+      refund_status?: string;
+      refund_id?: string;
+      cf_refund_id?: string;
+    };
   };
 };
 
@@ -69,13 +75,32 @@ export async function POST(req: NextRequest) {
 
   // Refund events carry the order id under `refund`, payment events under `order`.
   const orderId = event.data?.refund?.order_id ?? event.data?.order?.order_id;
-  const bookingId = orderId ? bookingIdFromOrderId(orderId) : null;
+  const [attempt] = orderId
+    ? await db
+        .select()
+        .from(schema.paymentAttempt)
+        .where(
+          and(
+            eq(schema.paymentAttempt.provider, 'cashfree'),
+            or(
+              eq(schema.paymentAttempt.id, orderId),
+              eq(schema.paymentAttempt.providerPaymentId, orderId),
+            ),
+          ),
+        )
+    : [];
+  const bookingId = attempt?.bookingId ?? (orderId ? bookingIdFromOrderId(orderId) : null);
   const [booking] = bookingId
     ? await db.select().from(schema.booking).where(eq(schema.booking.id, bookingId))
     : [];
 
   // Unknown order (e.g. a test event from the dashboard): acknowledge.
-  if (!booking || !orderId) return Response.json({ received: true });
+  if (
+    !booking ||
+    !orderId ||
+    (attempt ? attempt.provider !== 'cashfree' : booking.paymentProvider !== 'cashfree')
+  )
+    return Response.json({ received: true });
 
   if (event.type === 'PAYMENT_SUCCESS_WEBHOOK') {
     const order = event.data.order;
@@ -85,9 +110,25 @@ export async function POST(req: NextRequest) {
       (Math.round((order?.order_amount ?? -1) * 100) === booking.amountCents &&
         order?.order_currency?.toUpperCase() === booking.currency?.toUpperCase());
     if (event.data.payment?.payment_status === 'SUCCESS' && amountMatches) {
-      const outcome = await markBookingPaid(db, { bookingId: booking.id, paymentId: orderId });
+      if (attempt)
+        await db
+          .update(schema.paymentAttempt)
+          .set({ status: 'paid', providerPaymentId: orderId })
+          .where(eq(schema.paymentAttempt.id, attempt.id));
+      // Refunds only when this delivery captured money for a booking already
+      // cancelled or expired — never on a redelivery for one staff kept paid.
+      const { outcome, booking: latest } = await capturePayment(db, {
+        bookingId: booking.id,
+        paymentId: orderId,
+        provider: 'cashfree',
+        vendorId: attempt?.vendorId ?? booking.paymentVendorId,
+      });
       // No-op unless the tenant turned on auto-invoicing.
-      if (outcome === 'confirmed') after(() => autoInvoiceIfEnabled(db, booking.id));
+      if (
+        latest?.status === 'confirmed' &&
+        (outcome === 'confirmed' || outcome === 'already_settled')
+      )
+        after(() => autoInvoiceIfEnabled(db, booking.id));
     } else if (!amountMatches) {
       console.error(`[cashfree] amount mismatch for booking ${booking.id}; not marking paid`);
     }
@@ -100,10 +141,15 @@ export async function POST(req: NextRequest) {
     await markPaymentFailed(db, { bookingId: booking.id, paymentId: orderId, releaseHold: false });
   } else if (event.type === 'REFUND_STATUS_WEBHOOK') {
     const refund = event.data.refund;
-    if (refund?.refund_status === 'SUCCESS' && refund.refund_amount != null) {
-      await recordRefundTotal(db, {
+    if (refund?.refund_amount != null && refund.refund_id && refund.refund_status) {
+      await recordProviderRefund(db, {
         bookingId: booking.id,
-        refundedCents: Math.round(refund.refund_amount * 100),
+        provider: 'cashfree',
+        providerRefundId: refund.refund_id,
+        localId: refund.refund_id.startsWith('rfd_') ? refund.refund_id : undefined,
+        paymentId: orderId,
+        amountCents: Math.round(refund.refund_amount * 100),
+        status: refund.refund_status,
       });
     }
   }

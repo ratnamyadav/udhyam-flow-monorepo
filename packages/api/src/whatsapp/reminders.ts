@@ -48,15 +48,17 @@ export function replyPayload(action: ReplyAction, bookingId: string): string {
   return `${action}:${bookingId}`;
 }
 
-// Only unpaid bookings for a priced service get a pay link. `pending` /
-// `failed` are excluded on purpose: a Cashfree order id is the booking id, so
-// a second checkout for the same booking would be rejected by the gateway.
+// Only unpaid bookings that still owe money get a pay link — judged from the
+// booking's own amount snapshot (a membership booking is 0 and `covered`),
+// never the current catalog price. `pending` / `failed` are excluded on
+// purpose: a Cashfree order id is the booking id, so a second checkout for
+// the same booking would be rejected by the gateway.
 export function needsPayLink(args: {
   paymentStatus: string;
-  priceCents: number | null | undefined;
+  amountCents: number | null | undefined;
   providerConfigured: boolean;
 }): boolean {
-  return args.paymentStatus === 'unpaid' && (args.priceCents ?? 0) > 0 && args.providerConfigured;
+  return args.paymentStatus === 'unpaid' && (args.amountCents ?? 0) > 0 && args.providerConfigured;
 }
 
 export function formatWhen(date: Date, timeZone: string): string {

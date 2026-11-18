@@ -11,6 +11,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 const CASHFREE_JS = 'https://sdk.cashfree.com/js/v3/cashfree.js';
 
 type CashfreeInstance = {
+  checkout: (opts: {
+    paymentSessionId: string;
+    redirectTarget: '_self';
+  }) => Promise<{ error?: { message?: string } } | undefined>;
   subscriptionsCheckout: (opts: {
     subsSessionId: string;
     redirectTarget?: '_self' | '_blank' | '_top';
@@ -24,7 +28,7 @@ declare global {
 }
 
 let scriptPromise: Promise<void> | null = null;
-function loadCashfreeJs(): Promise<void> {
+export function loadCashfreeJs(): Promise<void> {
   if (window.Cashfree) return Promise.resolve();
   scriptPromise ??= new Promise<void>((resolve, reject) => {
     const s = document.createElement('script');
@@ -44,10 +48,14 @@ export function CashfreeMandateCheckout({
   sessionId,
   mode,
   theme,
+  title = 'Approve your mandate',
+  description = "Taking you to Cashfree to approve the recurring payment with UPI Autopay, net banking or your card. You'll come back here once it's done.",
 }: {
   sessionId: string;
   mode: 'sandbox' | 'production';
   theme: TenantTheme;
+  title?: string;
+  description?: string;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState(false);
@@ -83,12 +91,9 @@ export function CashfreeMandateCheckout({
         className="text-[28px] m-0 font-medium tracking-tight text-ink"
         style={{ fontFamily: theme.fontDisplay, lineHeight: 1.15 }}
       >
-        Approve your mandate
+        {title}
       </h1>
-      <p className="text-[14px] text-ink-mute mt-3 leading-relaxed">
-        Taking you to Cashfree to approve the recurring payment with UPI Autopay, net banking or
-        your card. You'll come back here once it's done.
-      </p>
+      <p className="text-[14px] text-ink-mute mt-3 leading-relaxed">{description}</p>
       {error && <div className="mt-4 text-[13px] text-danger">{error}</div>}
       <button
         type="button"

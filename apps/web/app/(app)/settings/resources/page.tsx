@@ -85,7 +85,7 @@ export default function ResourcesSettingsPage() {
   const locById = new Map((locations.data ?? []).map((l) => [l.id, l]));
 
   return (
-    <div className="px-12 py-10 max-w-[1280px] mx-auto">
+    <div className="px-4 sm:px-8 lg:px-12 py-8 sm:py-10 max-w-[1280px] mx-auto">
       <div className="flex justify-between items-end mb-8">
         <div>
           <div className="text-[11px] text-ink-soft uppercase tracking-wider mb-2 font-mono">
@@ -97,9 +97,13 @@ export default function ResourcesSettingsPage() {
 
       {!isAdmin && <MemberNote what="add, edit or remove resources and their hours" />}
 
-      <div className={isAdmin ? 'grid grid-cols-[1fr_360px] gap-6' : 'grid gap-6'}>
+      <div
+        className={
+          isAdmin ? 'grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-6' : 'grid gap-6'
+        }
+      >
         <div className="bg-surface border border-border rounded-xl h-fit">
-          <div className="grid grid-cols-[1fr_180px_160px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_160px] px-5 py-3 border-b border-border text-[10px] uppercase tracking-wider text-ink-soft font-mono">
             <div>Resource</div>
             <div>Location</div>
             <div>Actions</div>
@@ -118,7 +122,7 @@ export default function ResourcesSettingsPage() {
                     onDone={() => setEditingId(null)}
                   />
                 ) : (
-                  <div className="grid grid-cols-[1fr_180px_160px] px-5 py-3.5 items-center hover:bg-surface-mute">
+                  <div className="grid grid-cols-1 md:grid-cols-[1fr_180px_160px] px-5 py-3.5 items-center hover:bg-surface-mute">
                     <div className="flex items-center gap-2.5">
                       <div
                         className="w-7 h-7 grid place-items-center text-[var(--accent-fg)] text-[10px] font-semibold"
@@ -312,8 +316,8 @@ function EditResourceRow({
   }
 
   return (
-    <div className="px-5 py-4 bg-surface-mute space-y-3">
-      <div className="grid grid-cols-3 gap-3">
+    <div className="px-4 sm:px-5 py-4 bg-surface-mute space-y-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <div className="space-y-1.5">
           <Label htmlFor={`rname-${resource.id}`}>Name</Label>
           <Input
@@ -416,11 +420,11 @@ function HoursEditor({ resourceId }: { resourceId: string }) {
   }
 
   return (
-    <div className="px-5 py-4 bg-surface-mute border-t border-border">
+    <div className="px-4 sm:px-5 py-4 bg-surface-mute border-t border-border">
       <div className="text-[10px] uppercase tracking-wider text-ink-soft font-mono mb-3">
         Weekly hours (location timezone)
       </div>
-      <div className="grid grid-cols-[80px_60px_1fr_1fr] gap-2 items-center max-w-[520px]">
+      <div className="grid grid-cols-[40px_72px_minmax(0,1fr)_minmax(0,1fr)] sm:grid-cols-[80px_80px_minmax(0,1fr)_minmax(0,1fr)] gap-2 items-center max-w-[520px]">
         {DAYS.map((d, i) => {
           const row = rows[i]!;
           return (

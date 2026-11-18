@@ -35,6 +35,7 @@ export type SubscriptionWebhookPayment = {
   amount: number | string | null; // rupees
   status: string | null; // raw Cashfree payment_status
   failureReason: string | null;
+  paidAt?: string | null;
 };
 
 export type SubscriptionWebhookEvent = {
@@ -104,6 +105,7 @@ export function parseSubscriptionWebhook(rawBody: string): SubscriptionWebhookEv
       amount: typeof rawAmount === 'number' || typeof rawAmount === 'string' ? rawAmount : null,
       status: str(pay.payment_status),
       failureReason: first(failure?.failure_reason, pay.failure_reason),
+      paidAt: first(pay.payment_time, pay.payment_initiated_time, pay.payment_schedule_date),
     };
   }
 
