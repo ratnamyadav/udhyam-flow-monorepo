@@ -3,9 +3,15 @@ import { tenantThemeStyle } from '@udyamflow/tokens';
 import { and, eq, inArray, isNull } from 'drizzle-orm';
 import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
-import { BookingInterface } from '@/components/booking/booking-interface';
+import {
+  BookingInterface,
+  type InitialSlots,
+  type SlotQueryArgs,
+} from '@/components/booking/booking-interface';
 import { type BookingLayout, isBookingLayout } from '@/lib/booking-copy';
 import { settingsToTheme } from '@/lib/theme';
+import { ymdInZone } from '@/lib/timezones';
+import { trpcServer } from '@/lib/trpc/server';
 
 export async function generateMetadata({
   params,
@@ -114,14 +120,49 @@ export default async function BookingPage({
     settings: settings ?? null,
   });
 
-  // Only advertise memberships when there's something to buy.
-  const [membershipPlan] = await db
-    .select({ id: schema.membershipPlan.id })
-    .from(schema.membershipPlan)
-    .where(
-      and(eq(schema.membershipPlan.organizationId, org.id), eq(schema.membershipPlan.active, true)),
-    )
-    .limit(1);
+  const serviceResourceIds = (serviceId: string) =>
+    links.filter((l) => l.serviceId === serviceId).map((l) => l.resourceId);
+
+  const [[membershipPlan], initialSlots] = await Promise.all([
+    // Only advertise memberships when there's something to buy.
+    db
+      .select({ id: schema.membershipPlan.id })
+      .from(schema.membershipPlan)
+      .where(
+        and(
+          eq(schema.membershipPlan.organizationId, org.id),
+          eq(schema.membershipPlan.active, true),
+        ),
+      )
+      .limit(1),
+    loadInitialSlots(),
+  ]);
+
+  // Today's times for the selection the page opens with (first location,
+  // its first resource and that resource's first service — the same defaults
+  // BookingInterface picks), so visitors see times straight away. Any failure
+  // just leaves it to the browser to load them.
+  async function loadInitialSlots(): Promise<InitialSlots | null> {
+    const location = locations[0];
+    const resource = location && resources.find((r) => r.locationId === location.id);
+    if (!location || !resource) return null;
+    const service = services.find((s) => {
+      const ids = serviceResourceIds(s.id);
+      return ids.length === 0 || ids.includes(resource.id);
+    });
+    const args: SlotQueryArgs = {
+      orgSlug,
+      locationId: location.id,
+      resourceId: resource.id,
+      serviceId: service?.id,
+      date: ymdInZone(new Date(), location.timezone),
+    };
+    try {
+      return { args, data: await (await trpcServer()).booking.listSlots(args) };
+    } catch {
+      return null;
+    }
+  }
 
   // ?layout= previews another layout; otherwise the tenant's saved default.
   const layout: BookingLayout = isBookingLayout(layoutParam)
@@ -155,8 +196,9 @@ export default async function BookingPage({
         priceCents: s.priceCents,
         currency: s.currency,
         isOnline: s.isOnline,
-        resourceIds: links.filter((l) => l.serviceId === s.id).map((l) => l.resourceId),
+        resourceIds: serviceResourceIds(s.id),
       }))}
+      initialSlots={initialSlots}
       layout={layout}
       density={settings?.density === 'compact' ? 'compact' : 'comfortable'}
       headline={settings?.bookingHeadline ?? null}

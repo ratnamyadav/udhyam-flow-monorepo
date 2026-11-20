@@ -2,7 +2,7 @@
 
 import { type TenantTheme, tenantThemeStyle } from '@udyamflow/tokens';
 import { Input, Label } from '@udyamflow/ui';
-import { useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   type BookingLayout,
   defaultHeadline,
@@ -54,6 +54,27 @@ export type BookingService = {
 type Slot = { start: string; end: string; displayTime: string };
 type SelectedSlot = Slot & { date: string };
 
+export type SlotQueryArgs = {
+  orgSlug: string;
+  locationId: string;
+  resourceId: string;
+  serviceId?: string;
+  date: string;
+};
+/** Slots the server already loaded for the default selection, so the page
+ *  opens with times instead of a loading state. */
+export type InitialSlots = {
+  args: SlotQueryArgs;
+  data: { slots: Slot[]; timezone: string; date: string };
+};
+
+const sameSlotArgs = (a: SlotQueryArgs, b: SlotQueryArgs) =>
+  a.orgSlug === b.orgSlug &&
+  a.locationId === b.locationId &&
+  a.resourceId === b.resourceId &&
+  (a.serviceId ?? null) === (b.serviceId ?? null) &&
+  a.date === b.date;
+
 // How many days customers can pick from, and how many columns the inline
 // "week" layout renders at once.
 const BOOKING_WINDOW_DAYS = 14;
@@ -90,6 +111,7 @@ export function BookingInterface({
   intro,
   source,
   membershipId,
+  initialSlots,
 }: {
   orgSlug: string;
   theme: TenantTheme;
@@ -105,6 +127,7 @@ export function BookingInterface({
   /** Raw `?source=` attribution, forwarded to booking.create (sanitized there). */
   source?: string;
   membershipId?: string;
+  initialSlots?: InitialSlots | null;
 }) {
   const profession = professionFor(theme.profession);
   const dense = density === 'compact';
@@ -373,43 +396,28 @@ export function BookingInterface({
       </div>
     ) : null;
 
+  const slotArgs = {
+    orgSlug,
+    locationId: location?.id ?? '',
+    resourceId: resource?.id ?? '',
+    serviceId: service?.id,
+  };
+  const slotsEnabled = !!resource && !!location;
+
   const DatePicker = (
-    // Padding leaves room for the focus ring inside the scroll container. On
-    // phones the chips snap so a swipe lands cleanly on a day.
-    <fieldset
-      aria-label="Date"
-      className="min-w-0 flex gap-1.5 overflow-x-auto overscroll-x-contain p-1 -mx-1 mb-3 snap-x snap-mandatory scroll-px-1 md:snap-none"
-    >
-      {days.map((d) => {
-        const sel = d === date;
-        return (
-          <button
-            key={d}
-            type="button"
-            aria-pressed={sel}
-            aria-label={`${d === today ? 'Today, ' : ''}${spokenDate(d)}`}
-            onClick={() => {
-              setPickedDate(d);
-              clearSelection();
-            }}
-            className={`shrink-0 snap-start border px-2.5 py-1.5 text-center transition-colors ${FOCUS}`}
-            style={{
-              borderRadius: theme.radius,
-              borderColor: sel ? theme.accent : 'var(--color-border)',
-              background: sel ? theme.accent : 'var(--color-surface)',
-              color: sel ? 'var(--accent-fg)' : 'var(--color-ink)',
-            }}
-          >
-            <div className="text-[10px] uppercase tracking-wider font-mono opacity-80">
-              {d === today ? 'Today' : dayLabel(d, { weekday: 'short' })}
-            </div>
-            <div className="text-[13px] font-medium tabular-nums">
-              {dayLabel(d, { day: 'numeric', month: 'short' })}
-            </div>
-          </button>
-        );
-      })}
-    </fieldset>
+    <DateStrip
+      days={days}
+      date={date}
+      today={today}
+      theme={theme}
+      onPick={(d) => {
+        setPickedDate(d);
+        clearSelection();
+      }}
+      onPrefetch={(d) => {
+        if (slotsEnabled) void utils.booking.listSlots.prefetch({ ...slotArgs, date: d });
+      }}
+    />
   );
 
   const canSubmit =
@@ -533,23 +541,30 @@ export function BookingInterface({
       </div>
     );
 
-  const slotArgs = {
-    orgSlug,
-    locationId: location?.id ?? '',
-    resourceId: resource?.id ?? '',
-    serviceId: service?.id,
-  };
-  const slotsEnabled = !!resource && !!location;
-
+  const nextDay = days[days.indexOf(date) + 1] ?? null;
   const SlotGrid = (
     <DaySlots
       args={{ ...slotArgs, date }}
       enabled={slotsEnabled}
+      initialSlots={initialSlots}
       theme={theme}
       selected={selected}
       onSelect={(s) => selectSlot(s, date)}
       gridClassName="grid-cols-3 sm:grid-cols-4"
-      emptyText={`No availability on this day. Pick another date or a different ${profession.resourcePlural.toLowerCase().replace(/s$/, '')}.`}
+      emptyText={`No free times on ${date === today ? 'this day' : dayLabel(date, { weekday: 'long' })}.`}
+      onNextDay={
+        nextDay
+          ? () => {
+              setPickedDate(nextDay);
+              clearSelection();
+            }
+          : undefined
+      }
+      nextDayLabel={
+        nextDay
+          ? dayLabel(nextDay, { weekday: 'short', day: 'numeric', month: 'short' })
+          : undefined
+      }
     />
   );
 
@@ -637,7 +652,7 @@ export function BookingInterface({
             ? 'Booking…'
             : selected
               ? `Confirm ${selected.date === today ? '' : `${dayLabel(selected.date, { month: 'short', day: 'numeric' })} `}${selected.displayTime}`
-              : 'Pick a slot'}
+              : 'Choose a time above'}
       </button>
     </div>
   );
@@ -837,10 +852,12 @@ export function BookingInterface({
                 <DaySlots
                   args={{ ...slotArgs, date: d }}
                   enabled={slotsEnabled}
+                  initialSlots={initialSlots}
                   theme={theme}
                   selected={selected}
                   onSelect={(s) => selectSlot(s, d)}
                   gridClassName="grid-cols-3 sm:grid-cols-4 md:grid-cols-1"
+                  skeletonCount={4}
                   emptyText="No slots"
                 />
               </div>
@@ -856,38 +873,101 @@ export function BookingInterface({
 function DaySlots({
   args,
   enabled,
+  initialSlots,
   theme,
   selected,
   onSelect,
   gridClassName,
+  skeletonCount = 8,
   emptyText,
+  onNextDay,
+  nextDayLabel,
 }: {
-  args: {
-    orgSlug: string;
-    locationId: string;
-    resourceId: string;
-    serviceId?: string;
-    date: string;
-  };
+  args: SlotQueryArgs;
   enabled: boolean;
+  initialSlots?: InitialSlots | null;
   theme: TenantTheme;
   selected: SelectedSlot | null;
   onSelect: (s: Slot) => void;
   /** Tailwind grid-cols-* classes (responsive) for the slot buttons. */
   gridClassName: string;
+  /** Placeholder pills while loading (roughly a typical day's first rows). */
+  skeletonCount?: number;
   emptyText: string;
+  onNextDay?: () => void;
+  nextDayLabel?: string;
 }) {
-  const query = trpc.booking.listSlots.useQuery(args, { enabled, staleTime: 30_000 });
+  const query = trpc.booking.listSlots.useQuery(args, {
+    enabled,
+    staleTime: 30_000,
+    initialData:
+      initialSlots && sameSlotArgs(initialSlots.args, args) ? initialSlots.data : undefined,
+  });
   const slots: Slot[] = query.data?.slots ?? [];
 
   if (enabled && query.isLoading) {
-    return <div className="text-[12px] text-ink-mute py-6">Loading availability…</div>;
+    // Same grid as the real slots, so nothing jumps when they arrive.
+    return (
+      <div
+        role="status"
+        aria-busy="true"
+        className={`min-w-0 grid ${gridClassName}`}
+        style={{ gap: 'var(--gap, 8px)' }}
+      >
+        <span className="sr-only">Loading available times…</span>
+        {Array.from({ length: skeletonCount }, (_, i) => (
+          <div
+            key={i}
+            aria-hidden
+            className="animate-pulse bg-surface-mute"
+            style={{
+              minHeight: 'var(--row-h, 36px)',
+              borderRadius: theme.radius,
+              animationDelay: `${(i % 4) * 120}ms`,
+            }}
+          />
+        ))}
+      </div>
+    );
   }
   if (query.error) {
-    return <div className="text-[12px] text-danger py-6">{query.error.message}</div>;
+    return (
+      <div
+        role="alert"
+        className="flex flex-wrap items-center justify-between gap-3 border border-border rounded-md bg-surface px-4 py-3"
+      >
+        <span className="text-[13px] text-danger">{query.error.message}</span>
+        <button
+          type="button"
+          onClick={() => void query.refetch()}
+          className={`text-[12px] font-medium text-ink underline underline-offset-2 ${FOCUS}`}
+        >
+          Try again
+        </button>
+      </div>
+    );
   }
   if (slots.length === 0) {
-    return <div className="text-[12px] text-ink-mute py-6">{emptyText}</div>;
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 border border-dashed border-border rounded-md px-4 py-3">
+        <span className="text-[13px] text-ink-mute">{emptyText}</span>
+        {onNextDay && nextDayLabel && (
+          <button
+            type="button"
+            onClick={onNextDay}
+            className={`text-[12px] font-medium px-3 py-1.5 border transition-colors ${FOCUS}`}
+            style={{
+              borderRadius: theme.radius,
+              borderColor: 'var(--color-border)',
+              background: 'var(--color-surface)',
+              color: 'var(--color-ink)',
+            }}
+          >
+            Try {nextDayLabel} →
+          </button>
+        )}
+      </div>
+    );
   }
   return (
     <fieldset
@@ -919,5 +999,134 @@ function DaySlots({
         );
       })}
     </fieldset>
+  );
+}
+
+// Horizontally scrolling day chips. No visible scrollbar: the edges fade
+// where there are more days, and on wider screens arrow buttons page through
+// them. The picked day is kept in view.
+function DateStrip({
+  days,
+  date,
+  today,
+  theme,
+  onPick,
+  onPrefetch,
+}: {
+  days: string[];
+  date: string;
+  today: string;
+  theme: TenantTheme;
+  onPick: (ymd: string) => void;
+  onPrefetch: (ymd: string) => void;
+}) {
+  const scroller = useRef<HTMLFieldSetElement>(null);
+  const [edges, setEdges] = useState({ left: false, right: false });
+
+  const measure = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const left = el.scrollLeft > 2;
+    const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 2;
+    setEdges((e) => (e.left === left && e.right === right ? e : { left, right }));
+  }, []);
+
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el) return;
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [measure]);
+
+  // Bring the picked chip into view (without scrolling the page itself).
+  useEffect(() => {
+    const el = scroller.current;
+    const chip = el?.querySelector<HTMLElement>(`[data-day="${date}"]`);
+    if (!el || !chip) return;
+    const pad = 40;
+    if (chip.offsetLeft - pad < el.scrollLeft) {
+      el.scrollTo({ left: chip.offsetLeft - pad, behavior: 'smooth' });
+    } else if (chip.offsetLeft + chip.offsetWidth + pad > el.scrollLeft + el.clientWidth) {
+      el.scrollTo({
+        left: chip.offsetLeft + chip.offsetWidth + pad - el.clientWidth,
+        behavior: 'smooth',
+      });
+    }
+  }, [date]);
+
+  const page = (dir: 1 | -1) => {
+    const el = scroller.current;
+    if (el) el.scrollBy({ left: dir * el.clientWidth * 0.8, behavior: 'smooth' });
+  };
+
+  const fade = 32;
+  const mask = `linear-gradient(to right, ${edges.left ? 'transparent' : '#000'} 0, #000 ${edges.left ? fade : 0}px, #000 calc(100% - ${edges.right ? fade : 0}px), ${edges.right ? 'transparent' : '#000'} 100%)`;
+
+  const arrow = (dir: 1 | -1, show: boolean) => (
+    <button
+      type="button"
+      aria-label={dir === 1 ? 'Later dates' : 'Earlier dates'}
+      tabIndex={-1}
+      onClick={() => page(dir)}
+      className={`absolute top-1/2 -translate-y-1/2 ${dir === 1 ? '-right-2' : '-left-2'} z-10 hidden md:grid place-items-center w-8 h-8 rounded-full border border-border bg-surface text-ink shadow-sm transition-opacity hover:bg-surface-mute ${show ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+    >
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path
+          d={dir === 1 ? 'M9 6l6 6-6 6' : 'M15 6l-6 6 6 6'}
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </button>
+  );
+
+  return (
+    <div className="relative mb-3">
+      {arrow(-1, edges.left)}
+      {/* Padding leaves room for the focus ring inside the scroll container.
+          On phones the chips snap so a swipe lands cleanly on a day. */}
+      <fieldset
+        ref={scroller}
+        aria-label="Date"
+        onScroll={measure}
+        className="min-w-0 flex gap-1.5 overflow-x-auto overscroll-x-contain p-1 -mx-1 snap-x snap-mandatory scroll-px-1 md:snap-none [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        style={{ maskImage: mask, WebkitMaskImage: mask }}
+      >
+        {days.map((d) => {
+          const sel = d === date;
+          return (
+            <button
+              key={d}
+              type="button"
+              data-day={d}
+              aria-pressed={sel}
+              aria-label={`${d === today ? 'Today, ' : ''}${spokenDate(d)}`}
+              onClick={() => onPick(d)}
+              onPointerEnter={() => onPrefetch(d)}
+              onFocus={() => onPrefetch(d)}
+              className={`shrink-0 snap-start min-w-[64px] border px-2.5 py-1.5 text-center transition-colors ${FOCUS}`}
+              style={{
+                borderRadius: theme.radius,
+                borderColor: sel ? theme.accent : 'var(--color-border)',
+                background: sel ? theme.accent : 'var(--color-surface)',
+                color: sel ? 'var(--accent-fg)' : 'var(--color-ink)',
+              }}
+            >
+              <div className="text-[10px] uppercase tracking-wider font-mono opacity-80">
+                {d === today ? 'Today' : dayLabel(d, { weekday: 'short' })}
+              </div>
+              <div className="text-[13px] font-medium tabular-nums">
+                {dayLabel(d, { day: 'numeric', month: 'short' })}
+              </div>
+            </button>
+          );
+        })}
+      </fieldset>
+      {arrow(1, edges.right)}
+    </div>
   );
 }
