@@ -7,7 +7,11 @@ import * as schema from '@udyamflow/db/schema';
 import { sendEmail } from '@udyamflow/notifications';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
+import { APIError } from 'better-auth/api';
+import { emailOTP } from 'better-auth/plugins/email-otp';
 import { organization } from 'better-auth/plugins/organization';
+import { OTP_EXPIRES_IN_SECONDS, OTP_LENGTH, signInCodeEmail } from './otp-email';
+import { reviewLoginCode } from './review-login';
 
 const baseURL = process.env.BETTER_AUTH_URL ?? 'http://localhost:3000';
 
@@ -29,12 +33,6 @@ const trustedOrigins = [
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
-// Email verification is enabled when SMTP/Resend is configured. In pure dev
-// (no RESEND_API_KEY) the link still prints to console, but we keep the
-// flag off so contributors don't need to fish links out of the terminal on
-// every sign-up.
-const requireEmailVerification = !!process.env.RESEND_API_KEY;
-
 export const auth = betterAuth({
   baseURL,
   secret: process.env.BETTER_AUTH_SECRET,
@@ -50,55 +48,11 @@ export const auth = betterAuth({
       invitation: schema.invitation,
     },
   }),
-  emailAndPassword: {
-    enabled: true,
-    requireEmailVerification,
-    sendResetPassword: async ({ user, url }) => {
-      await sendEmail({
-        to: user.email,
-        subject: 'Reset your UdyamFlow password',
-        html: `
-          <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:auto;padding:24px;">
-            <h2 style="margin:0 0 12px 0;font-weight:500;color:#1a1815;">Reset your password</h2>
-            <p style="color:#5e5b54;line-height:1.6;">
-              We received a request to reset your password. The link below expires in one hour.
-            </p>
-            <p style="margin:24px 0;">
-              <a href="${url}" style="background:#1a1815;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:500;display:inline-block;">
-                Reset password
-              </a>
-            </p>
-            <p style="color:#9a978f;font-size:12px;">
-              If you didn't request this, you can safely ignore this email.
-            </p>
-          </div>
-        `.trim(),
-      });
-    },
-  },
-  emailVerification: {
-    sendOnSignUp: true,
-    autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      await sendEmail({
-        to: user.email,
-        subject: 'Verify your email — UdyamFlow',
-        html: `
-          <div style="font-family:Inter,system-ui,sans-serif;max-width:520px;margin:auto;padding:24px;">
-            <h2 style="margin:0 0 12px 0;font-weight:500;color:#1a1815;">Welcome to UdyamFlow</h2>
-            <p style="color:#5e5b54;line-height:1.6;">
-              Confirm your email so we can finish setting up your workspace.
-            </p>
-            <p style="margin:24px 0;">
-              <a href="${url}" style="background:#1a1815;color:#fff;padding:10px 20px;border-radius:8px;text-decoration:none;font-weight:500;display:inline-block;">
-                Verify email
-              </a>
-            </p>
-          </div>
-        `.trim(),
-      });
-    },
-  },
+  // No passwords: people sign in with a one-time code sent to their email
+  // (the emailOTP plugin below) or with Google. Accounts created with a
+  // password before the switch sign in with a code too — same email, same
+  // account.
+  emailAndPassword: { enabled: false },
   // Google sign-in renders only when both client id + secret are set.
   socialProviders: process.env.GOOGLE_CLIENT_ID
     ? {
@@ -115,6 +69,15 @@ export const auth = betterAuth({
   },
   trustedOrigins,
   databaseHooks: {
+    user: {
+      create: {
+        // Someone who signs in with a code before ever signing up gets an
+        // account with no name; start them with their email's local part.
+        before: async (user) => ({
+          data: { ...user, name: user.name?.trim() || user.email.split('@')[0] || 'there' },
+        }),
+      },
+    },
     session: {
       create: {
         // New sessions start in the user's oldest workspace, so tenant
@@ -162,6 +125,30 @@ export const auth = betterAuth({
             </div>
           `.trim(),
         });
+      },
+    }),
+    emailOTP({
+      otpLength: OTP_LENGTH,
+      expiresIn: OTP_EXPIRES_IN_SECONDS,
+      // Three wrong guesses burn the code; a new one must be requested.
+      allowedAttempts: 3,
+      // Only a hash is kept, so a database leak doesn't hand out live codes.
+      storeOTP: 'hashed',
+      // The App Store / Play reviewer can't read our inbox: a fixed code for
+      // one configured demo account (see review-login.ts). Everyone else
+      // gets a random code.
+      generateOTP: ({ email, type }) =>
+        type === 'sign-in' ? (reviewLoginCode(email) ?? undefined) : undefined,
+      sendVerificationOTP: async ({ email, otp, type }) => {
+        if (type !== 'sign-in') return;
+        if (reviewLoginCode(email)) return; // nothing to send
+        if (!process.env.RESEND_API_KEY && process.env.NODE_ENV === 'production') {
+          // sendEmail would print the code to the server log instead.
+          throw new APIError('SERVICE_UNAVAILABLE', {
+            message: 'Email sign-in is not available right now. Please try again later.',
+          });
+        }
+        await sendEmail(signInCodeEmail(email, otp));
       },
     }),
     expo(),

@@ -12,6 +12,12 @@ const serverEnvObject = z.object({
   NEXT_PUBLIC_AUTH_URL: z.url(),
   RESEND_API_KEY: z.string().optional(),
   EMAIL_FROM: z.string().optional(),
+  // App Store / Play review demo login (see packages/auth/src/review-login.ts).
+  REVIEW_LOGIN_EMAIL: z.email().optional(),
+  REVIEW_LOGIN_CODE: z
+    .string()
+    .regex(/^\d{6}$/, 'must be 6 digits')
+    .optional(),
   SENTRY_DSN: z.string().optional(),
   // Public Sentry DSN (browser bundle) — kept identical to SENTRY_DSN in
   // most setups but separated so secrets-management tooling can tell them

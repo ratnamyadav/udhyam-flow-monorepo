@@ -41,7 +41,7 @@ export default function DeleteAccountPage() {
           heading: 'What gets deleted',
           body: (
             <ul>
-              <li>Your login: name, email, password and any linked Google sign-in.</li>
+              <li>Your login: name, email and any linked Google sign-in.</li>
               <li>Your sessions on every device, and your membership of every workspace.</li>
               <li>
                 If you run a workspace on your own, it is closed: billing and customers’ recurring

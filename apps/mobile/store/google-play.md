@@ -58,10 +58,10 @@ Questions? Write to udhyamflow@nextflytech.com.
 
 ## App access instructions (for Google's reviewers)
 
-Sign in with the demo account below. Today shows the demo clinic's appointments; Bookings lists every booking (open one to mark it completed, a no-show or cancelled); Settings has workspace switching, legal links and Delete account. To book as a customer, sign out, tap "Open the booking flow" and enter the code `patel-clinic`.
+There are no passwords: the app signs people in with their email and a 6-digit code. For the demo account, enter the email below, tap "Email me a code", then enter the code below (no email is needed for this account). Today shows the demo clinic's appointments; Bookings lists every booking (open one to mark it completed, a no-show or cancelled); Settings has workspace switching, legal links and Delete account. To book as a customer, sign out, tap "Open the booking flow" and enter the code `patel-clinic`.
 
 - Username: `appreview@udyamflow.com`
-- Password: set it in Play Console only — don't commit it.
+- Password: the 6-digit sign-in code (the `REVIEW_LOGIN_CODE` value). Put it in Play Console only — don't commit it.
 
 ## Graphics
 

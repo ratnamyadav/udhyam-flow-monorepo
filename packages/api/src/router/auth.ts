@@ -7,13 +7,10 @@ import { protectedProcedure, publicProcedure, router, tenantProcedure } from '..
 export const authRouter = router({
   me: publicProcedure.query(({ ctx }) => ctx.session?.user ?? null),
 
-  // Tells the sign-in / sign-up pages which social buttons to render and
-  // whether a new account must verify its email before it can sign in. Cheap
-  // boolean lookups — no provider secrets returned.
+  // Tells the sign-in / sign-up pages which social buttons to render. A
+  // cheap boolean lookup — no provider secrets returned.
   providers: publicProcedure.query(() => ({
     google: !!process.env.GOOGLE_CLIENT_ID,
-    // Mirrors `requireEmailVerification` in packages/auth/src/server.ts.
-    emailVerificationRequired: !!process.env.RESEND_API_KEY,
   })),
 
   // The caller's role in the org their tenant calls resolve to — lets the

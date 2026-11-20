@@ -108,7 +108,6 @@ Locations, resources and services are **archived, never deleted** (`archived_at`
 | `/api/export/invoices?format=csv\|tally&from&to` | Authed invoice export for the tenant's accountant — GST CSV or TallyPrime XML |
 | `/invoice/[id]` | Public, printable built-in GST invoice / Bill of Supply |
 | `/api/payments/cashfree/webhook` | Cashfree webhook — verifies HMAC + timestamp, confirms held bookings, records refunds |
-| `/forgot-password`, `/reset-password`, `/verify-email` | Password reset + email verification flows |
 | `/book/[orgSlug]/confirmation` | Post-payment confirmation (auto-refreshes until webhook lands) |
 | `/book/[orgSlug]?layout=sidebar\|stacked\|inline` | Public tenant booking page (server-rendered with the tenant's theme) |
 | `/api/auth/[...all]` | BetterAuth handler |
@@ -267,7 +266,7 @@ curl http://localhost:3000/api/health   # → {"ok":true,"orgs":3}
 Then visit:
 - http://localhost:3000 — marketing
 - http://localhost:3000/pricing
-- http://localhost:3000/sign-up — create an account → onboarding → dashboard
+- http://localhost:3000/sign-up — create an account (the sign-in code prints in the web app's terminal) → onboarding → dashboard
 - http://localhost:3000/book/patel-clinic — public booking page (try `?layout=stacked`, `?layout=inline`)
 - http://localhost:3001 — admin sign-in
 
@@ -334,7 +333,10 @@ Three demo tenants ship with the seed:
 
 ## Auth model
 
-BetterAuth is shared across web, admin, and mobile via a single instance in `packages/auth/src/server.ts` (Drizzle adapter + organization plugin + Expo plugin).
+BetterAuth is shared across web, admin, and mobile via a single instance in `packages/auth/src/server.ts` (Drizzle adapter + organization, email-OTP and Expo plugins).
+
+- **Sign-in**: passwordless. People enter their email, get a 6-digit code (valid 10 minutes, 3 tries, stored hashed) and sign in with it; a new email creates the account. Google sign-in is optional. Production needs `RESEND_API_KEY`; locally the code is printed in the web app's terminal
+- **Store review login**: `REVIEW_LOGIN_EMAIL` + `REVIEW_LOGIN_CODE` give one demo account a fixed code (no email sent) for App Store / Play reviewers. Leave them unset otherwise
 
 - **Web / admin**: cookies + `better-auth/react` client
 - **Mobile**: bearer tokens persisted in `expo-secure-store` via `@better-auth/expo`
@@ -344,7 +346,7 @@ BetterAuth is shared across web, admin, and mobile via a single instance in `pac
 - **Trusted origins**: `BETTER_AUTH_URL`, `NEXT_PUBLIC_APP_URL`, `ADMIN_APP_URL`, `TRUSTED_ORIGINS` and the `udyamflow://` scheme
 
 The flow on first sign-up:
-1. `signUp.email` creates a user, no org yet
+1. Passwordless sign-up: `emailOtp.sendVerificationOtp` emails a 6-digit code and `signIn.emailOtp` (with a name) creates the user, no org yet
 2. `apps/web/(app)/layout.tsx` detects `orgs.length === 0` and redirects to `/onboarding/account`
 3. The 5-step wizard collects business + template + brand + locations (with timezone + currency) into `sessionStorage`
 4. Step 4's "Create workspace" makes a single atomic `onboarding.createOrganization` call — org, owner membership, brand, locations, and the session's active org all commit together — then redirects to `/onboarding/ready`

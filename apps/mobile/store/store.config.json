@@ -51,9 +51,9 @@
       "email": "info@nextflytech.com",
       "phone": "+91 8800401238",
       "demoUsername": "appreview@udyamflow.com",
-      "demoPassword": "SET-IN-APP-STORE-CONNECT-NOT-HERE",
+      "demoPassword": "SET-IN-APP-STORE-CONNECT-NOT-HERE (the REVIEW_LOGIN_CODE value)",
       "demoRequired": true,
-      "notes": "UdyamFlow is a booking tool for small businesses. Sign in with the demo account to see the owner app: Today shows the demo clinic's appointments, Bookings lists every booking (open one to mark it completed, a no-show or cancelled), and Settings has workspace switching, legal links and Delete account. To try booking as a customer, sign out and tap 'Book an appointment', then enter the code patel-clinic. Payments open the payment provider's secure page in the browser; they are for real-world appointments (physical services), so In-App Purchase does not apply. Business setup and the workspace subscription are handled on our website, not in the app."
+      "notes": "UdyamFlow is a booking tool for small businesses. There are no passwords: you sign in with your email and a 6-digit code. For the demo account, enter the email above, tap 'Email me a code', then enter the code given in the password field (no email is needed for this account). Signed in, you see the owner app: Today shows the demo clinic's appointments, Bookings lists every booking (open one to mark it completed, a no-show or cancelled), and Settings has workspace switching, legal links and Delete account. To try booking as a customer, sign out and tap 'Book an appointment', then enter the code patel-clinic. Payments open the payment provider's secure page in the browser; they are for real-world appointments (physical services), so In-App Purchase does not apply. Business setup and the workspace subscription are handled on our website, not in the app."
     }
   }
 }

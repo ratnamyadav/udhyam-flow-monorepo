@@ -13,8 +13,9 @@
     "./middleware": "./src/middleware.ts"
   },
   "scripts": {
-    "lint": "biome check src",
-    "check-types": "tsgo --noEmit"
+    "lint": "biome check src test",
+    "check-types": "tsgo --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@better-auth/expo": "1.6.9",
@@ -26,7 +27,8 @@
     "@types/node": "catalog:",
     "@typescript/native-preview": "catalog:",
     "@udyamflow/tsconfig": "workspace:*",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   },
   "peerDependencies": {
     "expo-secure-store": "catalog:"

@@ -1,36 +1,14 @@
 import { Link, Redirect, useRouter } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, Text, TextInput, View } from 'react-native';
+import { Text, View } from 'react-native';
+import { EmailCodeForm } from '@/components/email-code-form';
 import { ResponsiveContent } from '@/components/responsive';
-import { signIn, useSession } from '@/lib/auth';
+import { useSession } from '@/lib/auth';
 
 export default function SignInScreen() {
   // Already signed in (or the session arrived after the (app) guard bounced
   // us back here while it was still refreshing): go to the app.
   const { data: session } = useSession();
   const router = useRouter();
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function onSubmit() {
-    setPending(true);
-    setError(null);
-    const res = await signIn.email({ email: email.trim(), password });
-    setPending(false);
-    if (res.error) {
-      setError(
-        res.error.code === 'EMAIL_NOT_VERIFIED'
-          ? 'Verify your email first — check your inbox for the link, then sign in.'
-          : (res.error.message ?? 'Could not sign in'),
-      );
-      return;
-    }
-    // The (app) layout sends users without an organization to /no-organization.
-    router.replace('/(app)');
-  }
-
   if (session) return <Redirect href="/(app)" />;
 
   return (
@@ -39,37 +17,8 @@ export default function SignInScreen() {
         <Text className="text-3xl font-semibold text-ink">UdyamFlow</Text>
         <Text className="text-base text-ink-mute mt-1 mb-8">Sign in to your workspace</Text>
 
-        <Text className="text-xs text-ink-mute uppercase tracking-wider mb-1.5">Email</Text>
-        <TextInput
-          autoCapitalize="none"
-          autoCorrect={false}
-          keyboardType="email-address"
-          autoComplete="email"
-          value={email}
-          onChangeText={setEmail}
-          className="border border-border rounded-md px-3 py-3 bg-surface text-ink mb-4"
-        />
-
-        <Text className="text-xs text-ink-mute uppercase tracking-wider mb-1.5">Password</Text>
-        <TextInput
-          secureTextEntry
-          autoComplete="password"
-          value={password}
-          onChangeText={setPassword}
-          className="border border-border rounded-md px-3 py-3 bg-surface text-ink mb-2"
-        />
-
-        {error ? <Text className="text-danger text-sm mb-2">{error}</Text> : null}
-
-        <Pressable
-          onPress={onSubmit}
-          disabled={pending}
-          className="bg-ink rounded-md py-3.5 mt-3 active:opacity-90"
-        >
-          <Text className="text-bg text-center font-medium">
-            {pending ? 'Signing in…' : 'Sign in'}
-          </Text>
-        </Pressable>
+        {/* The (app) layout sends users without an organization to /no-organization. */}
+        <EmailCodeForm submitLabel="Sign in" onSignedIn={() => router.replace('/(app)')} />
 
         <Link href="/sign-up" className="mt-4 self-center">
           <Text className="text-sm text-ink-mute">

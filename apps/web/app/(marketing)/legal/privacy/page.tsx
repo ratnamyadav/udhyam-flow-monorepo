@@ -33,8 +33,9 @@ export default function PrivacyPage() {
           body: (
             <ul>
               <li>
-                <strong>Account details</strong>: name, email, password (stored hashed), and Google
-                profile basics if you sign in with Google.
+                <strong>Account details</strong>: name, email, and Google profile basics if you sign
+                in with Google. There are no passwords: you sign in with a one-time code we email
+                you.
               </li>
               <li>
                 <strong>Business details</strong>: business name, locations, staff, services,
@@ -109,9 +110,9 @@ export default function PrivacyPage() {
           heading: 'Security',
           body: (
             <p>
-              Data is encrypted in transit. Passwords are hashed, and access tokens for connected
-              accounting tools are encrypted at rest. Each business’s data is kept separate from
-              every other business’s.
+              Data is encrypted in transit. Sign-in codes expire after 10 minutes and are stored
+              only in hashed form, and access tokens for connected accounting tools are encrypted at
+              rest. Each business’s data is kept separate from every other business’s.
             </p>
           ),
         },
