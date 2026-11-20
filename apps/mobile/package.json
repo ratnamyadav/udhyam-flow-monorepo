@@ -12,6 +12,7 @@
     "check-types": "tsgo --noEmit"
   },
   "dependencies": {
+    "@expo/vector-icons": "catalog:",
     "@tanstack/react-query": "catalog:",
     "@trpc/client": "catalog:",
     "@trpc/react-query": "catalog:",
@@ -36,6 +37,7 @@
     "react-native-reanimated": "catalog:",
     "react-native-safe-area-context": "catalog:",
     "react-native-screens": "catalog:",
+    "react-native-web": "catalog:",
     "react-native-worklets": "catalog:",
     "superjson": "catalog:",
     "tailwindcss": "catalog:"

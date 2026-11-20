@@ -12,7 +12,7 @@ export default function sitemap(): MetadataRoute.Sitemap {
     { url: `${BASE}/pricing`, lastModified: now, changeFrequency: 'monthly', priority: 0.8 },
     { url: `${BASE}/sign-in`, lastModified: now, changeFrequency: 'monthly', priority: 0.3 },
     { url: `${BASE}/sign-up`, lastModified: now, changeFrequency: 'monthly', priority: 0.7 },
-    ...['privacy', 'terms', 'cancellation'].map((page) => ({
+    ...['privacy', 'terms', 'cancellation', 'delete-account'].map((page) => ({
       url: `${BASE}/legal/${page}`,
       lastModified: now,
       changeFrequency: 'yearly' as const,

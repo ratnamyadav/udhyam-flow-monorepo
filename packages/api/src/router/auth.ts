@@ -1,5 +1,7 @@
 import { schema } from '@udyamflow/db';
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
+import { deleteAccount } from '../account/delete';
 import { protectedProcedure, publicProcedure, router, tenantProcedure } from '../trpc';
 
 export const authRouter = router({
@@ -33,4 +35,10 @@ export const authRouter = router({
       .where(eq(schema.member.userId, ctx.session.user.id));
     return memberships;
   }),
+
+  // Permanently deletes the signed-in user's account (required by the App
+  // Store and Google Play). The client signs out afterwards.
+  deleteAccount: protectedProcedure
+    .input(z.object({ confirm: z.literal('DELETE') }))
+    .mutation(({ ctx }) => deleteAccount(ctx.db, ctx.session.user.id)),
 });

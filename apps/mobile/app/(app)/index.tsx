@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { ResponsiveContent } from '@/components/responsive';
 import { useSession } from '@/lib/auth';
-import { calendarDateParts, formatTime, statusLabel } from '../../lib/format';
+import { calendarDateParts, formatMoney, formatTime, statusLabel } from '../../lib/format';
 import { errorMessage, trpc } from '../../lib/trpc';
 
 export default function DashboardScreen() {
@@ -31,8 +31,9 @@ export default function DashboardScreen() {
     }
   }, [session?.user, me.isFetched, me.data]);
 
-  const first = session?.user.name?.split(' ')[0] ?? 'there';
+  const first = greetingName(session?.user.name);
   const bookings = today.data?.bookings ?? [];
+  const resourceNames = new Map((resources.data ?? []).map((r) => [r.id, r.name]));
   const tz = today.data?.timezone;
   const day = today.data ? calendarDateParts(today.data.date) : null;
 
@@ -98,13 +99,32 @@ export default function DashboardScreen() {
           <View className="bg-surface border border-border rounded-xl overflow-hidden">
             {bookings.map((b, i) => (
               <Link key={b.id} href={`/bookings/${b.id}`} asChild>
-                <Pressable className={`px-4 py-3 ${i > 0 ? 'border-t border-border' : ''}`}>
-                  <Text className="text-sm font-medium text-ink">{b.customerName}</Text>
-                  <Text className="text-xs text-ink-mute font-mono">
-                    {formatTime(b.slotStart, tz)}
-                    {' · '}
-                    {statusLabel(b.status)}
-                  </Text>
+                <Pressable
+                  className={`px-4 py-3 flex-row items-center gap-3 ${
+                    i > 0 ? 'border-t border-border' : ''
+                  }`}
+                >
+                  <View className="flex-1">
+                    <Text className="text-sm font-medium text-ink">{b.customerName}</Text>
+                    <Text className="text-xs text-ink-mute font-mono">
+                      {formatTime(b.slotStart, tz)}
+                      {' · '}
+                      {statusLabel(b.status)}
+                    </Text>
+                    {b.serviceSnapshot?.name || resourceNames.get(b.resourceId) ? (
+                      <Text className="text-xs text-ink-mute mt-0.5" numberOfLines={1}>
+                        {[b.serviceSnapshot?.name, resourceNames.get(b.resourceId)]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </Text>
+                    ) : null}
+                  </View>
+                  {b.amountCents ? (
+                    <PaymentPill
+                      status={b.paymentStatus}
+                      amount={formatMoney(b.amountCents, b.currency)}
+                    />
+                  ) : null}
                 </Pressable>
               </Link>
             ))}
@@ -115,6 +135,22 @@ export default function DashboardScreen() {
   );
 }
 
+// Paid / unpaid at a glance, so staff know who still owes at the desk.
+function PaymentPill({ status, amount }: { status: string; amount: string }) {
+  const paid = status === 'paid' || status === 'covered';
+  return (
+    <View
+      className={`rounded-full px-2.5 py-1 border ${
+        paid ? 'border-accent bg-surface' : 'border-border bg-surface-mute'
+      }`}
+    >
+      <Text className={`text-[11px] font-mono ${paid ? 'text-accent' : 'text-ink-mute'}`}>
+        {paid ? `Paid ${amount}` : `${statusLabel(status)} ${amount}`}
+      </Text>
+    </View>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-1 bg-surface border border-border rounded-xl p-4">
@@ -122,4 +158,13 @@ function Metric({ label, value }: { label: string; value: string }) {
       <Text className="text-2xl font-semibold text-ink mt-1 font-mono">{value}</Text>
     </View>
   );
+}
+
+// "Anika Patel" → "Anika"; "Dr. Anika Patel" → "Dr. Patel".
+const TITLE = /^(dr|mr|mrs|ms|miss|prof)\.?$/i;
+function greetingName(name: string | null | undefined): string {
+  const parts = (name ?? '').trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'there';
+  if (TITLE.test(parts[0]!) && parts.length > 1) return `${parts[0]} ${parts[parts.length - 1]}`;
+  return parts[0]!;
 }

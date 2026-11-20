@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
+import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { ResponsiveContent } from '@/components/responsive';
 import { expoAuthClient, signOut, useSession } from '@/lib/auth';
+import { LEGAL_URLS } from '@/lib/env';
 import { errorMessage, trpc } from '../../lib/trpc';
 
 const ROLE_LABEL: Record<string, string> = { owner: 'Owner', admin: 'Admin', member: 'Member' };
@@ -38,6 +40,29 @@ export default function SettingsScreen() {
       await queryClient.invalidateQueries();
     },
   });
+
+  const deleteAccount = trpc.auth.deleteAccount.useMutation({
+    onSuccess: async () => {
+      await signOut().catch(() => {});
+      queryClient.clear();
+      router.replace('/sign-in');
+    },
+  });
+
+  function confirmDelete() {
+    Alert.alert(
+      'Delete your account?',
+      'This permanently deletes your login. If you run a workspace on your own, it is closed: billing stops and its booking page stops taking bookings. Booking and invoice records are kept for tax purposes. This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete account',
+          style: 'destructive',
+          onPress: () => deleteAccount.mutate({ confirm: 'DELETE' }),
+        },
+      ],
+    );
+  }
 
   const activeOrgId = membership.data?.organizationId;
   const orgs = organizations.data ?? [];
@@ -110,6 +135,43 @@ export default function SettingsScreen() {
         >
           <Text className="text-ink text-center font-medium">Sign out</Text>
         </Pressable>
+
+        <Text className="text-xs text-ink-mute uppercase tracking-wider font-mono mt-8 mb-2">
+          Legal
+        </Text>
+        <View className="bg-surface border border-border rounded-xl overflow-hidden">
+          {(
+            [
+              ['Privacy policy', LEGAL_URLS.privacy],
+              ['Terms of service', LEGAL_URLS.terms],
+              ['Cancellation & refunds', LEGAL_URLS.cancellation],
+            ] as const
+          ).map(([label, url], i) => (
+            <Pressable
+              key={url}
+              onPress={() => WebBrowser.openBrowserAsync(url)}
+              className={`flex-row items-center justify-between px-4 py-3 ${
+                i > 0 ? 'border-t border-border' : ''
+              }`}
+            >
+              <Text className="text-sm text-ink">{label}</Text>
+              <Text className="text-xs text-ink-mute font-mono">↗</Text>
+            </Pressable>
+          ))}
+        </View>
+
+        <Pressable
+          onPress={confirmDelete}
+          disabled={deleteAccount.isPending}
+          className="border border-danger rounded-md py-3.5 mt-8 active:opacity-90"
+        >
+          <Text className="text-danger text-center font-medium">
+            {deleteAccount.isPending ? 'Deleting…' : 'Delete account'}
+          </Text>
+        </Pressable>
+        {deleteAccount.error ? (
+          <Text className="text-sm text-danger mt-2">{errorMessage(deleteAccount.error)}</Text>
+        ) : null}
       </ResponsiveContent>
     </ScrollView>
   );

@@ -1,0 +1,59 @@
+{
+  "configVersion": 0,
+  "apple": {
+    "copyright": "2026 Nextfly Technologies",
+    "categories": ["BUSINESS", "PRODUCTIVITY"],
+    "info": {
+      "en-US": {
+        "title": "UdyamFlow",
+        "subtitle": "Bookings for your business",
+        "promoText": "Your appointments, customers and payments in your pocket. See today at a glance and act on any booking in a tap.",
+        "description": "UdyamFlow is the booking app for people who run their own business: clinics, tutors, salons, sports courts, therapists and trainers.\n\nYour customers book and pay online through your own branded booking page. UdyamFlow keeps your day in your pocket.\n\nYOUR DAY AT A GLANCE\n• Today's appointments for each of your locations, in order\n• Who is coming, for what, with whom, and whether they have paid\n\nEVERY BOOKING, ONE TAP AWAY\n• Browse upcoming and past bookings\n• Open a booking to see the customer's contact details, the service, the time and the payment\n• Mark it completed or a no-show, or cancel it, in a tap\n\nBOOK IN SECONDS\n• Open any business's booking link and pick a service, a person and a time\n• Pay securely through Stripe or Cashfree (UPI, cards and more), and get confirmed straight away\n\nMORE THAN ONE BUSINESS?\nSwitch between workspaces from Settings.\n\nSET UP ON THE WEB\nCreate your workspace at udyamflow.com: pick a template for your profession, add your brand colours, locations, staff and services, connect payments, and share your booking link. Most businesses are taking bookings the same afternoon.\n\nQuestions? Write to udhyamflow@nextflytech.com.",
+        "keywords": [
+          "appointments",
+          "booking",
+          "scheduler",
+          "clinic",
+          "salon",
+          "tutor",
+          "calendar",
+          "UPI",
+          "small business",
+          "reservations"
+        ],
+        "releaseNotes": "First release: today's schedule, all bookings with payment status, booking actions, and booking with secure online payment.",
+        "marketingUrl": "https://udyamflow.com",
+        "supportUrl": "https://udyamflow.com/legal/cancellation",
+        "privacyPolicyUrl": "https://udyamflow.com/legal/privacy"
+      }
+    },
+    "advisory": {
+      "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+      "contests": "NONE",
+      "gamblingSimulated": "NONE",
+      "horrorOrFearThemes": "NONE",
+      "matureOrSuggestiveThemes": "NONE",
+      "medicalOrTreatmentInformation": "NONE",
+      "profanityOrCrudeHumor": "NONE",
+      "sexualContentGraphicAndNudity": "NONE",
+      "sexualContentOrNudity": "NONE",
+      "violenceCartoonOrFantasy": "NONE",
+      "violenceRealistic": "NONE",
+      "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+      "gambling": false,
+      "unrestrictedWebAccess": false,
+      "kidsAgeBand": null,
+      "seventeenPlus": false
+    },
+    "review": {
+      "firstName": "Ratnam",
+      "lastName": "Yadav",
+      "email": "info@nextflytech.com",
+      "phone": "+91 8800401238",
+      "demoUsername": "appreview@udyamflow.com",
+      "demoPassword": "SET-IN-APP-STORE-CONNECT-NOT-HERE",
+      "demoRequired": true,
+      "notes": "UdyamFlow is a booking tool for small businesses. Sign in with the demo account to see the owner app: Today shows the demo clinic's appointments, Bookings lists every booking (open one to mark it completed, a no-show or cancelled), and Settings has workspace switching, legal links and Delete account. To try booking as a customer, sign out and tap 'Book an appointment', then enter the code patel-clinic. Payments open the payment provider's secure page in the browser; they are for real-world appointments (physical services), so In-App Purchase does not apply. Business setup and the workspace subscription are handled on our website, not in the app."
+    }
+  }
+}

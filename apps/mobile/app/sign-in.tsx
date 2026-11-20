@@ -1,10 +1,13 @@
-import { Link, useRouter } from 'expo-router';
+import { Link, Redirect, useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { ResponsiveContent } from '@/components/responsive';
-import { signIn } from '@/lib/auth';
+import { signIn, useSession } from '@/lib/auth';
 
 export default function SignInScreen() {
+  // Already signed in (or the session arrived after the (app) guard bounced
+  // us back here while it was still refreshing): go to the app.
+  const { data: session } = useSession();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,6 +30,8 @@ export default function SignInScreen() {
     // The (app) layout sends users without an organization to /no-organization.
     router.replace('/(app)');
   }
+
+  if (session) return <Redirect href="/(app)" />;
 
   return (
     <View className="flex-1 bg-bg px-6 justify-center">

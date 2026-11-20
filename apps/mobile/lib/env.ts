@@ -34,3 +34,10 @@ export const AUTH_URL = resolveAuthUrl().replace(/\/+$/, '');
 
 /** Web onboarding — where users without an organization finish setup. */
 export const ONBOARDING_URL = `${AUTH_URL}/onboarding/account`;
+
+/** Legal pages on the web app, linked from sign-up and Settings. */
+export const LEGAL_URLS = {
+  privacy: `${AUTH_URL}/legal/privacy`,
+  terms: `${AUTH_URL}/legal/terms`,
+  cancellation: `${AUTH_URL}/legal/cancellation`,
+} as const;

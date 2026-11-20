@@ -1,8 +1,10 @@
 import { Link, useRouter } from 'expo-router';
+import * as WebBrowser from 'expo-web-browser';
 import { useState } from 'react';
 import { Pressable, Text, TextInput, View } from 'react-native';
 import { ResponsiveContent } from '@/components/responsive';
 import { signUp } from '@/lib/auth';
+import { LEGAL_URLS } from '@/lib/env';
 import { trpc } from '../lib/trpc';
 
 type Outcome = { kind: 'verify'; email: string } | { kind: 'sign-in' };
@@ -112,6 +114,21 @@ export default function SignUpScreen() {
             {pending ? 'Creating…' : 'Create account →'}
           </Text>
         </Pressable>
+
+        <Text className="text-xs text-ink-mute text-center mt-3">
+          By creating an account you agree to our{' '}
+          <Text className="underline" onPress={() => WebBrowser.openBrowserAsync(LEGAL_URLS.terms)}>
+            Terms
+          </Text>{' '}
+          and{' '}
+          <Text
+            className="underline"
+            onPress={() => WebBrowser.openBrowserAsync(LEGAL_URLS.privacy)}
+          >
+            Privacy Policy
+          </Text>
+          .
+        </Text>
 
         <Link href="/sign-in" className="mt-4 self-center">
           <Text className="text-sm text-ink-mute">

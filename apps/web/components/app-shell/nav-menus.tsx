@@ -27,6 +27,7 @@ export const SETTINGS_NAV: NavItem[] = [
   { href: '/settings/templates', label: 'Template' },
   { href: '/settings/channels', label: 'Channels' },
   { href: '/settings/notifications', label: 'Notifications' },
+  { href: '/settings/account', label: 'Your account' },
 ];
 
 export function isActivePath(pathname: string | null, href: string) {
@@ -299,7 +300,7 @@ export function MobileNav({ pathname }: { pathname: string | null }) {
         <ul className="m-0 p-0 list-none grid gap-0.5">{SETTINGS_NAV.map((item) => link(item))}</ul>
         <div className="border-t border-border mt-3 pt-3">
           <a
-            href="mailto:support@udyamflow.com"
+            href="mailto:udhyamflow@nextflytech.com"
             className={`block px-3 py-2.5 rounded-md text-[14px] text-ink-mute hover:bg-surface-mute ${FOCUS}`}
           >
             Help

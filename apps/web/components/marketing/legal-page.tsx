@@ -2,7 +2,7 @@ import { MarketingNav } from '@/components/marketing/marketing-nav';
 import { SiteFooter } from '@/components/site-footer';
 
 // Contact for privacy, legal and grievance requests. Shown on every legal page.
-export const LEGAL_CONTACT_EMAIL = 'support@udyamflow.com';
+export const LEGAL_CONTACT_EMAIL = 'udhyamflow@nextflytech.com';
 export const LEGAL_ENTITY = 'Nextfly Technologies';
 
 export type LegalSection = { heading: string; body: React.ReactNode };

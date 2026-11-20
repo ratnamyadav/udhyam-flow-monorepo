@@ -1,3 +1,4 @@
+import Feather from '@expo/vector-icons/Feather';
 import { Redirect, Tabs } from 'expo-router';
 import { ActivityIndicator, View } from 'react-native';
 import { useWindowClass } from '@/components/responsive';
@@ -34,14 +35,35 @@ export default function AppLayout() {
         tabBarActiveTintColor: '#1a1815',
         tabBarInactiveTintColor: '#9a978f',
         tabBarPosition: sideRail ? 'left' : 'bottom',
+        // The side rail highlights the active item with a filled pill, which
+        // defaults to the platform blue; keep it on-brand.
+        tabBarActiveBackgroundColor: sideRail ? '#efede7' : undefined,
         tabBarStyle: sideRail
           ? { backgroundColor: '#fefcf7', borderRightColor: '#e9e7e0' }
           : { backgroundColor: '#fefcf7', borderTopColor: '#e9e7e0' },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: 'Dashboard' }} />
-      <Tabs.Screen name="bookings" options={{ title: 'Bookings' }} />
-      <Tabs.Screen name="settings" options={{ title: 'Settings' }} />
+      <Tabs.Screen
+        name="index"
+        options={{
+          title: 'Dashboard',
+          tabBarIcon: ({ color, size }) => <Feather name="grid" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="bookings"
+        options={{
+          title: 'Bookings',
+          tabBarIcon: ({ color, size }) => <Feather name="calendar" color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="settings"
+        options={{
+          title: 'Settings',
+          tabBarIcon: ({ color, size }) => <Feather name="settings" color={color} size={size} />,
+        }}
+      />
     </Tabs>
   );
 }

@@ -1,16 +1,36 @@
 {
-  "cli": { "version": ">= 16.0.0", "appVersionSource": "remote" },
+  "cli": {
+    "version": ">= 16.0.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "preview": {
       "pnpm": "9.15.0",
       "distribution": "internal",
-      "android": { "buildType": "apk" },
-      "env": { "EXPO_PUBLIC_AUTH_URL": "https://udyamflow.com" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_AUTH_URL": "https://udyamflow.com"
+      }
     },
     "production": {
       "pnpm": "9.15.0",
       "autoIncrement": true,
-      "env": { "EXPO_PUBLIC_AUTH_URL": "https://udyamflow.com" }
+      "env": {
+        "EXPO_PUBLIC_AUTH_URL": "https://udyamflow.com"
+      }
+    }
+  },
+  "submit": {
+    "production": {
+      "ios": {
+        "metadataPath": "./store/store.config.json"
+      },
+      "android": {
+        "track": "internal",
+        "releaseStatus": "draft"
+      }
     }
   }
 }

@@ -175,7 +175,7 @@ export function Topbar({
       <div className="flex items-center gap-1 md:gap-2 shrink-0">
         <div ref={userRef} className="flex items-center gap-2 relative">
           <a
-            href="mailto:support@udyamflow.com"
+            href="mailto:udhyamflow@nextflytech.com"
             className="hidden md:inline-block text-[13px] px-3 py-1.5 rounded-md text-ink-mute hover:text-ink hover:bg-surface-mute transition-colors"
           >
             Help

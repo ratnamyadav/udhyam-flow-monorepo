@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Link from 'next/link';
 import { LEGAL_CONTACT_EMAIL, LEGAL_ENTITY, LegalPage } from '@/components/marketing/legal-page';
 
 export const metadata: Metadata = {
@@ -120,9 +121,11 @@ export default function PrivacyPage() {
             <>
               <p>
                 You can ask to access, correct or delete your personal data, or withdraw consent for
-                optional messages. Account holders can ask us to delete their account by writing to
-                us. If you booked with a business on UdyamFlow, you can also contact that business
-                directly.
+                optional messages. Account holders can delete their account from Settings → Your
+                account on the web or Settings in the app (see{' '}
+                <Link href="/legal/delete-account">how to delete your account</Link>), or by writing
+                to us. If you booked with a business on UdyamFlow, you can also contact that
+                business directly.
               </p>
               <p>
                 We reply within 30 days. If you’re unhappy with our reply, you can complain to the

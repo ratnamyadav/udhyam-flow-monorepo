@@ -1,4 +1,4 @@
-import { neon } from '@neondatabase/serverless';
+import { neon, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
 import * as schema from './schema';
 
@@ -10,6 +10,9 @@ let _db: ReturnType<typeof makeDb> | null = null;
 function makeDb() {
   const url = process.env.DATABASE_URL;
   if (!url) throw new Error('DATABASE_URL is not set');
+  // Local development against a Neon HTTP proxy in front of plain Postgres
+  // (e.g. local-neon-http-proxy): NEON_HTTP_ENDPOINT=http://db.localtest.me:4444/sql
+  if (process.env.NEON_HTTP_ENDPOINT) neonConfig.fetchEndpoint = process.env.NEON_HTTP_ENDPOINT;
   const sql = neon(url);
   return drizzle({ client: sql, schema, casing: 'snake_case' });
 }

@@ -103,6 +103,10 @@ const serverEnvObject = z.object({
   // Bearer token the hourly scheduler (.github/workflows/reminders.yml) sends
   // to /api/cron/*. Unset → cron endpoints return 503.
   CRON_SECRET: z.string().optional(),
+  // Mobile deep links (/.well-known files). Apple Developer team ID, and the
+  // comma-separated SHA-256 fingerprints of the Android app signing keys.
+  APPLE_TEAM_ID: z.string().optional(),
+  ANDROID_SHA256_CERT_FINGERPRINTS: z.string().optional(),
 });
 
 export const serverEnvSchema = z.preprocess((value) => {
